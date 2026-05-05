@@ -1,0 +1,24 @@
+[package]
+name = "agri-server"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+agri-core = { path = "../agri-core" }
+agri-mqtt = { path = "../agri-mqtt" }
+axum.workspace = true
+tower.workspace = true
+tower-http.workspace = true
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sqlx.workspace = true
+chrono.workspace = true
+uuid.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+config.workspace = true
+dotenvy.workspace = true
+jsonwebtoken.workspace = true
+rumqttc.workspace = true

@@ -1,0 +1,16 @@
+[package]
+name = "agri-mqtt"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+agri-core = { path = "../agri-core" }
+rumqttd.workspace = true
+rumqttc.workspace = true
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+anyhow.workspace = true
+sqlx.workspace = true
+chrono.workspace = true

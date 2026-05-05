@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>农业物联网监控系统</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f0f2f5; }
+        .sidebar { width: 240px; background: #1a1a2e; color: #fff; position: fixed; height: 100vh; padding-top: 20px; }
+        .sidebar h2 { padding: 0 24px 20px; font-size: 20px; border-bottom: 1px solid #2a2a4e; margin-bottom: 10px; }
+        .sidebar a { display: block; padding: 14px 24px; color: #a0a0b0; text-decoration: none; cursor: pointer; }
+        .sidebar a:hover, .sidebar a.active { background: #16213e; color: #fff; }
+        .main { margin-left: 240px; padding: 24px; min-height: 100vh; }
+        .page { display: none; }
+        .page.active { display: block; }
+        h1 { margin-bottom: 20px; color: #333; font-size: 24px; }
+        .card { background: #fff; border-radius: 12px; padding: 24px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .metrics { display: flex; gap: 20px; flex-wrap: wrap; }
+        .metric { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; border-radius: 12px; padding: 24px; flex: 1; min-width: 200px; }
+        .metric h3 { font-size: 14px; opacity: 0.9; margin-bottom: 8px; }
+        .metric .value { font-size: 36px; font-weight: bold; }
+        .metric.green { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); }
+        .metric.orange { background: linear-gradient(135deg, #f2994a 0%, #f2c94c 100%); }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 14px; text-align: left; border-bottom: 1px solid #eee; }
+        th { background: #f8f9fa; font-weight: 600; color: #555; }
+        .status { padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 500; }
+        .status.online { background: #e6f7ed; color: #28a745; }
+        .status.offline { background: #fde8e8; color: #dc3545; }
+        .btn { padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; }
+        .btn-primary { background: #4361ee; color: #fff; }
+        .btn-primary:hover { background: #3a56d4; }
+        .btn-danger { background: #ef476f; color: #fff; }
+        .btn-success { background: #06d6a0; color: #fff; }
+        .form-group { margin-bottom: 16px; }
+        .form-group label { display: block; margin-bottom: 6px; font-weight: 500; color: #555; }
+        .form-group input, .form-group select { width: 100%; padding: 10px 14px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; }
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 100; }
+        .modal.show { display: flex; align-items: center; justify-content: center; }
+        .modal-content { background: #fff; border-radius: 12px; padding: 30px; width: 500px; max-width: 90%; max-height: 80vh; overflow-y: auto; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .modal-header h3 { font-size: 20px; }
+        .close-btn { background: none; border: none; font-size: 24px; cursor: pointer; color: #666; }
+        .actions { display: flex; gap: 10px; margin-top: 20px; }
+        .chart-bar { height: 24px; background: #4361ee; border-radius: 4px; margin: 4px 0; }
+    </style>
+</head>
+<body>
+    <nav class="sidebar">
+        <h2>🌾 农业物联网</h2>
+        <a onclick="showPage('dashboard')" class="active" id="nav-dashboard">📊 仪表盘</a>
+        <a onclick="showPage('devices')" id="nav-devices">📡 设备管理</a>
+        <a onclick="showPage('rules')" id="nav-rules">⚙️ 规则引擎</a>
+        <a onclick="showPage('readings')" id="nav-readings">📈 数据记录</a>
+    </nav>
+
+    <div class="main">
+        <!-- Dashboard -->
+        <div id="page-dashboard" class="page active">
+            <h1>仪表盘</h1>
+            <div class="metrics" id="dashboard-metrics"></div>
+            <div class="card">
+                <h3 style="margin-bottom:16px;">设备状态</h3>
+                <div id="device-status-chart"></div>
+            </div>
+        </div>
+
+        <!-- Devices -->
+        <div id="page-devices" class="page">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+                <h1>设备管理</h1>
+                <button class="btn btn-primary" onclick="showAddDevice()">+ 添加设备</button>
+            </div>
+            <div class="card">
+                <table>
+                    <thead><tr><th>名称</th><th>节点 ID</th><th>类型</th><th>状态</th><th>操作</th></tr></thead>
+                    <tbody id="devices-table"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Rules -->
+        <div id="page-rules" class="page">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+                <h1>规则引擎</h1>
+                <button class="btn btn-primary" onclick="showAddRule()">+ 添加规则</button>
+            </div>
+            <div class="card">
+                <table>
+                    <thead><tr><th>名称</th><th>触发类型</th><th>状态</th><th>创建时间</th><th>操作</th></tr></thead>
+                    <tbody id="rules-table"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Readings -->
+        <div id="page-readings" class="page">
+            <h1>数据记录</h1>
+            <div class="card">
+                <div class="form-group" style="max-width:300px;margin-bottom:20px;">
+                    <label>选择设备</label>
+                    <select id="reading-device" onchange="loadReadings()"></select>
+                </div>
+                <table>
+                    <thead><tr><th>指标</th><th>数值</th><th>时间</th></tr></thead>
+                    <tbody id="readings-table"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Device Modal -->
+    <div class="modal" id="modal-device">
+        <div class="modal-content">
+            <div class="modal-header"><h3>添加设备</h3><button class="close-btn" onclick="closeModal('modal-device')">&times;</button></div>
+            <div class="form-group"><label>设备名称</label><input type="text" id="dev-name" placeholder="如：温湿度传感器-01"></div>
+            <div class="form-group"><label>节点 ID</label><input type="text" id="dev-node" placeholder="如：esp32-node-001"></div>
+            <div class="form-group"><label>设备类型</label>
+                <select id="dev-type"><option value="sensor">传感器</option><option value="actuator">执行器</option></select>
+            </div>
+            <div class="actions">
+                <button class="btn btn-primary" onclick="addDevice()">创建</button>
+                <button class="btn" onclick="closeModal('modal-device')" style="background:#eee;">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Rule Modal -->
+    <div class="modal" id="modal-rule">
+        <div class="modal-content">
+            <div class="modal-header"><h3>添加规则</h3><button class="close-btn" onclick="closeModal('modal-rule')">&times;</button></div>
+            <div class="form-group"><label>规则名称</label><input type="text" id="rule-name" placeholder="如：温度过高自动开风扇"></div>
+            <div class="form-group"><label>指标</label>
+                <select id="rule-metric"><option value="temperature">温度</option><option value="humidity">湿度</option><option value="light">光照</option><option value="soil_moisture">土壤湿度</option></select>
+            </div>
+            <div class="form-group"><label>条件</label>
+                <select id="rule-op"><option value=">">大于</option><option value="<">小于</option><option value=">=">大于等于</option><option value="<=">小于等于</option></select>
+            </div>
+            <div class="form-group"><label>阈值</label><input type="number" id="rule-value" placeholder="如：30"></div>
+            <div class="form-group"><label>触发动作设备</label><select id="rule-action-device"></select></div>
+            <div class="actions">
+                <button class="btn btn-primary" onclick="addRule()">创建</button>
+                <button class="btn" onclick="closeModal('modal-rule')" style="background:#eee;">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API = '/api/v1';
+        let devices = [], rules = [];
+
+        async function api(path, opts = {}) {
+            const res = await fetch(API + path, { headers: {'Content-Type': 'application/json'}, ...opts });
+            return res.json();
+        }
+
+        function showPage(name) {
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.sidebar a').forEach(a => a.classList.remove('active'));
+            document.getElementById('page-' + name).classList.add('active');
+            document.getElementById('nav-' + name).classList.add('active');
+            if (name === 'dashboard') loadDashboard();
+            if (name === 'devices') loadDevices();
+            if (name === 'rules') loadRules();
+            if (name === 'readings') loadReadingsPage();
+        }
+
+        async function loadDashboard() {
+            const data = await api('/dashboard/summary');
+            document.getElementById('dashboard-metrics').innerHTML = `
+                <div class="metric"><h3>设备总数</h3><div class="value">${data.total_devices}</div></div>
+                <div class="metric green"><h3>在线设备</h3><div class="value">${data.online_devices}</div></div>
+                <div class="metric orange"><h3>活跃规则</h3><div class="value">${data.active_rules}</div></div>
+            `;
+        }
+
+        async function loadDevices() {
+            devices = await api('/devices');
+            const tbody = document.getElementById('devices-table');
+            tbody.innerHTML = devices.map(d => `
+                <tr>
+                    <td><strong>${d.name}</strong></td>
+                    <td><code>${d.node_id}</code></td>
+                    <td>${d.device_type === 'sensor' ? '📡 传感器' : '🔧 执行器'}</td>
+                    <td><span class="status ${d.status}">${d.status === 'online' ? '在线' : '离线'}</span></td>
+                    <td><button class="btn btn-danger" style="padding:6px 12px;font-size:12px;" onclick="deleteDevice('${d.id}')">删除</button></td>
+                </tr>
+            `).join('');
+        }
+
+        async function loadRules() {
+            rules = await api('/rules');
+            const tbody = document.getElementById('rules-table');
+            tbody.innerHTML = rules.map(r => `
+                <tr>
+                    <td><strong>${r.name}</strong></td>
+                    <td>${r.trigger_type === 'condition' ? '条件触发' : '定时任务'}</td>
+                    <td><span class="status ${r.enabled ? 'online' : 'offline'}">${r.enabled ? '启用' : '禁用'}</span></td>
+                    <td>${new Date(r.created_at * 1000).toLocaleString('zh-CN')}</td>
+                    <td><button class="btn btn-danger" style="padding:6px 12px;font-size:12px;" onclick="deleteRule('${r.id}')">删除</button></td>
+                </tr>
+            `).join('');
+        }
+
+        async function loadReadingsPage() {
+            const devs = await api('/devices');
+            const sel = document.getElementById('reading-device');
+            sel.innerHTML = devs.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
+            if (devs.length) loadReadings();
+        }
+
+        async function loadReadings() {
+            const devId = document.getElementById('reading-device').value;
+            if (!devId) return;
+            const readings = await api(`/devices/${devId}/readings?limit=50`);
+            const tbody = document.getElementById('readings-table');
+            if (!readings.length) { tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:#999;">暂无数据</td></tr>'; return; }
+            tbody.innerHTML = readings.map(r => `
+                <tr>
+                    <td>${getMetricName(r.metric)}</td>
+                    <td><strong>${r.value} ${r.unit}</strong></td>
+                    <td>${new Date(r.timestamp * 1000).toLocaleString('zh-CN')}</td>
+                </tr>
+            `).join('');
+        }
+
+        function getMetricName(m) {
+            return {temperature:'🌡️ 温度', humidity:'💧 湿度', light:'☀️ 光照', soil_moisture:'🌱 土壤湿度'}[m] || m;
+        }
+
+        function showAddDevice() { document.getElementById('modal-device').classList.add('show'); }
+        function showAddRule() {
+            document.getElementById('modal-rule').classList.add('show');
+            const sel = document.getElementById('rule-action-device');
+            sel.innerHTML = devices.filter(d => d.device_type === 'actuator').map(d => `<option value="${d.id}">${d.name}</option>`).join('');
+        }
+        function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+
+        async function addDevice() {
+            const name = document.getElementById('dev-name').value;
+            const node = document.getElementById('dev-node').value;
+            const type = document.getElementById('dev-type').value;
+            if (!name || !node) return alert('请填写完整信息');
+            await api('/devices', { method: 'POST', body: JSON.stringify({name, node_id: node, device_type: type}) });
+            closeModal('modal-device');
+            loadDevices();
+        }
+
+        async function deleteDevice(id) {
+            if (!confirm('确定删除该设备？')) return;
+            await fetch(API + '/devices/' + id, { method: 'DELETE' });
+            loadDevices();
+        }
+
+        async function addRule() {
+            const name = document.getElementById('rule-name').value;
+            const metric = document.getElementById('rule-metric').value;
+            const op = document.getElementById('rule-op').value;
+            const value = parseFloat(document.getElementById('rule-value').value);
+            const actionDevice = document.getElementById('rule-action-device').value;
+            if (!name || !actionDevice) return alert('请填写完整信息');
+            await api('/rules', { method: 'POST', body: JSON.stringify({
+                name, trigger_type: 'condition',
+                conditions: {logic: 'AND', conditions: [{metric, operator: op, value}]},
+                actions: {actions: [{device_id: actionDevice, command: 'switch', params: {on: true}}]}
+            })});
+            closeModal('modal-rule');
+            loadRules();
+        }
+
+        async function deleteRule(id) {
+            if (!confirm('确定删除该规则？')) return;
+            await fetch(API + '/rules/' + id, { method: 'DELETE' });
+            loadRules();
+        }
+
+        // 初始化
+        loadDashboard();
+        // 每 30 秒自动刷新仪表盘
+        setInterval(loadDashboard, 30000);
+    </script>
+</body>
+</html>
