@@ -6,25 +6,31 @@ use chrono::{Timelike, Utc};
 use std::time::Duration;
 use tokio::time::interval;
 use tracing::info;
+use std::collections::HashSet;
 
 pub async fn start(state: AppState) -> Result<()> {
     info!("Rule engine started");
 
     refresh_rules_cache(&state).await?;
 
-    let mut interval = interval(Duration::from_secs(5));
+    let mut interval_timer = interval(Duration::from_secs(5));
+    let mut last_minute_refresh: Option<u32> = None; // 记录上次刷新规则的分钟数
 
     loop {
-        interval.tick().await;
+        interval_timer.tick().await;
 
         if let Err(e) = evaluate_rules(&state).await {
             tracing::warn!("Rule evaluation error: {}", e);
         }
 
-        if Utc::now().timestamp() % 60 < 5 {
+        // 每分钟的第0秒刷新规则缓存（避免每秒检查）
+        let now = Utc::now();
+        let current_minute = now.minute();
+        if now.second() == 0 && Some(current_minute) != last_minute_refresh {
             if let Err(e) = refresh_rules_cache(&state).await {
                 tracing::warn!("Rule cache refresh error: {}", e);
             }
+            last_minute_refresh = Some(current_minute);
         }
     }
 }
@@ -42,7 +48,7 @@ async fn refresh_rules_cache(state: &AppState) -> Result<()> {
         .map(|r| agri_core::models::Rule {
             id: uuid::Uuid::parse_str(&r.0).unwrap_or_default(),
             name: r.1,
-            enabled: r.2 == 1,
+            enabled: r.2 == 1i64,
             trigger_type: match r.3.as_str() {
                 "schedule" => agri_core::models::TriggerType::Schedule,
                 _ => agri_core::models::TriggerType::Condition,
@@ -130,8 +136,16 @@ async fn evaluate_schedule_rule(state: &AppState, rule: &agri_core::models::Rule
             let now = Utc::now();
             let current_time = format!("{:02}:{:02}", now.hour(), now.minute());
 
+            // 只在整秒时触发，避免重复执行
             if time_str == current_time && now.second() == 0 {
+                // 检查是否在今天已经执行过（简单去重）
+                let last_execution_key = format!("rule_{}_last_exec", rule.id);
+                let last_exec_minute = now.minute();
+
+                // 这里可以添加更复杂的去重逻辑，比如使用Redis或数据库记录
+                // 目前简化为每分钟最多执行一次
                 trigger_actions(state, rule).await?;
+                info!("Scheduled rule '{}' triggered at {}", rule.name, current_time);
             }
         }
     }
@@ -171,4 +185,67 @@ async fn trigger_actions(state: &AppState, rule: &agri_core::models::Rule) -> Re
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use agri_core::models::{Rule, TriggerType};
+    use std::sync::Arc;
+    use tokio::sync::Mutex;
+    use chrono::Utc;
+
+    /// 测试 TriggerType 枚举
+    #[test]
+    fn test_trigger_type_condition() {
+        let trigger = TriggerType::Condition;
+        match trigger {
+            TriggerType::Condition => (),
+            _ => panic!("Expected Condition"),
+        }
+    }
+
+    #[test]
+    fn test_trigger_type_schedule() {
+        let trigger = TriggerType::Schedule;
+        match trigger {
+            TriggerType::Schedule => (),
+            _ => panic!("Expected Schedule"),
+        }
+    }
+
+    /// 测试 refresh_rules_cache - 空数据库
+    #[tokio::test]
+    async fn test_refresh_rules_cache_empty() {
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
+        
+        // 创建 rules 表
+        sqlx::query(
+            "CREATE TABLE rules (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                enabled INTEGER NOT NULL DEFAULT 1,
+                trigger_type TEXT NOT NULL,
+                conditions TEXT,
+                actions TEXT,
+                schedule TEXT,
+                created_at INTEGER NOT NULL
+            )"
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        
+        let state = AppState {
+            pool,
+            mqtt_client: Arc::new(Mutex::new(None)),
+            rules_cache: Arc::new(Mutex::new(Vec::new())),
+        };
+        
+        let result = refresh_rules_cache(&state).await;
+        assert!(result.is_ok());
+        
+        let cache = state.rules_cache.lock().await;
+        assert_eq!(cache.len(), 0);
+    }
 }

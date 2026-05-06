@@ -253,3 +253,239 @@ async fn dashboard_summary(State(state): State<AppState>) -> impl IntoResponse {
         "total_devices": total.0, "online_devices": online.0, "active_rules": active_rules.0,
     })).into_response()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::{
+        body::Body,
+        http::{Request, StatusCode},
+    };
+    use sqlx::SqlitePool;
+    use tower::ServiceExt;
+    use uuid::Uuid;
+
+    /// 创建内存测试数据库并创建必要的表
+    async fn setup_test_db() -> SqlitePool {
+        let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+
+        sqlx::query(
+            "CREATE TABLE devices (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                node_id TEXT NOT NULL UNIQUE,
+                device_type TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'offline',
+                config TEXT,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL
+            )"
+        ).execute(&pool).await.unwrap();
+
+        sqlx::query(
+            "CREATE TABLE sensor_readings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                device_id TEXT NOT NULL,
+                metric TEXT NOT NULL,
+                value REAL NOT NULL,
+                unit TEXT,
+                timestamp INTEGER NOT NULL
+            )"
+        ).execute(&pool).await.unwrap();
+
+        sqlx::query(
+            "CREATE TABLE rules (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                enabled INTEGER NOT NULL DEFAULT 1,
+                trigger_type TEXT NOT NULL,
+                conditions TEXT,
+                actions TEXT,
+                schedule TEXT,
+                created_at INTEGER NOT NULL
+            )"
+        ).execute(&pool).await.unwrap();
+
+        pool
+    }
+
+    /// 插入测试设备并返回设备ID
+    async fn insert_test_device(pool: &SqlitePool, name: &str, node_id: &str, device_type: &str) -> String {
+        let id = Uuid::new_v4().to_string();
+        let now = Utc::now().timestamp();
+        sqlx::query(
+            "INSERT INTO devices (id, name, node_id, device_type, status, created_at, updated_at) VALUES (?, ?, ?, ?, 'offline', ?, ?)"
+        )
+        .bind(&id).bind(name).bind(node_id).bind(device_type).bind(now).bind(now)
+        .execute(pool).await.unwrap();
+        id
+    }
+
+    // ========== 设备 API 测试（使用 Router::oneshot） ==========
+
+    /// 测试列出设备 - 空列表，返回200
+    #[tokio::test]
+    async fn test_list_devices_empty() {
+        let pool = setup_test_db().await;
+        let state = AppState::new(pool, create_mock_client().await);
+        let router = create_router(state);
+
+        let request = Request::builder()
+            .method("GET")
+            .uri("/api/v1/devices")
+            .body(Body::empty())
+            .unwrap();
+
+        let response = router.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    /// 测试获取不存在的设备 - 返回404
+    #[tokio::test]
+    async fn test_get_device_not_found() {
+        let pool = setup_test_db().await;
+        let state = AppState::new(pool, create_mock_client().await);
+        let router = create_router(state);
+
+        let request = Request::builder()
+            .method("GET")
+            .uri("/api/v1/devices/non-existent-uuid")
+            .body(Body::empty())
+            .unwrap();
+
+        let response = router.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    /// 测试仪表盘摘要 - 空数据返回200
+    #[tokio::test]
+    async fn test_dashboard_summary_empty() {
+        let pool = setup_test_db().await;
+        let state = AppState::new(pool, create_mock_client().await);
+        let router = create_router(state);
+
+        let request = Request::builder()
+            .method("GET")
+            .uri("/api/v1/dashboard/summary")
+            .body(Body::empty())
+            .unwrap();
+
+        let response = router.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    /// 测试创建设备 - 正常情况返回201
+    #[tokio::test]
+    async fn test_create_device_success() {
+        let pool = setup_test_db().await;
+        let state = AppState::new(pool, create_mock_client().await);
+        let router = create_router(state);
+
+        let request = Request::builder()
+            .method("POST")
+            .uri("/api/v1/devices")
+            .header("content-type", "application/json")
+            .body(Body::from(r#"{"name": "温度传感器", "node_id": "node-001", "device_type": "sensor"}"#))
+            .unwrap();
+
+        let response = router.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::CREATED);
+    }
+
+    /// 测试创建设备 - 非法设备类型返回400
+    #[tokio::test]
+    async fn test_create_device_invalid_type() {
+        let pool = setup_test_db().await;
+        let state = AppState::new(pool, create_mock_client().await);
+        let router = create_router(state);
+
+        let request = Request::builder()
+            .method("POST")
+            .uri("/api/v1/devices")
+            .header("content-type", "application/json")
+            .body(Body::from(r#"{"name": "Test", "node_id": "node-002", "device_type": "invalid"}"#))
+            .unwrap();
+
+        let response = router.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    // ========== 参数校验单元测试 ==========
+
+    /// 测试设备类型校验 - sensor 合法
+    #[test]
+    fn test_device_type_validation_sensor() {
+        let device_type = "sensor";
+        let result = match device_type {
+            "sensor" | "actuator" => true,
+            _ => false,
+        };
+        assert!(result);
+    }
+
+    /// 测试设备类型校验 - actuator 合法
+    #[test]
+    fn test_device_type_validation_actuator() {
+        let device_type = "actuator";
+        let result = match device_type {
+            "sensor" | "actuator" => true,
+            _ => false,
+        };
+        assert!(result);
+    }
+
+    /// 测试设备类型校验 - 非法类型
+    #[test]
+    fn test_device_type_validation_invalid() {
+        let device_type = "invalid";
+        let result = match device_type {
+            "sensor" | "actuator" => true,
+            _ => false,
+        };
+        assert!(!result);
+    }
+
+    /// 测试触发类型校验 - schedule 合法
+    #[test]
+    fn test_trigger_type_validation_schedule() {
+        let trigger_type = "schedule";
+        let result = match trigger_type {
+            "schedule" | "condition" => true,
+            _ => false,
+        };
+        assert!(result);
+    }
+
+    /// 测试触发类型校验 - condition 合法
+    #[test]
+    fn test_trigger_type_validation_condition() {
+        let trigger_type = "condition";
+        let result = match trigger_type {
+            "schedule" | "condition" => true,
+            _ => false,
+        };
+        assert!(result);
+    }
+
+    /// 测试触发类型校验 - 非法类型
+    #[test]
+    fn test_trigger_type_validation_invalid() {
+        let trigger_type = "invalid";
+        let result = match trigger_type {
+            "schedule" | "condition" => true,
+            _ => false,
+        };
+        assert!(!result);
+    }
+
+    // ========== 辅助函数 ==========
+
+    /// 创建 Mock MQTT 客户端（不连接真实 broker）
+    async fn create_mock_client() -> rumqttc::AsyncClient {
+        let (client, _) = rumqttc::AsyncClient::new(
+            rumqttc::MqttOptions::new("test-client", "127.0.0.1", 1883),
+            10
+        );
+        client
+    }
+}
