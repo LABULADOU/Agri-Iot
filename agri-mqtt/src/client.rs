@@ -1,35 +1,21 @@
 use anyhow::Result;
-use rumqttc::{AsyncClient, MqttOptions, QoS};
+use rumqttc::{AsyncClient, EventLoop, MqttOptions, QoS};
 use tracing::info;
 
-pub async fn create_client(
+pub fn create_client(
     broker_addr: &str,
     port: u16,
     client_id: &str,
-) -> Result<AsyncClient> {
+) -> Result<(AsyncClient, EventLoop)> {
     let mut mqtt_options = MqttOptions::new(client_id, broker_addr, port);
     mqtt_options.set_keep_alive(std::time::Duration::from_secs(5));
     mqtt_options.set_clean_session(true);
 
-    let (client, mut eventloop) = AsyncClient::new(mqtt_options, 10);
+    let (client, eventloop) = AsyncClient::new(mqtt_options, 10);
 
     info!("MQTT client created: {}", client_id);
 
-    tokio::spawn(async move {
-        loop {
-            match eventloop.poll().await {
-                Ok(notification) => {
-                    tracing::debug!("MQTT notification: {:?}", notification);
-                }
-                Err(e) => {
-                    tracing::warn!("MQTT eventloop error: {}", e);
-                    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-                }
-            }
-        }
-    });
-
-    Ok(client)
+    Ok((client, eventloop))
 }
 
 pub async fn publish_command(

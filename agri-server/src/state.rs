@@ -11,10 +11,10 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub fn new(pool: SqlitePool) -> Self {
+    pub fn new(pool: SqlitePool, client: rumqttc::AsyncClient) -> Self {
         Self {
             pool,
-            mqtt_client: Arc::new(Mutex::new(None)),
+            mqtt_client: Arc::new(Mutex::new(Some(client))),
             rules_cache: Arc::new(Mutex::new(Vec::new())),
         }
     }

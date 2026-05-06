@@ -1,12 +1,12 @@
 use agri_core::db;
 use anyhow::Result;
-use axum::Router;
+use axum::{Router, middleware};
 use tower_http::services::ServeDir;
 use tracing::info;
 
 mod routes;
 mod state;
-mod middleware;
+mod request_logger;
 mod rule_engine;
 
 #[tokio::main]
@@ -24,12 +24,34 @@ async fn main() -> Result<()> {
     let pool = db::create_pool(&database_url).await?;
     db::run_migrations(&pool).await?;
 
-    let app_state = state::AppState::new(pool);
+    // 启动MQTT Broker
+    let mqtt_port = std::env::var("MQTT_BROKER_PORT")
+        .unwrap_or_else(|_| "1883".into())
+        .parse::<u16>()
+        .unwrap_or(1883);
+
+    std::thread::spawn(move || {
+        if let Err(e) = agri_mqtt::broker::start_broker(mqtt_port) {
+            tracing::error!("MQTT Broker failed: {}", e);
+        }
+    });
+    info!("MQTT Broker started on port {}", mqtt_port);
+
+    // 创建MQTT客户端和事件循环
+    let (mqtt_client, eventloop) = agri_mqtt::client::create_client("127.0.0.1", mqtt_port, "agri-server")?;
+    info!("MQTT client created");
+
+    // 启动MQTT消息处理（传入eventloop）
+    let handler_pool = pool.clone();
+    tokio::spawn(async move {
+        agri_mqtt::handler::start_listener(eventloop, handler_pool).await;
+    });
+
+    let app_state = state::AppState::new(pool, mqtt_client);
 
     // 启动规则引擎（异步后台任务）
     let rule_state = app_state.clone();
     tokio::spawn(async move {
-        // 等待 2 秒让服务器先启动
         tokio::time::sleep(std::time::Duration::from_secs(2)).await;
         if let Err(e) = rule_engine::start(rule_state).await {
             tracing::error!("Rule engine error: {}", e);
@@ -40,6 +62,7 @@ async fn main() -> Result<()> {
 
     let app = Router::new()
         .merge(api_router)
+        .layer(middleware::from_fn(request_logger::log_requests))
         .fallback_service(ServeDir::new("static"));
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await?;

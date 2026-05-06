@@ -13,7 +13,7 @@ import paho.mqtt.client as mqtt
 MQTT_HOST = "127.0.0.1"
 MQTT_PORT = 1883
 NODE_ID = "esp32-node-001"
-TOPIC = f"agri/{NODE_ID}/telemetry"
+TOPIC = f"agri/node/{NODE_ID}/telemetry"  # 与 handler.rs 中的主题格式一致
 
 print(f"[*] 正在连接 MQTT Broker (localhost:{MQTT_PORT})...")
 

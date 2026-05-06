@@ -22,8 +22,8 @@ const int MQTT_PORT = 1883;
 const char* NODE_ID = "esp32-node-001";      // 设备唯一标识
 
 // 引脚定义
-#define DHTPIN 4
-#define DHTTYPE DHT11          // 使用 DHT11，如使用 DHT22 改为 DHT22
+#define DHTPIN 15
+#define DHTTYPE DHT22
 #define SOIL_MOISTURE_PIN 34   // 土壤湿度传感器 (ADC1)
 #define LIGHT_PIN 35           // 光照传感器 (ADC1)
 #define RELAY_PIN 16           // 继电器控制引脚
