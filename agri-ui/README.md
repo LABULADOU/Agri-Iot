@@ -1,73 +1,62 @@
-# React + TypeScript + Vite
+# Agri-IoT 前端
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+智慧农业物联网监控系统前端，基于 React + TypeScript + Vite。
 
-Currently, two official plugins are available:
+## 技术栈
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- **框架**: React 19 + TypeScript 6
+- **UI**: Ant Design 6 + CSS Modules
+- **图表**: ECharts 6 + echarts-for-react
+- **状态管理**: Zustand 5
+- **路由**: React Router 7
+- **构建**: Vite 8
 
-## React Compiler
+## 快速开始
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+```bash
+# 安装依赖
+npm install
 
-## Expanding the ESLint configuration
+# 开发模式（端口 3001）
+npm run dev
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+# 构建到后端静态目录
+npm run build
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+构建输出自动写入 `agri-server/static/`，由后端 fallback 服务托管。
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## 项目结构
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
 ```
+src/
+├── components/     # 公共组件
+│   ├── Charts/     # ECharts 封装
+│   ├── Layout/     # 布局（Header/Sidebar/MainLayout）
+│   ├── WeatherPanel/   # 天气面板
+│   ├── ZoneCard/       # 区域卡片
+│   ├── ControlPanel/   # 设备控制面板
+│   └── ComfortIndicator/  # 舒适度指示器
+├── pages/          # 页面
+│   ├── Dashboard/      # 仪表盘
+│   ├── NodeList/       # 节点列表
+│   ├── ZoneList/       # 区域列表
+│   ├── ZoneDetail/     # 区域详情
+│   ├── DataQuery/      # 数据查询
+│   ├── RuleList/       # 规则列表
+│   └── Settings/       # 系统设置
+├── services/       # API 服务
+│   ├── api.ts          # REST API 封装
+│   ├── weather.ts      # 天气 API
+│   └── ws.ts           # WebSocket 实时数据
+├── stores/         # Zustand 状态管理
+│   ├── realtimeStore.ts
+│   └── zoneStore.ts
+├── types/          # TypeScript 类型定义
+├── App.tsx         # 根组件
+└── main.tsx        # 入口
+```
+
+## 后端 API
+
+所有 API 通过 `/api/v1/*` 访问，由 `agri-server`（Axum）提供。开发模式下 Vite 代理到 `localhost:3000`。

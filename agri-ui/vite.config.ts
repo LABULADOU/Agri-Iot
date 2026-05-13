@@ -6,4 +6,8 @@ export default defineConfig({
   server: {
     port: 3001,
   },
+  build: {
+    outDir: '../agri-server/static',
+    emptyOutDir: true,
+  },
 })

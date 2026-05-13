@@ -313,7 +313,6 @@ async fn list_node_readings(
 #[derive(Debug, Deserialize)]
 pub struct AggregatedQuery {
     pub node_id: Option<String>,
-    #[allow(dead_code)]
     pub metric: Option<String>,
     pub period: Option<String>,
     pub start: Option<i64>,
@@ -344,6 +343,10 @@ async fn aggregated_readings(State(state): State<AppState>, Query(query): Query<
     if let Some(ref node_id) = query.node_id {
         builder.push(" AND device_id = ");
         builder.push_bind(node_id);
+    }
+    if let Some(ref metric) = query.metric {
+        builder.push(" AND metric = ");
+        builder.push_bind(metric);
     }
     
     builder.push(format!(

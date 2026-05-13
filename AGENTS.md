@@ -5,7 +5,7 @@
 - **agri-core**: 核心库（模型、DB、错误定义）
 - **agri-server**: 后端服务（Axum + SQLx）
 - **agri-mqtt**: MQTT 通信（rumqttd broker + rumqttc client）
-- **agri-frontend**: 前端（Yew WASM）
+- **agri-ui**: 前端（React + TypeScript + Vite + Ant Design）
 - **esp32-firmware**: ESP32 固件（Arduino）
 
 ## 后端整改完成（2026-05-06）
@@ -27,25 +27,27 @@
 ## 后端优化进度
 
 ### 响应 JSON 序列化（未完成）
-- **尝试过**：为 `Device`、`SensorReading`、`Rule` 添加 `sqlx::FromRow` 派生
-- **遇到问题**：`DeviceType`、`DeviceStatus`、`TriggerType` 枚举需要实现 `sqlx::Type` + `sqlx::Decode`，否则 `query_as` 报错
-- **当前方案**：回退到手动构建 JSON（`serde_json::json!`），编译通过
-- **后续建议**：要么为枚举实现 sqlx 支持，要么继续用手动 JSON 构建
+- 所有 API 当前使用手动 `serde_json::json!()` 构建 JSON
+- 枚举（`DeviceType`、`DeviceStatus`、`TriggerType`）未实现 `sqlx::Type`，无法直接 `FromRow`
+- 后续建议：为枚举实现 sqlx 支持，或保持手动构建
 
-### 单元测试（未开始）
-- [ ] 为 `agri-core` 模型添加测试
-- [ ] 为 `agri-server` 路由添加集成测试
-- [ ] 为规则引擎添加逻辑测试
+### 单元测试（已有 54 个测试）
+- `agri-core`：模型 9 个 + 错误处理 9 个 = 18 个
+- `agri-mqtt`：消息处理 15 个 + 集成 7 个 = 22 个
+- `agri-server`：路由 11 个 + 规则引擎 3 个 = 14 个
 
-### 配置管理统一（未开始）
-- **现状**：`.env`（DATABASE_URL、SERVER_PORT、MQTT_BROKER_PORT、RUST_LOG）和 `config/default.toml`（server、database、mqtt、logging）并存
-- **建议**：二选一，推荐用 `config` crate 统一加载 `config/default.toml`，敏感信息放 `.env` 或环境变量
+### 配置管理统一（已完成）
+- `config/` 已移除，统一使用 `.env` 加载配置
+- `agri-core/src/models.rs`：移除死代码 `AggregatedReading`、`CommandLog`、`CommandStatus`、`SensorUtils`、`FromRow` 派生
+- `agri-core/migrations/001_init.sql`：替为 `migrations/` 的符号链接（消除重复）
+- `agri-server/src/routes.rs`：`AggregatedQuery.metric` 接入实际查询（原为死字段）
+- `deploy/verify.sh`：修复 `middleware.rs` → `request_logger.rs` 过时引用
 
-## 前端（优先级低，未开始）
-- [ ] 告警记录页面（`alerts.rs` 仅占位符）
-- [ ] 系统设置页面（`settings.rs` 仅占位符）
-- [ ] 前端设备/规则创建表单
-- [ ] 数据可视化图表
+## 前端（React + Vite，已完成迁移）
+- 新 UI 替换旧 Yew WASM 前端（2026-05-13）
+- 旧 `agri-frontend/` 已移除
+- 构建输出到 `agri-server/static/`，由后端 fallback 服务托管
+- 技术栈：React 19 + Ant Design 6 + ECharts + Zustand + React Router 7
 
 ## ESP32
 - [ ] 移除固件中的硬编码 WiFi 凭据（`main.ino:16-17`）
@@ -58,16 +60,23 @@
 - MQTT 处理：`agri-mqtt/src/handler.rs`（监听 `agri/node/+/telemetry` 和 `agri/node/+/status`）
 - 数据库迁移：`migrations/001_init.sql`
 - 请求日志：`agri-server/src/request_logger.rs`（原 `middleware.rs`）
+- 前端页面：`agri-ui/src/pages/`
+- 前端组件：`agri-ui/src/components/`
+- 前端 API：`agri-ui/src/services/api.ts`
+- 前端状态：`agri-ui/src/stores/`
 
 ## 启动方式
 ```bash
-# 1. 构建（首次或代码修改后）
+# 1. 构建前端（首次或修改后）
+cd agri-ui && npm install && npm run build && cd ..
+
+# 2. 构建后端
 cargo build
 
-# 2. 启动后端
+# 3. 启动后端
 ./target/debug/agri-server
 
-# 3. 模拟传感器数据（新终端）
+# 4. 模拟传感器数据（新终端）
 python3 scripts/simulate_node.py
 ```
 
@@ -80,14 +89,17 @@ cargo check  # 应该全项目通过
 ```
 
 ### 2. 接着做优化（建议顺序）
-1. **配置管理统一**：选 `.env` 或 `config.toml` 二选一，减少配置源
-2. **单元测试**：从 `agri-core` 的模型开始，再到路由和规则引擎
+1. **配置管理统一**：已完成（使用 `.env`）
+2. **单元测试**：已有 54 个，可继续增加路由集成测试
 3. **JSON 序列化**：解决枚举的 sqlx 支持问题，或为枚举实现 `FromRow`
 
-### 3. 如果要做前端
-- 先完善 `alerts.rs` 和 `settings.rs` 的占位符页面
-- 添加设备/规则创建表单（需要后端先完善 API）
-- 数据可视化（需要图表库，如 `plotters` 或前端图表库）
+### 3. 前端开发
+```bash
+cd agri-ui
+npm install
+npm run dev    # 开发模式，端口 3001，API 代理到后端 3000
+npm run build  # 构建到 agri-server/static/
+```
 
 ## 已知坑点
 - `rumqttc` 0.24 的 `AsyncClient` 和 `EventLoop` 要分开创建（`AsyncClient::new` 返回 `(AsyncClient, EventLoop)`）
@@ -98,4 +110,5 @@ cargo check  # 应该全项目通过
 ## 项目记忆
 - 本文档（`AGENTS.md`）是项目记忆，每次新对话先看这个
 - 后端核心功能已完善，优先做优化和测试
-- 前端优先级低，ESP32 按用户要求暂不处理
+- 前端已迁移到 React（agri-ui），旧 Yew 前端已移除
+- ESP32 按用户要求暂不处理
