@@ -6,7 +6,7 @@ use chrono::{Timelike, Utc};
 use std::time::Duration;
 use tokio::time::interval;
 use tracing::info;
-use std::collections::HashSet;
+
 
 pub async fn start(state: AppState) -> Result<()> {
     info!("Rule engine started");
@@ -138,12 +138,6 @@ async fn evaluate_schedule_rule(state: &AppState, rule: &agri_core::models::Rule
 
             // 只在整秒时触发，避免重复执行
             if time_str == current_time && now.second() == 0 {
-                // 检查是否在今天已经执行过（简单去重）
-                let last_execution_key = format!("rule_{}_last_exec", rule.id);
-                let last_exec_minute = now.minute();
-
-                // 这里可以添加更复杂的去重逻辑，比如使用Redis或数据库记录
-                // 目前简化为每分钟最多执行一次
                 trigger_actions(state, rule).await?;
                 info!("Scheduled rule '{}' triggered at {}", rule.name, current_time);
             }
@@ -190,10 +184,9 @@ async fn trigger_actions(state: &AppState, rule: &agri_core::models::Rule) -> Re
 #[cfg(test)]
 mod tests {
     use super::*;
-    use agri_core::models::{Rule, TriggerType};
+    use agri_core::models::TriggerType;
     use std::sync::Arc;
     use tokio::sync::Mutex;
-    use chrono::Utc;
 
     /// 测试 TriggerType 枚举
     #[test]

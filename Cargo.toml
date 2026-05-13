@@ -3,7 +3,6 @@ members = [
     "agri-core",
     "agri-server",
     "agri-mqtt",
-    "agri-frontend",
 ]
 resolver = "2"
 
@@ -27,18 +26,9 @@ sqlx = { version = "0.7", features = ["runtime-tokio", "sqlite", "chrono", "uuid
 axum = "0.7"
 tower = "0.4"
 tower-http = { version = "0.5", features = ["fs", "trace", "cors"] }
-jsonwebtoken = "9.2"
 rumqttd = "0.18"
 rumqttc = "0.24"
-config = { version = "0.14", features = ["toml"] }
 dotenvy = "0.15"
-yew = { version = "0.21", features = ["csr"] }
-yew-router = "0.18"
-gloo = "0.11"
-gloo-net = "0.5"
-wasm-bindgen = "0.2"
-wasm-bindgen-futures = "0.4"
-web-sys = { version = "0.3", features = ["WebSocket"] }
 
 [profile.release]
 opt-level = 3

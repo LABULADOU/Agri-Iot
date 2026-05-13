@@ -25,6 +25,18 @@ pub struct ComfortConfig {
     pub ec_value: ValueRange,
 }
 
+impl Default for ComfortConfig {
+    fn default() -> Self {
+        Self {
+            air_temp: ValueRange { min: 15.0, max: 30.0 },
+            air_humidity: ValueRange { min: 50.0, max: 85.0 },
+            soil_temp: ValueRange { min: 12.0, max: 28.0 },
+            soil_moisture: ValueRange { min: 40.0, max: 80.0 },
+            ec_value: ValueRange { min: 1.0, max: 4.0 },
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ValueRange {
     pub min: f64,

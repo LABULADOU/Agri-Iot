@@ -1,4 +1,4 @@
-use agri_core::models::CommandPayload;
+use agri_core::models::{ComfortConfig, CommandPayload, ValueRange};
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
@@ -7,7 +7,7 @@ use axum::{
     Json, Router,
 };
 use chrono::Utc;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::state::AppState;
@@ -51,33 +51,6 @@ pub struct CreateZoneRequest {
     pub comfort_config: Option<ComfortConfig>,
     #[serde(default)]
     pub node_ids: Vec<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ComfortConfig {
-    pub air_temp: ValueRange,
-    pub air_humidity: ValueRange,
-    pub soil_temp: ValueRange,
-    pub soil_moisture: ValueRange,
-    pub ec_value: ValueRange,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ValueRange {
-    pub min: f64,
-    pub max: f64,
-}
-
-impl Default for ComfortConfig {
-    fn default() -> Self {
-        Self {
-            air_temp: ValueRange { min: 15.0, max: 30.0 },
-            air_humidity: ValueRange { min: 50.0, max: 85.0 },
-            soil_temp: ValueRange { min: 12.0, max: 28.0 },
-            soil_moisture: ValueRange { min: 40.0, max: 80.0 },
-            ec_value: ValueRange { min: 1.0, max: 4.0 },
-        }
-    }
 }
 
 async fn list_zones(State(state): State<AppState>) -> impl IntoResponse {
@@ -297,15 +270,33 @@ async fn list_node_readings(
     State(state): State<AppState>, Path(id): Path<String>,
     Query(query): Query<ReadingsQuery>,
 ) -> impl IntoResponse {
-    let mut sql = String::from("SELECT id, device_id, metric, value, unit, timestamp FROM sensor_readings WHERE device_id = ?");
-    if let Some(ref metric) = query.metric { sql.push_str(&format!(" AND metric = '{}'", metric)); }
-    if let Some(start) = query.start { sql.push_str(&format!(" AND timestamp >= {}", start)); }
-    if let Some(end) = query.end { sql.push_str(&format!(" AND timestamp <= {}", end)); }
-    sql.push_str(" ORDER BY timestamp DESC");
-    if let Some(limit) = query.limit { sql.push_str(&format!(" LIMIT {}", limit)); }
-    
-    let readings = sqlx::query_as::<_, (i64, String, String, f64, String, i64)>(&sql)
-        .bind(&id).fetch_all(&state.pool).await;
+    use sqlx::QueryBuilder;
+
+    let mut builder = QueryBuilder::new(
+        "SELECT id, device_id, metric, value, unit, timestamp FROM sensor_readings WHERE device_id = "
+    );
+    builder.push_bind(&id);
+
+    if let Some(ref metric) = query.metric {
+        builder.push(" AND metric = ");
+        builder.push_bind(metric);
+    }
+    if let Some(start) = query.start {
+        builder.push(" AND timestamp >= ");
+        builder.push_bind(start);
+    }
+    if let Some(end) = query.end {
+        builder.push(" AND timestamp <= ");
+        builder.push_bind(end);
+    }
+    builder.push(" ORDER BY timestamp DESC");
+    if let Some(limit) = query.limit {
+        builder.push(" LIMIT ");
+        builder.push_bind(limit);
+    }
+
+    let readings = builder.build_query_as::<(i64, String, String, f64, String, i64)>()
+        .fetch_all(&state.pool).await;
     match readings {
         Ok(rows) => {
             let result: Vec<serde_json::Value> = rows.into_iter().map(|r| {
@@ -330,6 +321,8 @@ pub struct AggregatedQuery {
 }
 
 async fn aggregated_readings(State(state): State<AppState>, Query(query): Query<AggregatedQuery>) -> impl IntoResponse {
+    use sqlx::QueryBuilder;
+
     let now = Utc::now().timestamp();
     let start = query.start.unwrap_or(now - 86400);
     let end = query.end.unwrap_or(now);
@@ -341,18 +334,24 @@ async fn aggregated_readings(State(state): State<AppState>, Query(query): Query<
         _ => "datetime(timestamp, 'unixepoch', 'start of hour')",
     };
     
-    let sql = format!(
-        "SELECT {}, metric, device_id, MAX(value), MIN(value), AVG(value), COUNT(*) 
-         FROM sensor_readings 
-         WHERE timestamp >= {} AND timestamp <= {} {} 
-         GROUP BY {}, metric, device_id 
-         ORDER BY {}",
+    let mut builder = QueryBuilder::new(format!(
+        "SELECT {}, metric, device_id, MAX(value), MIN(value), AVG(value), COUNT(*) \
+         FROM sensor_readings \
+         WHERE timestamp >= {} AND timestamp <= {}",
         truncate, start, end,
-        query.node_id.as_ref().map(|n| format!(" AND device_id = '{}'", n)).unwrap_or_default(),
-        truncate, truncate
-    );
+    ));
     
-    let readings = sqlx::query_as::<_, (String, String, String, f64, f64, f64, i64)>(&sql)
+    if let Some(ref node_id) = query.node_id {
+        builder.push(" AND device_id = ");
+        builder.push_bind(node_id);
+    }
+    
+    builder.push(format!(
+        " GROUP BY {}, metric, device_id ORDER BY {}",
+        truncate, truncate,
+    ));
+    
+    let readings = builder.build_query_as::<(String, String, String, f64, f64, f64, i64)>()
         .fetch_all(&state.pool).await;
     
     match readings {
@@ -497,14 +496,33 @@ pub struct ReadingsQuery {
 }
 
 async fn list_readings(State(state): State<AppState>, Path(id): Path<String>, Query(query): Query<ReadingsQuery>) -> impl IntoResponse {
-    let mut sql = String::from("SELECT id, device_id, metric, value, unit, timestamp FROM sensor_readings WHERE device_id = ?");
-    if let Some(ref metric) = query.metric { sql.push_str(&format!(" AND metric = '{}'", metric)); }
-    if let Some(start) = query.start { sql.push_str(&format!(" AND timestamp >= {}", start)); }
-    if let Some(end) = query.end { sql.push_str(&format!(" AND timestamp <= {}", end)); }
-    sql.push_str(" ORDER BY timestamp DESC");
-    if let Some(limit) = query.limit { sql.push_str(&format!(" LIMIT {}", limit)); }
-    let readings = sqlx::query_as::<_, (i64, String, String, f64, String, i64)>(&sql)
-        .bind(&id).fetch_all(&state.pool).await;
+    use sqlx::QueryBuilder;
+
+    let mut builder = QueryBuilder::new(
+        "SELECT id, device_id, metric, value, unit, timestamp FROM sensor_readings WHERE device_id = "
+    );
+    builder.push_bind(&id);
+
+    if let Some(ref metric) = query.metric {
+        builder.push(" AND metric = ");
+        builder.push_bind(metric);
+    }
+    if let Some(start) = query.start {
+        builder.push(" AND timestamp >= ");
+        builder.push_bind(start);
+    }
+    if let Some(end) = query.end {
+        builder.push(" AND timestamp <= ");
+        builder.push_bind(end);
+    }
+    builder.push(" ORDER BY timestamp DESC");
+    if let Some(limit) = query.limit {
+        builder.push(" LIMIT ");
+        builder.push_bind(limit);
+    }
+
+    let readings = builder.build_query_as::<(i64, String, String, f64, String, i64)>()
+        .fetch_all(&state.pool).await;
     match readings {
         Ok(rows) => {
             let result: Vec<serde_json::Value> = rows.into_iter().map(|r| {
@@ -680,9 +698,51 @@ mod tests {
             )"
         ).execute(&pool).await.unwrap();
 
+        sqlx::query(
+            "CREATE TABLE command_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                device_id TEXT NOT NULL,
+                command TEXT NOT NULL,
+                payload TEXT,
+                status TEXT NOT NULL DEFAULT 'pending',
+                created_at INTEGER NOT NULL
+            )"
+        ).execute(&pool).await.unwrap();
+
+        sqlx::query(
+            "CREATE TABLE IF NOT EXISTS zones (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                description TEXT,
+                location TEXT NOT NULL,
+                crop_type TEXT NOT NULL,
+                comfort_config TEXT NOT NULL,
+                node_ids TEXT NOT NULL DEFAULT '[]',
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL
+            )"
+        ).execute(&pool).await.unwrap();
+
+        sqlx::query(
+            "CREATE TABLE sensor_nodes (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                zone_id TEXT NOT NULL,
+                has_irrigation INTEGER NOT NULL DEFAULT 0,
+                has_side_vent INTEGER NOT NULL DEFAULT 0,
+                has_roof_vent INTEGER NOT NULL DEFAULT 0,
+                vent_range TEXT NOT NULL DEFAULT '{\"min\": 0, \"max\": 100}',
+                status TEXT NOT NULL DEFAULT 'offline',
+                last_seen INTEGER,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL
+            )"
+        ).execute(&pool).await.unwrap();
+
         pool
     }
 
+    #[allow(dead_code)]
     async fn insert_test_device(pool: &SqlitePool, name: &str, node_id: &str, device_type: &str) -> String {
         let id = Uuid::new_v4().to_string();
         let now = Utc::now().timestamp();

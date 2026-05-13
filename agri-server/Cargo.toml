@@ -18,7 +18,5 @@ uuid.workspace = true
 anyhow.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
-config.workspace = true
 dotenvy.workspace = true
-jsonwebtoken.workspace = true
 rumqttc.workspace = true

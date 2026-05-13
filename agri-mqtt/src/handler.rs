@@ -1,6 +1,6 @@
 use chrono::Utc;
 use sqlx::SqlitePool;
-use rumqttc::{AsyncClient, Event, Incoming};
+use rumqttc::{Event, Incoming};
 use tracing::info;
 
 pub async fn handle_telemetry(
@@ -71,6 +71,16 @@ pub async fn handle_status_change(
         "UPDATE devices SET status = ?, updated_at = ? WHERE node_id = ?",
     )
     .bind(db_status)
+    .bind(now)
+    .bind(node_id)
+    .execute(pool)
+    .await?;
+
+    sqlx::query(
+        "UPDATE sensor_nodes SET status = ?, last_seen = ?, updated_at = ? WHERE id = ?",
+    )
+    .bind(db_status)
+    .bind(now)
     .bind(now)
     .bind(node_id)
     .execute(pool)
@@ -161,12 +171,41 @@ mod tests {
         .execute(&pool)
         .await
         .unwrap();
+
+        // 创建 sensor_nodes 表
+        sqlx::query(
+            "CREATE TABLE IF NOT EXISTS sensor_nodes (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                zone_id TEXT NOT NULL,
+                has_irrigation INTEGER NOT NULL DEFAULT 0,
+                has_side_vent INTEGER NOT NULL DEFAULT 0,
+                has_roof_vent INTEGER NOT NULL DEFAULT 0,
+                vent_range TEXT NOT NULL DEFAULT '{\"min\": 0, \"max\": 100}',
+                status TEXT NOT NULL DEFAULT 'offline',
+                last_seen INTEGER,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL
+            )"
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
         
         // 插入测试设备
         let now = Utc::now().timestamp();
         sqlx::query(
             "INSERT INTO devices (id, name, node_id, device_type, status, created_at, updated_at) 
              VALUES ('test-device-uuid', 'Test Sensor', 'node-001', 'sensor', 'online', ?1, ?1)"
+        )
+        .bind(now)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        sqlx::query(
+            "INSERT INTO sensor_nodes (id, name, zone_id, status, created_at, updated_at)
+             VALUES ('node-001', 'Test Node', 'zone-001', 'online', ?1, ?1)"
         )
         .bind(now)
         .execute(&pool)

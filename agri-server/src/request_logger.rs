@@ -6,7 +6,6 @@ use axum::{
 };
 use tracing::info;
 
-#[allow(dead_code)]
 pub async fn log_requests(req: Request<Body>, next: Next) -> Response {
     let method = req.method().clone();
     let uri = req.uri().clone();
