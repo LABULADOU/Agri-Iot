@@ -20,9 +20,10 @@
 7. **rumqttc API 不匹配** → 使用正确的 `AsyncClient + EventLoop` 模式
 8. **中间件模块冲突** → 重命名 `middleware.rs` 为 `request_logger.rs`
 
-### 编译状态（2026-05-06 最新）
+### 编译状态（2026-05-13 最新）
 - ✅ `cargo check` 全项目通过
 - 构建产物：`target/debug/agri-server`
+- MQTT：支持云 Broker（通过 `MQTT_HOST` 配置，默认 `broker.emqx.io`），非本地地址时自动跳过内置 Broker
 
 ## 后端优化进度
 
@@ -49,9 +50,11 @@
 - 构建输出到 `agri-server/static/`，由后端 fallback 服务托管
 - 技术栈：React 19 + Ant Design 6 + ECharts + Zustand + React Router 7
 
-## ESP32
-- [ ] 移除固件中的硬编码 WiFi 凭据（`main.ino:16-17`）
-- **按用户要求：暂不处理**
+## ESP32（更新于 2026-05-13）
+- 固件：仅采集 DHT22 温湿度，上报至云 MQTT Broker（`broker.emqx.io`）
+- 使用前需修改 `src/main.ino` 中的 WiFi 凭据（`WIFI_SSID` / `WIFI_PASSWORD`）
+- 冗余传感器（土壤湿度、光照）和控制指令保留代码已清理
+- 根目录 `main.ino` 重复文件已移除，`src/main.ino` 为唯一源文件
 
 ## 关键文件位置
 - 路由：`agri-server/src/routes.rs`（返回 `Response`，错误处理用 `app_error_to_response`）

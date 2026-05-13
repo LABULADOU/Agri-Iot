@@ -24,21 +24,27 @@ async fn main() -> Result<()> {
     let pool = db::create_pool(&database_url).await?;
     db::run_migrations(&pool).await?;
 
-    // 启动MQTT Broker
-    let mqtt_port = std::env::var("MQTT_BROKER_PORT")
+    let mqtt_host = std::env::var("MQTT_HOST").unwrap_or_else(|_| "127.0.0.1".into());
+    let mqtt_port = std::env::var("MQTT_PORT")
         .unwrap_or_else(|_| "1883".into())
         .parse::<u16>()
         .unwrap_or(1883);
 
-    std::thread::spawn(move || {
-        if let Err(e) = agri_mqtt::broker::start_broker(mqtt_port) {
-            tracing::error!("MQTT Broker failed: {}", e);
-        }
-    });
-    info!("MQTT Broker started on port {}", mqtt_port);
+    // 仅在本地模式下启动内置 Broker（127.0.0.1/localhost 时启动）
+    if mqtt_host == "127.0.0.1" || mqtt_host == "localhost" {
+        let broker_port = mqtt_port;
+        std::thread::spawn(move || {
+            if let Err(e) = agri_mqtt::broker::start_broker(broker_port) {
+                tracing::error!("MQTT Broker failed: {}", e);
+            }
+        });
+        info!("MQTT Broker started on port {}", mqtt_port);
+    } else {
+        info!("Using external MQTT broker at {}:{}", mqtt_host, mqtt_port);
+    }
 
     // 创建MQTT客户端和事件循环
-    let (mqtt_client, eventloop) = agri_mqtt::client::create_client("127.0.0.1", mqtt_port, "agri-server")?;
+    let (mqtt_client, eventloop) = agri_mqtt::client::create_client(&mqtt_host, mqtt_port, "agri-server")?;
     info!("MQTT client created");
 
     // 启动MQTT消息处理（传入eventloop）
