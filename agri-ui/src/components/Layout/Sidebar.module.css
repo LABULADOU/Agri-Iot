@@ -1,0 +1,19 @@
+.sider {
+  background: #001529;
+}
+
+.logo {
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: bold;
+  color: #fff;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.menu {
+  border-right: none;
+  background: transparent;
+}

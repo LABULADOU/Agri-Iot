@@ -1,0 +1,29 @@
+.container {
+  padding: 0;
+}
+
+.header {
+  margin-bottom: 16px;
+}
+
+.filterCard {
+  margin-bottom: 16px;
+}
+
+.statsRow {
+  margin-bottom: 16px;
+}
+
+.statRange {
+  font-size: 11px;
+  display: block;
+  margin-top: 4px;
+}
+
+.chartCard {
+  margin-bottom: 16px;
+}
+
+.tableCard {
+  margin-bottom: 16px;
+}

@@ -1,0 +1,17 @@
+.container {
+  padding: 0;
+}
+
+.hint {
+  display: block;
+  margin-bottom: 16px;
+}
+
+.comfortSection {
+  padding: 12px 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.comfortSection:last-child {
+  border-bottom: none;
+}

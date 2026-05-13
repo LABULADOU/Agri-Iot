@@ -1,0 +1,78 @@
+.card {
+  height: 100%;
+}
+
+.current {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.currentMain {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.icon {
+  font-size: 48px;
+}
+
+.temp {
+  font-size: 32px;
+  font-weight: bold;
+}
+
+.currentInfo {
+  display: flex;
+  gap: 24px;
+}
+
+.infoItem {
+  text-align: center;
+}
+
+.infoItem :global(.ant-typography) {
+  display: block;
+}
+
+.infoItem :global(.ant-typography-secondary) {
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+
+.forecast {
+  margin-top: 16px;
+}
+
+.forecastTitle {
+  display: block;
+  margin-bottom: 12px;
+}
+
+.forecastDay {
+  text-align: center;
+  padding: 8px;
+  background: #fafafa;
+  border-radius: 4px;
+}
+
+.forecastIcon {
+  font-size: 24px;
+  display: block;
+  margin: 8px 0;
+}
+
+.forecastTemp {
+  font-size: 12px;
+}
+
+.updateTime {
+  display: block;
+  margin-top: 16px;
+  text-align: right;
+  font-size: 12px;
+}

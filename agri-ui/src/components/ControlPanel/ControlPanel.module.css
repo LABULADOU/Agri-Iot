@@ -1,0 +1,36 @@
+.card {
+  height: 100%;
+}
+
+.controlItem {
+  padding: 16px;
+  background: #fafafa;
+  border-radius: 8px;
+}
+
+.controlHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.icon {
+  font-size: 16px;
+  color: #1890ff;
+}
+
+.range {
+  font-size: 12px;
+  margin-left: auto;
+}
+
+.controlBody {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.status {
+  font-size: 12px;
+}

@@ -3,7 +3,70 @@ use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Zone {
+    pub id: Uuid,
+    pub name: String,
+    pub description: String,
+    pub location: String,
+    pub crop_type: String,
+    pub comfort_config: ComfortConfig,
+    pub node_ids: Vec<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ComfortConfig {
+    pub air_temp: ValueRange,
+    pub air_humidity: ValueRange,
+    pub soil_temp: ValueRange,
+    pub soil_moisture: ValueRange,
+    pub ec_value: ValueRange,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ValueRange {
+    pub min: f64,
+    pub max: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SensorNode {
+    pub id: Uuid,
+    pub name: String,
+    pub zone_id: Uuid,
+    pub has_irrigation: bool,
+    pub has_side_vent: bool,
+    pub has_roof_vent: bool,
+    pub vent_range: ValueRange,
+    pub status: DeviceStatus,
+    pub last_seen: DateTime<Utc>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AggregatedReading {
+    pub timestamp: DateTime<Utc>,
+    pub metric: String,
+    pub node_id: String,
+    pub max: f64,
+    pub min: f64,
+    pub avg: f64,
+    pub count: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AccumulatedTemp {
+    pub id: Uuid,
+    pub zone_id: Uuid,
+    pub date: String,
+    pub accumulated: f64,
+    pub threshold: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Device {
     pub id: Uuid,
     pub name: String,
