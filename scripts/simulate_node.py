@@ -11,19 +11,19 @@ import paho.mqtt.client as mqtt
 
 # 配置
 MQTT_HOST = "127.0.0.1"
-MQTT_PORT = 1883
+MQTT_PORT = 11883
 NODE_ID = "esp32-node-001"
 TOPIC = f"agri/node/{NODE_ID}/telemetry"  # 与 handler.rs 中的主题格式一致
 
 print(f"[*] 正在连接 MQTT Broker (localhost:{MQTT_PORT})...")
 
-def on_connect(client, userdata, flags, rc):
-    if rc == 0:
+def on_connect(client, userdata, flags, reason_code, properties):
+    if reason_code == 0:
         print(f"[+] 已连接，开始发布遥测数据到主题: {TOPIC}")
     else:
-        print(f"[-] 连接失败，代码: {rc}")
+        print(f"[-] 连接失败，代码: {reason_code}")
 
-client = mqtt.Client()
+client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
 client.on_connect = on_connect
 
 try:
@@ -37,10 +37,12 @@ try:
     while True:
         data = {
             "node_id": NODE_ID,
-            "soil_moisture": round(random.uniform(30, 80), 1),
-            "temperature": round(random.uniform(15, 35), 1),
-            "humidity": round(random.uniform(40, 90), 1),
-            "light_intensity": round(random.uniform(200, 1000), 0),
+            "metrics": {
+                "soil_moisture": round(random.uniform(30, 80), 1),
+                "temperature": round(random.uniform(15, 35), 1),
+                "humidity": round(random.uniform(40, 90), 1),
+                "light": round(random.uniform(200, 1000), 0),
+            },
             "timestamp": int(time.time())
         }
         
@@ -48,7 +50,7 @@ try:
         client.publish(TOPIC, payload)
         
         ts = time.strftime("%H:%M:%S")
-        print(f"{ts} | {data['soil_moisture']}%      | {data['temperature']}°C   | {data['humidity']}%    | {data['light_intensity']}")
+        print(f"{ts} | {data['metrics']['soil_moisture']}%      | {data['metrics']['temperature']}°C   | {data['metrics']['humidity']}%    | {data['metrics']['light']}")
         
         time.sleep(5)
         

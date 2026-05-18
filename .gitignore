@@ -21,3 +21,15 @@ esp32-firmware/.env
 # OS
 .DS_Store
 Thumbs.db
+
+# Backups and logs
+*.bak
+error.txt
+
+# Docs
+*.docx
+*.mdx
+
+# Python
+__pycache__/
+*.pyc

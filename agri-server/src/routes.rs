@@ -1,457 +1,131 @@
-use agri_core::models::{ComfortConfig, CommandPayload, ValueRange};
+use agri_core::error::AppError;
+use agri_core::models::{CommandPayload, Device, SensorReading, Rule};
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
-    response::IntoResponse,
+    response::{IntoResponse, Response, sse::{Event, Sse, KeepAlive}},
     routing::{get, post, put},
     Json, Router,
 };
 use chrono::Utc;
 use serde::Deserialize;
+use tokio_stream::wrappers::BroadcastStream;
+use tokio_stream::StreamExt;
 use uuid::Uuid;
 
 use crate::state::AppState;
 
+pub struct ServerError(pub AppError);
+
+impl IntoResponse for ServerError {
+    fn into_response(self) -> Response {
+        let status = StatusCode::from_u16(self.0.status_code()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+        (status, Json(self.0.as_response())).into_response()
+    }
+}
+
+impl From<sqlx::Error> for ServerError {
+    fn from(e: sqlx::Error) -> Self {
+        ServerError(AppError::Database(e))
+    }
+}
+
 pub fn create_router(state: AppState) -> Router {
     Router::new()
-        // Devices
         .route("/api/v1/devices", get(list_devices).post(create_device))
-        .route("/api/v1/devices/{id}", get(get_device).put(update_device).delete(delete_device))
-        .route("/api/v1/devices/{id}/readings", get(list_readings))
-        .route("/api/v1/devices/{id}/command", post(send_command))
-        // Zones
-        .route("/api/v1/zones", get(list_zones).post(create_zone))
-        .route("/api/v1/zones/{id}", get(get_zone).put(update_zone).delete(delete_zone))
-        .route("/api/v1/zones/{id}/accumulated-temp", get(list_accumulated_temp))
-        // Nodes
-        .route("/api/v1/nodes", get(list_nodes).post(create_node))
-        .route("/api/v1/nodes/{id}", get(get_node).put(update_node).delete(delete_node))
-        .route("/api/v1/nodes/{id}/readings", get(list_node_readings))
-        // Aggregated data
-        .route("/api/v1/readings/aggregated", get(aggregated_readings))
-        // Control
-        .route("/api/v1/control/command", post(send_control_command))
-        // Rules
+        .route("/api/v1/devices/:id", get(get_device).put(update_device).delete(delete_device))
+        .route("/api/v1/devices/:id/readings", get(list_readings))
+        .route("/api/v1/devices/:id/command", post(send_command))
         .route("/api/v1/rules", get(list_rules).post(create_rule))
-        .route("/api/v1/rules/{id}", put(update_rule).delete(delete_rule))
-        // Dashboard
+        .route("/api/v1/rules/:id", put(update_rule).delete(delete_rule))
+        .route("/api/v1/alerts", get(list_alerts))
+        .route("/api/v1/telemetry", post(ingest_telemetry))
         .route("/api/v1/dashboard/summary", get(dashboard_summary))
+        .route("/api/v1/dashboard/area-readings", get(dashboard_area_readings))
+        .route("/api/v1/dashboard/node-readings", get(dashboard_node_readings))
+        .route("/api/v1/system/info", get(system_info))
+        .route("/api/v1/monitor/realtime", get(monitor_realtime))
+        .route("/api/v1/events", get(sse_events))
+        .route("/api/v1/commands/node/:node_id", get(get_pending_commands))
+        .route("/api/v1/commands/:id/status", put(update_command_status))
         .with_state(state)
 }
-
-// ============== Zone APIs ==============
-
-#[derive(Debug, Deserialize)]
-pub struct CreateZoneRequest {
-    pub name: String,
-    pub description: Option<String>,
-    pub location: String,
-    pub crop_type: String,
-    #[serde(default)]
-    pub comfort_config: Option<ComfortConfig>,
-    #[serde(default)]
-    pub node_ids: Vec<String>,
-}
-
-async fn list_zones(State(state): State<AppState>) -> impl IntoResponse {
-    let zones = sqlx::query_as::<_, (String, String, String, String, String, String, String, i64, i64)>(
-        "SELECT id, name, description, location, crop_type, comfort_config, node_ids, created_at, updated_at FROM zones",
-    ).fetch_all(&state.pool).await;
-    match zones {
-        Ok(rows) => {
-            let result: Vec<serde_json::Value> = rows.into_iter().map(|r| {
-                serde_json::json!({
-                    "id": r.0, "name": r.1, "description": r.2, "location": r.3, "cropType": r.4,
-                    "comfortConfig": serde_json::from_str(&r.5).unwrap_or(serde_json::Value::Null),
-                    "nodeIds": serde_json::from_str::<Vec<String>>(&r.6).unwrap_or_default(),
-                    "createdAt": r.7, "updatedAt": r.8
-                })
-            }).collect();
-            Json(result).into_response()
-        }
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response(),
-    }
-}
-
-async fn get_zone(State(state): State<AppState>, Path(id): Path<String>) -> impl IntoResponse {
-    let zone = sqlx::query_as::<_, (String, String, String, String, String, String, String, i64, i64)>(
-        "SELECT id, name, description, location, crop_type, comfort_config, node_ids, created_at, updated_at FROM zones WHERE id = ?",
-    ).bind(&id).fetch_one(&state.pool).await;
-    match zone {
-        Ok(r) => Json(serde_json::json!({
-            "id": r.0, "name": r.1, "description": r.2, "location": r.3, "cropType": r.4,
-            "comfortConfig": serde_json::from_str(&r.5).unwrap_or(serde_json::Value::Null),
-            "nodeIds": serde_json::from_str::<Vec<String>>(&r.6).unwrap_or_default(),
-            "createdAt": r.7, "updatedAt": r.8
-        })).into_response(),
-        Err(_) => (StatusCode::NOT_FOUND, Json(serde_json::json!({"error": "Zone not found"}))).into_response(),
-    }
-}
-
-async fn create_zone(State(state): State<AppState>, Json(req): Json<CreateZoneRequest>) -> impl IntoResponse {
-    let id = Uuid::new_v4();
-    let now = Utc::now();
-    let comfort_config = req.comfort_config.unwrap_or_default();
-    let comfort_str = serde_json::to_string(&comfort_config).unwrap_or_default();
-    let node_ids_str = serde_json::to_string(&req.node_ids).unwrap_or_else(|_| "[]".to_string());
-    
-    let result = sqlx::query(
-        "INSERT INTO zones (id, name, description, location, crop_type, comfort_config, node_ids, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-    ).bind(id.to_string()).bind(&req.name).bind(&req.description).bind(&req.location).bind(&req.crop_type)
-    .bind(&comfort_str).bind(&node_ids_str).bind(now.timestamp()).bind(now.timestamp())
-    .execute(&state.pool).await;
-    
-    match result {
-        Ok(_) => Json(serde_json::json!({"id": id.to_string(), "name": req.name})).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response(),
-    }
-}
-
-async fn update_zone(State(state): State<AppState>, Path(id): Path<String>, Json(req): Json<CreateZoneRequest>) -> impl IntoResponse {
-    let now = Utc::now().timestamp();
-    let comfort_config = req.comfort_config.unwrap_or_default();
-    let comfort_str = serde_json::to_string(&comfort_config).unwrap_or_default();
-    let node_ids_str = serde_json::to_string(&req.node_ids).unwrap_or_else(|_| "[]".to_string());
-    
-    let result = sqlx::query(
-        "UPDATE zones SET name = ?, description = ?, location = ?, crop_type = ?, comfort_config = ?, node_ids = ?, updated_at = ? WHERE id = ?",
-    ).bind(&req.name).bind(&req.description).bind(&req.location).bind(&req.crop_type)
-    .bind(&comfort_str).bind(&node_ids_str).bind(now).bind(&id)
-    .execute(&state.pool).await;
-    
-    match result {
-        Ok(r) if r.rows_affected() > 0 => Json(serde_json::json!({"message": "Zone updated"})).into_response(),
-        Ok(_) => (StatusCode::NOT_FOUND, Json(serde_json::json!({"error": "Zone not found"}))).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response(),
-    }
-}
-
-async fn delete_zone(State(state): State<AppState>, Path(id): Path<String>) -> impl IntoResponse {
-    let result = sqlx::query("DELETE FROM zones WHERE id = ?").bind(&id).execute(&state.pool).await;
-    match result {
-        Ok(r) if r.rows_affected() > 0 => Json(serde_json::json!({"message": "Zone deleted"})).into_response(),
-        Ok(_) => (StatusCode::NOT_FOUND, Json(serde_json::json!({"error": "Zone not found"}))).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response(),
-    }
-}
-
-async fn list_accumulated_temp(State(state): State<AppState>, Path(zone_id): Path<String>) -> impl IntoResponse {
-    let temps = sqlx::query_as::<_, (String, String, String, f64, f64)>(
-        "SELECT id, zone_id, date, accumulated, threshold FROM accumulated_temps WHERE zone_id = ? ORDER BY date DESC LIMIT 30",
-    ).bind(&zone_id).fetch_all(&state.pool).await;
-    match temps {
-        Ok(rows) => {
-            let result: Vec<serde_json::Value> = rows.into_iter().map(|r| {
-                serde_json::json!({"id": r.0, "zoneId": r.1, "date": r.2, "accumulated": r.3, "threshold": r.4})
-            }).collect();
-            Json(result).into_response()
-        }
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response(),
-    }
-}
-
-// ============== Node APIs ==============
-
-#[derive(Debug, Deserialize)]
-pub struct CreateNodeRequest {
-    pub name: String,
-    pub zone_id: String,
-    #[serde(default)]
-    pub has_irrigation: bool,
-    #[serde(default)]
-    pub has_side_vent: bool,
-    #[serde(default)]
-    pub has_roof_vent: bool,
-    #[serde(default)]
-    pub vent_range: Option<ValueRange>,
-}
-
-async fn list_nodes(State(state): State<AppState>, Query(query): Query<NodeQuery>) -> impl IntoResponse {
-    let sql = if query.zone_id.is_some() {
-        "SELECT id, name, zone_id, has_irrigation, has_side_vent, has_roof_vent, vent_range, status, last_seen, created_at, updated_at FROM sensor_nodes WHERE zone_id = ?"
-    } else {
-        "SELECT id, name, zone_id, has_irrigation, has_side_vent, has_roof_vent, vent_range, status, last_seen, created_at, updated_at FROM sensor_nodes"
-    };
-    
-    let nodes = if let Some(ref zone_id) = query.zone_id {
-        sqlx::query_as::<_, (String, String, String, i64, i64, i64, String, String, Option<i64>, i64, i64)>(sql)
-            .bind(zone_id).fetch_all(&state.pool).await
-    } else {
-        sqlx::query_as::<_, (String, String, String, i64, i64, i64, String, String, Option<i64>, i64, i64)>(sql)
-            .fetch_all(&state.pool).await
-    };
-    
-    match nodes {
-        Ok(rows) => {
-            let result: Vec<serde_json::Value> = rows.into_iter().map(|r| {
-                serde_json::json!({
-                    "id": r.0, "name": r.1, "zoneId": r.2, "hasIrrigation": r.3 == 1, "hasSideVent": r.4 == 1,
-                    "hasRoofVent": r.5 == 1, "ventRange": serde_json::from_str(&r.6).unwrap_or(serde_json::json!({"min": 0, "max": 100})),
-                    "status": r.7, "lastSeen": r.8, "createdAt": r.9, "updatedAt": r.10
-                })
-            }).collect();
-            Json(result).into_response()
-        }
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response(),
-    }
-}
-
-#[derive(Debug, Deserialize)]
-pub struct NodeQuery {
-    pub zone_id: Option<String>,
-}
-
-async fn get_node(State(state): State<AppState>, Path(id): Path<String>) -> impl IntoResponse {
-    let node = sqlx::query_as::<_, (String, String, String, i64, i64, i64, String, String, Option<i64>, i64, i64)>(
-        "SELECT id, name, zone_id, has_irrigation, has_side_vent, has_roof_vent, vent_range, status, last_seen, created_at, updated_at FROM sensor_nodes WHERE id = ?",
-    ).bind(&id).fetch_one(&state.pool).await;
-    match node {
-        Ok(r) => Json(serde_json::json!({
-            "id": r.0, "name": r.1, "zoneId": r.2, "hasIrrigation": r.3 == 1, "hasSideVent": r.4 == 1,
-            "hasRoofVent": r.5 == 1, "ventRange": serde_json::from_str(&r.6).unwrap_or(serde_json::json!({"min": 0, "max": 100})),
-            "status": r.7, "lastSeen": r.8, "createdAt": r.9, "updatedAt": r.10
-        })).into_response(),
-        Err(_) => (StatusCode::NOT_FOUND, Json(serde_json::json!({"error": "Node not found"}))).into_response(),
-    }
-}
-
-async fn create_node(State(state): State<AppState>, Json(req): Json<CreateNodeRequest>) -> impl IntoResponse {
-    let id = Uuid::new_v4();
-    let now = Utc::now();
-    let vent_range = req.vent_range.unwrap_or(ValueRange { min: 0.0, max: 100.0 });
-    let vent_str = serde_json::to_string(&vent_range).unwrap_or_default();
-    
-    let result = sqlx::query(
-        "INSERT INTO sensor_nodes (id, name, zone_id, has_irrigation, has_side_vent, has_roof_vent, vent_range, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-    ).bind(id.to_string()).bind(&req.name).bind(&req.zone_id)
-    .bind(if req.has_irrigation { 1 } else { 0 })
-    .bind(if req.has_side_vent { 1 } else { 0 })
-    .bind(if req.has_roof_vent { 1 } else { 0 })
-    .bind(&vent_str).bind("offline").bind(now.timestamp()).bind(now.timestamp())
-    .execute(&state.pool).await;
-    
-    match result {
-        Ok(_) => Json(serde_json::json!({"id": id.to_string(), "name": req.name})).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response(),
-    }
-}
-
-async fn update_node(State(state): State<AppState>, Path(id): Path<String>, Json(req): Json<CreateNodeRequest>) -> impl IntoResponse {
-    let now = Utc::now().timestamp();
-    let vent_range = req.vent_range.unwrap_or(ValueRange { min: 0.0, max: 100.0 });
-    let vent_str = serde_json::to_string(&vent_range).unwrap_or_default();
-    
-    let result = sqlx::query(
-        "UPDATE sensor_nodes SET name = ?, zone_id = ?, has_irrigation = ?, has_side_vent = ?, has_roof_vent = ?, vent_range = ?, updated_at = ? WHERE id = ?",
-    ).bind(&req.name).bind(&req.zone_id)
-    .bind(if req.has_irrigation { 1 } else { 0 })
-    .bind(if req.has_side_vent { 1 } else { 0 })
-    .bind(if req.has_roof_vent { 1 } else { 0 })
-    .bind(&vent_str).bind(now).bind(&id)
-    .execute(&state.pool).await;
-    
-    match result {
-        Ok(r) if r.rows_affected() > 0 => Json(serde_json::json!({"message": "Node updated"})).into_response(),
-        Ok(_) => (StatusCode::NOT_FOUND, Json(serde_json::json!({"error": "Node not found"}))).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response(),
-    }
-}
-
-async fn delete_node(State(state): State<AppState>, Path(id): Path<String>) -> impl IntoResponse {
-    let result = sqlx::query("DELETE FROM sensor_nodes WHERE id = ?").bind(&id).execute(&state.pool).await;
-    match result {
-        Ok(r) if r.rows_affected() > 0 => Json(serde_json::json!({"message": "Node deleted"})).into_response(),
-        Ok(_) => (StatusCode::NOT_FOUND, Json(serde_json::json!({"error": "Node not found"}))).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response(),
-    }
-}
-
-async fn list_node_readings(
-    State(state): State<AppState>, Path(id): Path<String>,
-    Query(query): Query<ReadingsQuery>,
-) -> impl IntoResponse {
-    use sqlx::QueryBuilder;
-
-    let mut builder = QueryBuilder::new(
-        "SELECT id, device_id, metric, value, unit, timestamp FROM sensor_readings WHERE device_id = "
-    );
-    builder.push_bind(&id);
-
-    if let Some(ref metric) = query.metric {
-        builder.push(" AND metric = ");
-        builder.push_bind(metric);
-    }
-    if let Some(start) = query.start {
-        builder.push(" AND timestamp >= ");
-        builder.push_bind(start);
-    }
-    if let Some(end) = query.end {
-        builder.push(" AND timestamp <= ");
-        builder.push_bind(end);
-    }
-    builder.push(" ORDER BY timestamp DESC");
-    if let Some(limit) = query.limit {
-        builder.push(" LIMIT ");
-        builder.push_bind(limit);
-    }
-
-    let readings = builder.build_query_as::<(i64, String, String, f64, String, i64)>()
-        .fetch_all(&state.pool).await;
-    match readings {
-        Ok(rows) => {
-            let result: Vec<serde_json::Value> = rows.into_iter().map(|r| {
-                serde_json::json!({"id": r.0, "deviceId": r.1, "metric": r.2, "value": r.3, "unit": r.4, "timestamp": r.5})
-            }).collect();
-            Json(result).into_response()
-        }
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response(),
-    }
-}
-
-// ============== Aggregated Data API ==============
-
-#[derive(Debug, Deserialize)]
-pub struct AggregatedQuery {
-    pub node_id: Option<String>,
-    pub metric: Option<String>,
-    pub period: Option<String>,
-    pub start: Option<i64>,
-    pub end: Option<i64>,
-}
-
-async fn aggregated_readings(State(state): State<AppState>, Query(query): Query<AggregatedQuery>) -> impl IntoResponse {
-    use sqlx::QueryBuilder;
-
-    let now = Utc::now().timestamp();
-    let start = query.start.unwrap_or(now - 86400);
-    let end = query.end.unwrap_or(now);
-    let period = query.period.as_deref().unwrap_or("hour");
-    
-    let truncate = match period {
-        "hour" => "datetime(timestamp, 'unixepoch', 'localtime', 'start of hour')",
-        "day" => "date(timestamp, 'unixepoch', 'localtime')",
-        _ => "datetime(timestamp, 'unixepoch', 'start of hour')",
-    };
-    
-    let mut builder = QueryBuilder::new(format!(
-        "SELECT {}, metric, device_id, MAX(value), MIN(value), AVG(value), COUNT(*) \
-         FROM sensor_readings \
-         WHERE timestamp >= {} AND timestamp <= {}",
-        truncate, start, end,
-    ));
-    
-    if let Some(ref node_id) = query.node_id {
-        builder.push(" AND device_id = ");
-        builder.push_bind(node_id);
-    }
-    if let Some(ref metric) = query.metric {
-        builder.push(" AND metric = ");
-        builder.push_bind(metric);
-    }
-    
-    builder.push(format!(
-        " GROUP BY {}, metric, device_id ORDER BY {}",
-        truncate, truncate,
-    ));
-    
-    let readings = builder.build_query_as::<(String, String, String, f64, f64, f64, i64)>()
-        .fetch_all(&state.pool).await;
-    
-    match readings {
-        Ok(rows) => {
-            let result: Vec<serde_json::Value> = rows.into_iter().map(|r| {
-                serde_json::json!({
-                    "timestamp": r.0, "metric": r.1, "nodeId": r.2, "max": r.3, "min": r.4, "avg": r.5, "count": r.6
-                })
-            }).collect();
-            Json(result).into_response()
-        }
-        Err(_) => {
-            let result: Vec<serde_json::Value> = vec![];
-            Json(result).into_response()
-        }
-    }
-}
-
-// ============== Control Command API ==============
-
-#[derive(Debug, Deserialize)]
-pub struct ControlCommand {
-    pub device_id: String,
-    pub command: String,
-    pub action: serde_json::Value,
-}
-
-async fn send_control_command(State(state): State<AppState>, Json(cmd): Json<ControlCommand>) -> impl IntoResponse {
-    let node = sqlx::query_as::<_, (String, i64, i64, i64)>(
-        "SELECT id, has_irrigation, has_side_vent, has_roof_vent FROM sensor_nodes WHERE id = ?",
-    ).bind(&cmd.device_id).fetch_optional(&state.pool).await.ok().flatten();
-    
-    let (_node_id, has_irrigation, has_side_vent, has_roof_vent) = match node {
-        Some(n) => n,
-        None => return (StatusCode::NOT_FOUND, Json(serde_json::json!({"error": "Node not found"}))).into_response(),
-    };
-    
-    let is_valid = match cmd.command.as_str() {
-        "irrigation" => has_irrigation == 1,
-        "side_vent" => has_side_vent == 1,
-        "roof_vent" => has_roof_vent == 1,
-        _ => false,
-    };
-    
-    if !is_valid {
-        return (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": "Invalid command or node does not support this control"}))).into_response();
-    }
-    
-    let now = Utc::now().timestamp();
-    let action_str = cmd.action.to_string();
-    let result = sqlx::query(
-        "INSERT INTO command_log (device_id, command, payload, status, created_at) VALUES (?, ?, ?, ?, ?)",
-    ).bind(&cmd.device_id).bind(&cmd.command).bind(&action_str).bind("pending").bind(now)
-    .execute(&state.pool).await;
-    
-    match result {
-        Ok(r) => Json(serde_json::json!({"id": r.last_insert_rowid(), "message": "Command queued"})).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response(),
-    }
-}
-
-// ============== Device APIs ==============
 
 #[derive(Debug, Deserialize)]
 pub struct CreateDeviceRequest {
     pub name: String,
     pub node_id: String,
-    pub device_type: String,
+    pub device_type: Option<String>,
+    pub area_id: Option<String>,
+    pub comfort_config: Option<serde_json::Value>,
+    pub capabilities: Option<Vec<String>>,
 }
 
-async fn create_device(State(state): State<AppState>, Json(req): Json<CreateDeviceRequest>) -> impl IntoResponse {
-    let device_type = match req.device_type.as_str() {
-        "sensor" => "sensor",
-        "actuator" => "actuator",
-        _ => return (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": "Invalid device type"}))).into_response(),
-    };
+async fn create_device(
+    State(state): State<AppState>,
+    Json(req): Json<CreateDeviceRequest>,
+) -> impl IntoResponse {
+    let device_type = req.device_type.as_deref().unwrap_or("sensor");
+    if device_type != "sensor" && device_type != "actuator" {
+        return (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": "Invalid device type"}))).into_response();
+    }
     let now = Utc::now();
     let id = Uuid::new_v4();
-    let result = sqlx::query(
-        "INSERT INTO devices (id, name, node_id, device_type, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-    ).bind(id.to_string()).bind(&req.name).bind(&req.node_id).bind(device_type)
-    .bind("offline").bind(now.timestamp()).bind(now.timestamp())
-    .execute(&state.pool).await;
+    let comfort_config_str = req.comfort_config.as_ref().map(|v| v.to_string());
+    let capabilities = req.capabilities.as_ref().map(|c| serde_json::to_string(c).unwrap_or_default())
+        .unwrap_or_else(|| "[\"sensor\"]".to_string());
+
+    // UPSERT: node_id 已存在则更新 capabilities，否则插入新记录
+    let existing: Option<(String,)> = sqlx::query_as(
+        "SELECT id FROM devices WHERE node_id = ?"
+    )
+    .bind(&req.node_id)
+    .fetch_optional(&state.pool)
+    .await
+    .ok()
+    .flatten();
+
+    let result = if let Some((existing_id,)) = existing {
+        sqlx::query(
+            "UPDATE devices SET name = ?, device_type = ?, capabilities = ?, area_id = ?, comfort_config = ?, updated_at = ? WHERE id = ?"
+        )
+        .bind(&req.name).bind(device_type).bind(&capabilities).bind(&req.area_id)
+        .bind(&comfort_config_str).bind(now.timestamp()).bind(&existing_id)
+        .execute(&state.pool).await
+        .map(|_| existing_id)
+    } else {
+        sqlx::query(
+            "INSERT INTO devices (id, name, node_id, device_type, status, area_id, comfort_config, capabilities, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        )
+        .bind(id.to_string()).bind(&req.name).bind(&req.node_id).bind(device_type)
+        .bind("offline").bind(&req.area_id).bind(&comfort_config_str).bind(&capabilities)
+        .bind(now.timestamp()).bind(now.timestamp())
+        .execute(&state.pool).await
+        .map(|_| id.to_string())
+    };
+
     match result {
-        Ok(_) => (StatusCode::CREATED, Json(serde_json::json!({"id": id.to_string()}))).into_response(),
+        Ok(device_id) => (StatusCode::CREATED, Json(serde_json::json!({"id": device_id, "message": "Device created/updated"}))).into_response(),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response(),
     }
 }
 
 async fn list_devices(State(state): State<AppState>) -> impl IntoResponse {
-    let devices = sqlx::query_as::<_, (String, String, String, String, String, Option<String>, i64, i64)>(
-        "SELECT id, name, node_id, device_type, status, config, created_at, updated_at FROM devices",
+    let devices = sqlx::query_as::<_, Device>(
+        "SELECT id, name, node_id, device_type, status, config, area_id, comfort_config, capabilities, created_at, updated_at FROM devices",
     ).fetch_all(&state.pool).await;
     match devices {
         Ok(rows) => {
-            let result: Vec<serde_json::Value> = rows.into_iter().map(|r| {
-                serde_json::json!({"id": r.0, "name": r.1, "nodeId": r.2, "deviceType": r.3, "status": r.4, "config": r.5, "createdAt": r.6, "updatedAt": r.7})
+            let result: Vec<serde_json::Value> = rows.into_iter().map(|d| {
+                serde_json::json!({
+                    "id": d.id, "name": d.name, "node_id": d.node_id,
+                    "device_type": d.device_type, "status": d.status,
+                    "config": d.config, "area_id": d.area_id,
+                    "comfort_config": d.comfort_config,
+                    "capabilities": d.capabilities,
+                    "created_at": d.created_at.timestamp(),
+                    "updated_at": d.updated_at.timestamp(),
+                })
             }).collect();
             Json(result).into_response()
         }
@@ -459,20 +133,36 @@ async fn list_devices(State(state): State<AppState>) -> impl IntoResponse {
     }
 }
 
-async fn get_device(State(state): State<AppState>, Path(id): Path<String>) -> impl IntoResponse {
-    let device = sqlx::query_as::<_, (String, String, String, String, String, Option<String>, i64, i64)>(
-        "SELECT id, name, node_id, device_type, status, config, created_at, updated_at FROM devices WHERE id = ?",
-    ).bind(&id).fetch_one(&state.pool).await;
+async fn get_device(State(state): State<AppState>, Path(id): Path<String>) -> Result<Json<serde_json::Value>, ServerError> {
+    let device = sqlx::query_as::<_, Device>(
+        "SELECT id, name, node_id, device_type, status, config, area_id, comfort_config, capabilities, created_at, updated_at FROM devices WHERE id = ?",
+    ).bind(&id).fetch_optional(&state.pool).await?;
     match device {
-        Ok(r) => Json(serde_json::json!({"id": r.0, "name": r.1, "nodeId": r.2, "deviceType": r.3, "status": r.4, "config": r.5, "createdAt": r.6, "updatedAt": r.7})).into_response(),
-        Err(_) => (StatusCode::NOT_FOUND, Json(serde_json::json!({"error": "Device not found"}))).into_response(),
+        Some(d) => Ok(Json(serde_json::json!({
+            "id": d.id, "name": d.name, "node_id": d.node_id,
+            "device_type": d.device_type, "status": d.status,
+            "config": d.config, "area_id": d.area_id,
+            "comfort_config": d.comfort_config,
+            "capabilities": d.capabilities,
+            "created_at": d.created_at.timestamp(),
+            "updated_at": d.updated_at.timestamp(),
+        }))),
+        None => Err(ServerError(AppError::DeviceNotFound(id))),
     }
 }
 
-async fn update_device(State(state): State<AppState>, Path(id): Path<String>, Json(req): Json<CreateDeviceRequest>) -> impl IntoResponse {
+async fn update_device(
+    State(state): State<AppState>, Path(id): Path<String>,
+    Json(req): Json<CreateDeviceRequest>,
+) -> impl IntoResponse {
     let now = Utc::now().timestamp();
-    let result = sqlx::query("UPDATE devices SET name = ?, node_id = ?, device_type = ?, updated_at = ? WHERE id = ?")
-        .bind(&req.name).bind(&req.node_id).bind(&req.device_type).bind(now).bind(&id)
+    let comfort_config_str = req.comfort_config.as_ref().map(|v| v.to_string());
+    let device_type = req.device_type.as_deref().unwrap_or("sensor");
+    let capabilities = req.capabilities.as_ref().map(|c| serde_json::to_string(c).unwrap_or_default())
+        .unwrap_or_else(|| "[\"sensor\"]".to_string());
+    let result = sqlx::query("UPDATE devices SET name = ?, node_id = ?, device_type = ?, area_id = ?, comfort_config = ?, capabilities = ?, updated_at = ? WHERE id = ?")
+        .bind(&req.name).bind(&req.node_id).bind(device_type).bind(&req.area_id)
+        .bind(&comfort_config_str).bind(&capabilities).bind(now).bind(&id)
         .execute(&state.pool).await;
     match result {
         Ok(r) if r.rows_affected() > 0 => Json(serde_json::json!({"message": "Device updated"})).into_response(),
@@ -481,12 +171,12 @@ async fn update_device(State(state): State<AppState>, Path(id): Path<String>, Js
     }
 }
 
-async fn delete_device(State(state): State<AppState>, Path(id): Path<String>) -> impl IntoResponse {
-    let result = sqlx::query("DELETE FROM devices WHERE id = ?").bind(&id).execute(&state.pool).await;
-    match result {
-        Ok(r) if r.rows_affected() > 0 => Json(serde_json::json!({"message": "Device deleted"})).into_response(),
-        Ok(_) => (StatusCode::NOT_FOUND, Json(serde_json::json!({"error": "Device not found"}))).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+async fn delete_device(State(state): State<AppState>, Path(id): Path<String>) -> Result<Json<serde_json::Value>, ServerError> {
+    let result = sqlx::query("DELETE FROM devices WHERE id = ?").bind(&id).execute(&state.pool).await?;
+    if result.rows_affected() > 0 {
+        Ok(Json(serde_json::json!({"message": "Device deleted"})))
+    } else {
+        Err(ServerError(AppError::DeviceNotFound(id)))
     }
 }
 
@@ -498,38 +188,30 @@ pub struct ReadingsQuery {
     pub limit: Option<i64>,
 }
 
-async fn list_readings(State(state): State<AppState>, Path(id): Path<String>, Query(query): Query<ReadingsQuery>) -> impl IntoResponse {
-    use sqlx::QueryBuilder;
-
-    let mut builder = QueryBuilder::new(
-        "SELECT id, device_id, metric, value, unit, timestamp FROM sensor_readings WHERE device_id = "
-    );
-    builder.push_bind(&id);
-
-    if let Some(ref metric) = query.metric {
-        builder.push(" AND metric = ");
-        builder.push_bind(metric);
-    }
-    if let Some(start) = query.start {
-        builder.push(" AND timestamp >= ");
-        builder.push_bind(start);
-    }
-    if let Some(end) = query.end {
-        builder.push(" AND timestamp <= ");
-        builder.push_bind(end);
-    }
-    builder.push(" ORDER BY timestamp DESC");
-    if let Some(limit) = query.limit {
-        builder.push(" LIMIT ");
-        builder.push_bind(limit);
-    }
-
-    let readings = builder.build_query_as::<(i64, String, String, f64, String, i64)>()
-        .fetch_all(&state.pool).await;
+async fn list_readings(
+    State(state): State<AppState>, Path(id): Path<String>,
+    Query(query): Query<ReadingsQuery>,
+) -> impl IntoResponse {
+    let has_metric = query.metric.is_some();
+    let has_start = query.start.is_some();
+    let has_end = query.end.is_some();
+    let has_limit = query.limit.is_some();
+    let mut sql = String::from("SELECT id, device_id, metric, value, unit, timestamp FROM sensor_readings WHERE device_id = ?");
+    if has_metric { sql.push_str(" AND metric = ?"); }
+    if has_start { sql.push_str(" AND timestamp >= ?"); }
+    if has_end { sql.push_str(" AND timestamp <= ?"); }
+    sql.push_str(" ORDER BY timestamp DESC");
+    if has_limit { sql.push_str(" LIMIT ?"); }
+    let mut q = sqlx::query_as::<_, SensorReading>(&sql).bind(&id);
+    if let Some(ref metric) = query.metric { q = q.bind(metric); }
+    if let Some(start) = query.start { q = q.bind(start); }
+    if let Some(end) = query.end { q = q.bind(end); }
+    if let Some(limit) = query.limit { q = q.bind(limit); }
+    let readings = q.fetch_all(&state.pool).await;
     match readings {
         Ok(rows) => {
             let result: Vec<serde_json::Value> = rows.into_iter().map(|r| {
-                serde_json::json!({"id": r.0, "deviceId": r.1, "metric": r.2, "value": r.3, "unit": r.4, "timestamp": r.5})
+                serde_json::json!({"id": r.id, "device_id": r.device_id, "metric": r.metric, "value": r.value, "unit": r.unit, "timestamp": r.timestamp.timestamp()})
             }).collect();
             Json(result).into_response()
         }
@@ -537,16 +219,21 @@ async fn list_readings(State(state): State<AppState>, Path(id): Path<String>, Qu
     }
 }
 
-async fn send_command(State(state): State<AppState>, Path(id): Path<String>, Json(cmd): Json<CommandPayload>) -> impl IntoResponse {
-    let device: Option<(String, String)> = sqlx::query_as(
-        "SELECT device_type, status FROM devices WHERE id = ?"
+async fn send_command(
+    State(state): State<AppState>, Path(id): Path<String>,
+    Json(cmd): Json<CommandPayload>,
+) -> impl IntoResponse {
+    let device: Option<(String, Option<String>)> = sqlx::query_as::<_, (String, Option<String>)>(
+        "SELECT status, capabilities FROM devices WHERE id = ?"
     ).bind(&id).fetch_optional(&state.pool).await.ok().flatten();
-    let (device_type, status) = match device {
+    let (status, capabilities_json) = match device {
         Some(d) => d,
         None => return (StatusCode::NOT_FOUND, Json(serde_json::json!({"error": "Device not found"}))).into_response(),
     };
-    if device_type != "actuator" {
-        return (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": "Cannot send command to sensor"}))).into_response();
+    let has_actuator = capabilities_json.as_ref().and_then(|c| serde_json::from_str::<Vec<String>>(c).ok())
+        .map_or(false, |caps| caps.contains(&"actuator".to_string()));
+    if !has_actuator {
+        return (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": "Device does not support actuator commands"}))).into_response();
     }
     if status != "online" {
         return (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": "Device is offline"}))).into_response();
@@ -562,46 +249,29 @@ async fn send_command(State(state): State<AppState>, Path(id): Path<String>, Jso
     }
 }
 
-// ============== Rule APIs ==============
+async fn get_pending_commands(
+    State(state): State<AppState>,
+    Path(node_id): Path<String>,
+) -> impl IntoResponse {
+    let rows = sqlx::query_as::<_, (i64, i64, String, Option<String>)>(
+        "SELECT cl.id, cl.created_at, cl.command, cl.payload \
+         FROM command_log cl \
+         JOIN devices d ON cl.device_id = d.id \
+         WHERE d.node_id = ? AND cl.status = 'pending' \
+         ORDER BY cl.created_at ASC LIMIT 10"
+    )
+    .bind(&node_id)
+    .fetch_all(&state.pool)
+    .await;
 
-#[derive(Debug, Deserialize)]
-pub struct CreateRuleRequest {
-    pub name: String,
-    pub trigger_type: String,
-    pub conditions: serde_json::Value,
-    pub actions: serde_json::Value,
-    pub schedule: Option<String>,
-    pub enabled: Option<bool>,
-}
-
-async fn create_rule(State(state): State<AppState>, Json(req): Json<CreateRuleRequest>) -> impl IntoResponse {
-    let id = Uuid::new_v4();
-    let now = Utc::now().timestamp();
-    let conditions_str = req.conditions.to_string();
-    let actions_str = req.actions.to_string();
-    let result = sqlx::query(
-        "INSERT INTO rules (id, name, enabled, trigger_type, conditions, actions, schedule, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-    ).bind(id.to_string()).bind(&req.name).bind(if req.enabled.unwrap_or(true) { 1 } else { 0 })
-    .bind(&req.trigger_type).bind(&conditions_str).bind(&actions_str).bind(&req.schedule).bind(now)
-    .execute(&state.pool).await;
-    match result {
-        Ok(_) => Json(serde_json::json!({"id": id.to_string()})).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response(),
-    }
-}
-
-async fn list_rules(State(state): State<AppState>) -> impl IntoResponse {
-    let rules = sqlx::query_as::<_, (String, String, i64, String, String, String, Option<String>, i64)>(
-        "SELECT id, name, enabled, trigger_type, conditions, actions, schedule, created_at FROM rules",
-    ).fetch_all(&state.pool).await;
-    match rules {
+    match rows {
         Ok(rows) => {
             let result: Vec<serde_json::Value> = rows.into_iter().map(|r| {
                 serde_json::json!({
-                    "id": r.0, "name": r.1, "enabled": r.2 == 1, "triggerType": r.3,
-                    "conditions": serde_json::from_str::<serde_json::Value>(&r.4).ok(),
-                    "actions": serde_json::from_str::<serde_json::Value>(&r.5).ok(),
-                    "schedule": r.6, "createdAt": r.7
+                    "id": r.0.to_string(),
+                    "created_at": r.1,
+                    "command": r.2,
+                    "params": r.3,
                 })
             }).collect();
             Json(result).into_response()
@@ -610,14 +280,122 @@ async fn list_rules(State(state): State<AppState>) -> impl IntoResponse {
     }
 }
 
-async fn update_rule(State(state): State<AppState>, Path(id): Path<String>, Json(req): Json<CreateRuleRequest>) -> impl IntoResponse {
+#[derive(Debug, Deserialize)]
+struct UpdateCommandStatusRequest {
+    status: String,  // "executed" | "failed"
+}
+
+async fn update_command_status(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(req): Json<UpdateCommandStatusRequest>,
+) -> impl IntoResponse {
+    if req.status != "executed" && req.status != "failed" {
+        return (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": "Status must be 'executed' or 'failed'"}))).into_response();
+    }
+    let id: i64 = match id.parse() {
+        Ok(v) => v,
+        Err(_) => return (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": "Invalid command id"}))).into_response(),
+    };
+    let result = sqlx::query("UPDATE command_log SET status = ? WHERE id = ?")
+        .bind(&req.status)
+        .bind(id)
+        .execute(&state.pool)
+        .await;
+
+    match result {
+        Ok(r) => {
+            if r.rows_affected() == 0 {
+                (StatusCode::NOT_FOUND, Json(serde_json::json!({"error": "Command not found"}))).into_response()
+            } else {
+                Json(serde_json::json!({"status": "updated"})).into_response()
+            }
+        }
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CreateRuleRequest {
+    pub name: String,
+    pub trigger_type: String,
+    pub conditions: serde_json::Value,
+    pub actions: serde_json::Value,
+    pub schedule: Option<String>,
+    pub priority: Option<i32>,        // 0=普通, 1=紧急
+    pub auto_execute: Option<bool>,   // true=自动执行
+}
+
+async fn create_rule(
+    State(state): State<AppState>,
+    Json(req): Json<CreateRuleRequest>,
+) -> impl IntoResponse {
+    let id = Uuid::new_v4();
+    let now = Utc::now().timestamp();
     let conditions_str = req.conditions.to_string();
     let actions_str = req.actions.to_string();
+    let priority = req.priority.unwrap_or(0);
+    let auto_execute = if req.auto_execute.unwrap_or(false) { 1i64 } else { 0i64 };
+
     let result = sqlx::query(
-        "UPDATE rules SET name = ?, enabled = ?, trigger_type = ?, conditions = ?, actions = ?, schedule = ? WHERE id = ?",
-    ).bind(&req.name).bind(if req.enabled.unwrap_or(true) { 1 } else { 0 })
-    .bind(&req.trigger_type).bind(&conditions_str).bind(&actions_str).bind(&req.schedule).bind(&id)
-    .execute(&state.pool).await;
+        "INSERT INTO rules (id, name, enabled, trigger_type, conditions, actions, schedule, priority, auto_execute, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    )
+    .bind(id.to_string())
+    .bind(&req.name)
+    .bind(1i64)
+    .bind(&req.trigger_type)
+    .bind(&conditions_str)
+    .bind(&actions_str)
+    .bind(&req.schedule)
+    .bind(priority)
+    .bind(auto_execute)
+    .bind(now)
+    .execute(&state.pool)
+    .await;
+
+    match result {
+        Ok(_) => Json(serde_json::json!({"id": id.to_string(), "message": "Rule created"})).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+    }
+}
+
+async fn list_rules(State(state): State<AppState>) -> impl IntoResponse {
+    let rules = sqlx::query_as::<_, Rule>(
+        "SELECT id, name, enabled, trigger_type, conditions, actions, schedule, priority, auto_execute, created_at FROM rules",
+    ).fetch_all(&state.pool).await;
+    match rules {
+        Ok(rows) => {
+            let result: Vec<serde_json::Value> = rows.into_iter().map(|r| {
+                serde_json::json!({
+                    "id": r.id, "name": r.name, "enabled": r.enabled, "trigger_type": r.trigger_type,
+                    "conditions": r.conditions, "actions": r.actions,
+                    "schedule": r.schedule, "created_at": r.created_at.timestamp(),
+                    "priority": r.priority, "auto_execute": r.auto_execute,
+                })
+            }).collect();
+            Json(result).into_response()
+        }
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+    }
+}
+
+async fn update_rule(
+    State(state): State<AppState>, Path(id): Path<String>,
+    Json(req): Json<CreateRuleRequest>,
+) -> impl IntoResponse {
+    let conditions_str = req.conditions.to_string();
+    let actions_str = req.actions.to_string();
+    let priority = req.priority.unwrap_or(0);
+    let auto_execute = if req.auto_execute.unwrap_or(false) { 1i64 } else { 0i64 };
+
+    let result = sqlx::query(
+        "UPDATE rules SET name = ?, trigger_type = ?, conditions = ?, actions = ?, schedule = ?, priority = ?, auto_execute = ? WHERE id = ?"
+    )
+    .bind(&req.name).bind(&req.trigger_type).bind(&conditions_str).bind(&actions_str)
+    .bind(&req.schedule).bind(priority).bind(auto_execute).bind(&id)
+    .execute(&state.pool)
+    .await;
+
     match result {
         Ok(r) if r.rows_affected() > 0 => Json(serde_json::json!({"message": "Rule updated"})).into_response(),
         Ok(_) => (StatusCode::NOT_FOUND, Json(serde_json::json!({"error": "Rule not found"}))).into_response(),
@@ -634,20 +412,394 @@ async fn delete_rule(State(state): State<AppState>, Path(id): Path<String>) -> i
     }
 }
 
-// ============== Dashboard API ==============
-
 async fn dashboard_summary(State(state): State<AppState>) -> impl IntoResponse {
-    let total_devices: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM devices").fetch_one(&state.pool).await.unwrap_or((0,));
-    let online_devices: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM devices WHERE status = 'online'").fetch_one(&state.pool).await.unwrap_or((0,));
-    let total_nodes: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM sensor_nodes").fetch_one(&state.pool).await.unwrap_or((0,));
-    let online_nodes: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM sensor_nodes WHERE status = 'online'").fetch_one(&state.pool).await.unwrap_or((0,));
-    let total_zones: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM zones").fetch_one(&state.pool).await.unwrap_or((0,));
+    let total: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM devices").fetch_one(&state.pool).await.unwrap_or((0,));
+    let online: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM devices WHERE status = 'online'").fetch_one(&state.pool).await.unwrap_or((0,));
     let active_rules: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM rules WHERE enabled = 1").fetch_one(&state.pool).await.unwrap_or((0,));
     Json(serde_json::json!({
-        "totalDevices": total_devices.0, "onlineDevices": online_devices.0,
-        "totalNodes": total_nodes.0, "onlineNodes": online_nodes.0,
-        "totalZones": total_zones.0, "activeRules": active_rules.0,
+        "total_devices": total.0, "online_devices": online.0, "active_rules": active_rules.0,
     })).into_response()
+}
+
+async fn dashboard_area_readings(State(state): State<AppState>) -> Json<serde_json::Value> {
+    let now = chrono::Utc::now().timestamp();
+
+    let areas = sqlx::query_as::<_, (String, String, Option<String>, Option<String>, Option<i64>, Option<i64>, Option<String>)>(
+        "SELECT a.id, a.name, cb.id, c.name, cb.plant_date, cb.expected_harvest_date, c.comfort_config
+         FROM areas a
+         LEFT JOIN crop_batches cb ON cb.area_id = a.id AND cb.status = 'active'
+         LEFT JOIN crops c ON c.id = cb.crop_id
+         ORDER BY a.name"
+    )
+    .fetch_all(&state.pool)
+    .await
+    .unwrap_or_default();
+
+    let devices = sqlx::query_as::<_, (String, String, String, Option<String>)>(
+        "SELECT id, name, node_id, area_id FROM devices ORDER BY name"
+    )
+    .fetch_all(&state.pool)
+    .await
+    .unwrap_or_default();
+
+    let mut area_devices: std::collections::HashMap<String, Vec<(String, String, String)>> = std::collections::HashMap::new();
+    for (id, name, node_id, area_id) in &devices {
+        if let Some(aid) = area_id {
+            area_devices.entry(aid.clone()).or_default().push((id.clone(), name.clone(), node_id.clone()));
+        }
+    }
+
+    let mut result = Vec::new();
+    for (id, name, _batch_id, crop_name, plant_date, harvest_date, comfort_config_str) in areas {
+        let time_start = plant_date.unwrap_or(0);
+        let time_end = harvest_date.unwrap_or(now);
+
+        let area_device_list = area_devices.remove(&id).unwrap_or_default();
+        let mut device_results = Vec::new();
+
+        for (dev_id, dev_name, node_id) in &area_device_list {
+            let readings = sqlx::query_as::<_, (String, f64, String, i64)>(
+                "SELECT metric, value, unit, timestamp FROM sensor_readings WHERE device_id = ? AND timestamp >= ? AND timestamp <= ? ORDER BY timestamp ASC"
+            )
+            .bind(dev_id)
+            .bind(time_start)
+            .bind(time_end)
+            .fetch_all(&state.pool)
+            .await
+            .unwrap_or_default();
+
+            let mut metric_readings: std::collections::BTreeMap<String, Vec<serde_json::Value>> = std::collections::BTreeMap::new();
+            for (metric, value, _unit, ts) in &readings {
+                metric_readings.entry(metric.clone()).or_default().push(serde_json::json!({
+                    "value": value,
+                    "timestamp": ts
+                }));
+            }
+
+            device_results.push(serde_json::json!({
+                "id": dev_id,
+                "name": dev_name,
+                "node_id": node_id,
+                "readings": metric_readings
+            }));
+        }
+
+        let comfort_config: serde_json::Value = comfort_config_str
+            .and_then(|s| serde_json::from_str(&s).ok())
+            .unwrap_or(serde_json::Value::Null);
+
+        result.push(serde_json::json!({
+            "id": id,
+            "name": name,
+            "crop_batch": {
+                "crop_name": crop_name,
+                "plant_date": time_start,
+                "expected_harvest_date": time_end,
+                "comfort_config": comfort_config
+            },
+            "devices": device_results
+        }));
+    }
+
+    Json(serde_json::json!({"areas": result}))
+}
+
+async fn dashboard_node_readings(State(state): State<AppState>) -> impl IntoResponse {
+    let now = chrono::Utc::now().timestamp();
+    let cutoff = now - 86400;
+
+    let readings = sqlx::query_as::<_, (String, String, String, f64, String, i64)>(
+        "SELECT d.area_id, d.node_id, sr.metric, sr.value, sr.unit, sr.timestamp \
+         FROM sensor_readings sr \
+         INNER JOIN devices d ON sr.device_id = d.id \
+         WHERE d.area_id IS NOT NULL \
+           AND sr.timestamp >= ? \
+         ORDER BY d.area_id, d.node_id, sr.metric, sr.timestamp"
+    )
+    .bind(cutoff)
+    .fetch_all(&state.pool)
+    .await
+    .unwrap_or_default();
+
+    let mut area_map: std::collections::BTreeMap<String, std::collections::BTreeMap<String, std::collections::BTreeMap<String, Vec<serde_json::Value>>>> = std::collections::BTreeMap::new();
+    let mut latest_map: std::collections::BTreeMap<(String, String, String), (f64, String, i64)> = std::collections::BTreeMap::new();
+
+    for (area_id, node_id, metric, value, unit, ts) in &readings {
+        area_map.entry(area_id.clone())
+            .or_default()
+            .entry(node_id.clone())
+            .or_default()
+            .entry(metric.clone())
+            .or_default()
+            .push(serde_json::json!({"value": value, "timestamp": ts}));
+
+        let key = (area_id.clone(), node_id.clone(), metric.clone());
+        let prev = latest_map.get(&key);
+        if prev.is_none() || prev.unwrap().2 < *ts {
+            latest_map.insert(key, (*value, unit.clone(), *ts));
+        }
+    }
+
+    let mut result: Vec<serde_json::Value> = Vec::new();
+
+    let areas = sqlx::query_as::<_, (String, String)>(
+        "SELECT id, name FROM areas ORDER BY name"
+    )
+    .fetch_all(&state.pool)
+    .await
+    .unwrap_or_default();
+
+    for (area_id, area_name) in &areas {
+        let mut nodes = Vec::new();
+
+        if let Some(node_map) = area_map.get(area_id) {
+            let mut node_ids: Vec<&String> = node_map.keys().collect();
+            node_ids.sort();
+
+            for (node_idx, node_id) in node_ids.iter().enumerate() {
+                let metric_map = &node_map[*node_id];
+
+                let mut latest = serde_json::Map::new();
+                let mut history = serde_json::Map::new();
+
+                let known_metrics = ["temperature", "humidity", "soil_temperature", "soil_moisture", "ec", "light"];
+                for metric in &known_metrics {
+                    let readings_list = metric_map.get(*metric);
+                    if let Some(list) = readings_list {
+                        let key = (area_id.clone(), (*node_id).clone(), metric.to_string());
+                        if let Some((val, unit, ts)) = latest_map.get(&key) {
+                            latest.insert(metric.to_string(), serde_json::json!({"value": val, "unit": unit, "timestamp": ts}));
+                        }
+                        history.insert(metric.to_string(), serde_json::json!(list));
+                    }
+                }
+
+                nodes.push(serde_json::json!({
+                    "node_id": node_id,
+                    "node_number": node_idx + 1,
+                    "latest": latest,
+                    "history_24h": history,
+                }));
+            }
+        }
+
+        result.push(serde_json::json!({
+            "area_id": area_id,
+            "area_name": area_name,
+            "nodes": nodes,
+        }));
+    }
+
+    Json(serde_json::json!({"areas": result}))
+}
+
+async fn list_alerts(State(state): State<AppState>) -> impl IntoResponse {
+    let rows = sqlx::query_as::<_, (i64, String, String, Option<String>, String, i64, Option<String>)>(
+        "SELECT cl.id, cl.device_id, cl.command, cl.payload, cl.status, cl.created_at, d.name \
+         FROM command_log cl LEFT JOIN devices d ON cl.device_id = d.id \
+         ORDER BY cl.created_at DESC LIMIT 200"
+    )
+    .fetch_all(&state.pool)
+    .await;
+
+    match rows {
+        Ok(rows) => {
+            let result: Vec<serde_json::Value> = rows.into_iter().map(|r| {
+                serde_json::json!({
+                    "id": r.0,
+                    "device_id": r.1,
+                    "device_name": r.6,
+                    "command": r.2,
+                    "payload": r.3,
+                    "status": r.4,
+                    "created_at": r.5
+                })
+            }).collect();
+            Json(result).into_response()
+        }
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+    }
+}
+
+async fn system_info(State(state): State<AppState>) -> impl IntoResponse {
+    let total_devices: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM devices").fetch_one(&state.pool).await.unwrap_or((0,));
+    let online_devices: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM devices WHERE status = 'online'").fetch_one(&state.pool).await.unwrap_or((0,));
+    let total_rules: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM rules").fetch_one(&state.pool).await.unwrap_or((0,));
+    let active_rules: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM rules WHERE enabled = 1").fetch_one(&state.pool).await.unwrap_or((0,));
+    let total_readings: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM sensor_readings").fetch_one(&state.pool).await.unwrap_or((0,));
+    let total_alerts: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM command_log").fetch_one(&state.pool).await.unwrap_or((0,));
+    let area_count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM areas").fetch_one(&state.pool).await.unwrap_or((0,));
+
+    Json(serde_json::json!({
+        "version": env!("CARGO_PKG_VERSION", "0.1.0"),
+        "server_time": Utc::now().timestamp(),
+        "stats": {
+            "total_devices": total_devices.0,
+            "online_devices": online_devices.0,
+            "total_rules": total_rules.0,
+            "active_rules": active_rules.0,
+            "total_readings": total_readings.0,
+            "total_alerts": total_alerts.0,
+            "area_count": area_count.0,
+        }
+    })).into_response()
+}
+
+async fn monitor_realtime(State(state): State<AppState>) -> impl IntoResponse {
+    let areas = sqlx::query_as::<_, (String, String)>(
+        "SELECT id, name FROM areas ORDER BY name"
+    )
+    .fetch_all(&state.pool)
+    .await
+    .unwrap_or_default();
+
+    let devices = sqlx::query_as::<_, (String, String, String, String, String, Option<String>)>(
+        "SELECT id, name, node_id, device_type, status, area_id FROM devices ORDER BY name"
+    )
+    .fetch_all(&state.pool)
+    .await
+    .unwrap_or_default();
+
+    let device_ids: Vec<String> = devices.iter().map(|d| d.0.clone()).collect();
+    let mut device_readings: std::collections::HashMap<String, Vec<(String, f64, String, i64)>> = std::collections::HashMap::new();
+
+    for did in &device_ids {
+        let readings = sqlx::query_as::<_, (String, f64, String, i64)>(
+            "SELECT metric, value, unit, timestamp FROM sensor_readings \
+             WHERE device_id = ? AND id IN ( \
+                 SELECT MAX(id) FROM sensor_readings WHERE device_id = ? GROUP BY metric \
+             ) ORDER BY metric"
+        )
+        .bind(did)
+        .bind(did)
+        .fetch_all(&state.pool)
+        .await
+        .unwrap_or_default();
+        device_readings.insert(did.clone(), readings);
+    }
+
+    let areas_json: Vec<serde_json::Value> = areas.into_iter().map(|(aid, aname)| {
+        let area_devices: Vec<serde_json::Value> = devices.iter().filter(|d| d.5.as_deref() == Some(&aid)).map(|(did, dname, node_id, dtype, status, _)| {
+            let readings = device_readings.get(did);
+            let readings_map: serde_json::Value = readings.map(|r| {
+                r.iter().map(|(metric, value, unit, ts)| {
+                    (metric.clone(), serde_json::json!({"value": value, "unit": unit, "timestamp": ts}))
+                }).collect::<serde_json::Map<_, _>>().into()
+            }).unwrap_or(serde_json::Value::Object(Default::default()));
+
+            serde_json::json!({
+                "id": did, "name": dname, "node_id": node_id,
+                "device_type": dtype, "status": status,
+                "latest_readings": readings_map
+            })
+        }).collect();
+
+        serde_json::json!({"id": aid, "name": aname, "devices": area_devices})
+    }).collect();
+
+    Json(serde_json::json!({"areas": areas_json})).into_response()
+}
+
+async fn sse_events(
+    State(state): State<AppState>,
+) -> Sse<impl tokio_stream::Stream<Item = Result<Event, axum::BoxError>>> {
+    let rx = state.event_tx.subscribe();
+    let stream = BroadcastStream::new(rx).filter_map(|result| {
+        match result {
+            Ok(data) => Some(Ok(Event::default().data(data))),
+            Err(_) => None,
+        }
+    });
+    Sse::new(stream).keep_alive(KeepAlive::default())
+}
+
+#[derive(Debug, Deserialize)]
+pub struct IngestTelemetryRequest {
+    pub node_id: String,
+    pub metrics: serde_json::Value,
+}
+
+async fn ingest_telemetry(
+    State(state): State<AppState>,
+    Json(req): Json<IngestTelemetryRequest>,
+) -> impl IntoResponse {
+    let devices = sqlx::query_as::<_, (String, String)>(
+        "SELECT id, node_id FROM devices WHERE node_id = ?",
+    )
+    .bind(&req.node_id)
+    .fetch_all(&state.pool)
+    .await;
+
+    let devices = match devices {
+        Ok(d) if d.is_empty() => return (StatusCode::NOT_FOUND, Json(serde_json::json!({"error": "No device found for this node_id"}))).into_response(),
+        Ok(d) => d,
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+    };
+
+    let now = Utc::now().timestamp();
+    let mut inserted: i64 = 0;
+
+    if let Some(metrics) = req.metrics.as_object() {
+        const KNOWN_METRICS: &[&str] = &["temperature", "humidity", "soil_moisture", "soil_temperature", "ec", "light"];
+        for (device_id, _) in &devices {
+            for (metric, value) in metrics {
+                let Some(val) = value.as_f64() else { continue };
+                let m = metric.as_str();
+                if !KNOWN_METRICS.contains(&m) { continue; }
+                let valid = match m {
+                    "temperature" => val >= -10.0 && val <= 60.0,
+                    "humidity" => val >= 0.0 && val <= 100.0,
+                    "soil_moisture" => val >= 0.0 && val <= 100.0,
+                    "soil_temperature" => val >= -10.0 && val <= 60.0,
+                    "ec" => val >= 0.0 && val <= 10.0,
+                    "light" => val >= 0.0 && val <= 200000.0,
+                    _ => false,
+                };
+                if !valid { continue; }
+                let unit = match m {
+                    "temperature" => "℃",
+                    "humidity" => "%",
+                    "soil_temperature" => "℃",
+                    "light" => "lux",
+                    "soil_moisture" => "%",
+                    "ec" => "mS/cm",
+                    _ => "",
+                };
+                if let Err(e) = sqlx::query(
+                    "INSERT INTO sensor_readings (device_id, metric, value, unit, timestamp) VALUES (?, ?, ?, ?, ?)"
+                )
+                .bind(device_id)
+                .bind(metric)
+                .bind(val)
+                .bind(unit)
+                .bind(now)
+                .execute(&state.pool)
+                .await
+                {
+                    tracing::warn!("Failed to insert reading: {}", e);
+                } else {
+                    inserted += 1;
+                }
+            }
+        }
+    }
+
+    if inserted > 0 {
+        sqlx::query("UPDATE devices SET status = 'online', updated_at = ? WHERE node_id = ?")
+            .bind(now)
+            .bind(&req.node_id)
+            .execute(&state.pool)
+            .await
+            .ok();
+
+        let _ = state.event_tx.send(serde_json::json!({
+            "type": "telemetry",
+            "node_id": req.node_id,
+            "timestamp": now,
+        }).to_string());
+    }
+
+    Json(serde_json::json!({"inserted": inserted, "message": "Telemetry ingested"})).into_response()
 }
 
 #[cfg(test)]
@@ -661,6 +813,7 @@ mod tests {
     use tower::ServiceExt;
     use uuid::Uuid;
 
+    /// 创建内存测试数据库并创建必要的表
     async fn setup_test_db() -> SqlitePool {
         let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
 
@@ -672,6 +825,9 @@ mod tests {
                 device_type TEXT NOT NULL,
                 status TEXT NOT NULL DEFAULT 'offline',
                 config TEXT,
+                area_id TEXT,
+                comfort_config TEXT,
+                capabilities TEXT NOT NULL DEFAULT '[\"sensor\"]',
                 created_at INTEGER NOT NULL,
                 updated_at INTEGER NOT NULL
             )"
@@ -697,6 +853,8 @@ mod tests {
                 conditions TEXT,
                 actions TEXT,
                 schedule TEXT,
+                priority INTEGER NOT NULL DEFAULT 0,
+                auto_execute INTEGER NOT NULL DEFAULT 0,
                 created_at INTEGER NOT NULL
             )"
         ).execute(&pool).await.unwrap();
@@ -712,51 +870,26 @@ mod tests {
             )"
         ).execute(&pool).await.unwrap();
 
-        sqlx::query(
-            "CREATE TABLE IF NOT EXISTS zones (
-                id TEXT PRIMARY KEY,
-                name TEXT NOT NULL,
-                description TEXT,
-                location TEXT NOT NULL,
-                crop_type TEXT NOT NULL,
-                comfort_config TEXT NOT NULL,
-                node_ids TEXT NOT NULL DEFAULT '[]',
-                created_at INTEGER NOT NULL,
-                updated_at INTEGER NOT NULL
-            )"
-        ).execute(&pool).await.unwrap();
-
-        sqlx::query(
-            "CREATE TABLE sensor_nodes (
-                id TEXT PRIMARY KEY,
-                name TEXT NOT NULL,
-                zone_id TEXT NOT NULL,
-                has_irrigation INTEGER NOT NULL DEFAULT 0,
-                has_side_vent INTEGER NOT NULL DEFAULT 0,
-                has_roof_vent INTEGER NOT NULL DEFAULT 0,
-                vent_range TEXT NOT NULL DEFAULT '{\"min\": 0, \"max\": 100}',
-                status TEXT NOT NULL DEFAULT 'offline',
-                last_seen INTEGER,
-                created_at INTEGER NOT NULL,
-                updated_at INTEGER NOT NULL
-            )"
-        ).execute(&pool).await.unwrap();
-
         pool
     }
 
     #[allow(dead_code)]
+    /// 插入测试设备并返回设备ID
     async fn insert_test_device(pool: &SqlitePool, name: &str, node_id: &str, device_type: &str) -> String {
         let id = Uuid::new_v4().to_string();
         let now = Utc::now().timestamp();
+        let caps = if device_type == "actuator" { "[\"actuator\"]" } else { "[\"sensor\"]" };
         sqlx::query(
-            "INSERT INTO devices (id, name, node_id, device_type, status, created_at, updated_at) VALUES (?, ?, ?, ?, 'offline', ?, ?)"
+            "INSERT INTO devices (id, name, node_id, device_type, status, capabilities, created_at, updated_at) VALUES (?, ?, ?, ?, 'offline', ?, ?, ?)"
         )
-        .bind(&id).bind(name).bind(node_id).bind(device_type).bind(now).bind(now)
+        .bind(&id).bind(name).bind(node_id).bind(device_type).bind(caps).bind(now).bind(now)
         .execute(pool).await.unwrap();
         id
     }
 
+    // ========== 设备 API 测试（使用 Router::oneshot） ==========
+
+    /// 测试列出设备 - 空列表，返回200
     #[tokio::test]
     async fn test_list_devices_empty() {
         let pool = setup_test_db().await;
@@ -773,6 +906,7 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
     }
 
+    /// 测试获取不存在的设备 - 返回404
     #[tokio::test]
     async fn test_get_device_not_found() {
         let pool = setup_test_db().await;
@@ -789,6 +923,7 @@ mod tests {
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
 
+    /// 测试仪表盘摘要 - 空数据返回200
     #[tokio::test]
     async fn test_dashboard_summary_empty() {
         let pool = setup_test_db().await;
@@ -805,6 +940,7 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
     }
 
+    /// 测试创建设备 - 正常情况返回201
     #[tokio::test]
     async fn test_create_device_success() {
         let pool = setup_test_db().await;
@@ -822,6 +958,7 @@ mod tests {
         assert_eq!(response.status(), StatusCode::CREATED);
     }
 
+    /// 测试创建设备 - 非法设备类型返回400
     #[tokio::test]
     async fn test_create_device_invalid_type() {
         let pool = setup_test_db().await;
@@ -839,6 +976,9 @@ mod tests {
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     }
 
+    // ========== 参数校验单元测试 ==========
+
+    /// 测试设备类型校验 - sensor 合法
     #[test]
     fn test_device_type_validation_sensor() {
         let device_type = "sensor";
@@ -849,6 +989,7 @@ mod tests {
         assert!(result);
     }
 
+    /// 测试设备类型校验 - actuator 合法
     #[test]
     fn test_device_type_validation_actuator() {
         let device_type = "actuator";
@@ -859,6 +1000,7 @@ mod tests {
         assert!(result);
     }
 
+    /// 测试设备类型校验 - 非法类型
     #[test]
     fn test_device_type_validation_invalid() {
         let device_type = "invalid";
@@ -869,6 +1011,7 @@ mod tests {
         assert!(!result);
     }
 
+    /// 测试触发类型校验 - schedule 合法
     #[test]
     fn test_trigger_type_validation_schedule() {
         let trigger_type = "schedule";
@@ -879,6 +1022,7 @@ mod tests {
         assert!(result);
     }
 
+    /// 测试触发类型校验 - condition 合法
     #[test]
     fn test_trigger_type_validation_condition() {
         let trigger_type = "condition";
@@ -889,6 +1033,7 @@ mod tests {
         assert!(result);
     }
 
+    /// 测试触发类型校验 - 非法类型
     #[test]
     fn test_trigger_type_validation_invalid() {
         let trigger_type = "invalid";
@@ -899,6 +1044,9 @@ mod tests {
         assert!(!result);
     }
 
+    // ========== 辅助函数 ==========
+
+    /// 创建 Mock MQTT 客户端（不连接真实 broker）
     async fn create_mock_client() -> rumqttc::AsyncClient {
         let (client, _) = rumqttc::AsyncClient::new(
             rumqttc::MqttOptions::new("test-client", "127.0.0.1", 1883),

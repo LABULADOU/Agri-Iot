@@ -1,59 +1,66 @@
 /*
- * 农业物联网 ESP32 固件 v1.0
- * 功能：DHT22 温湿度采集 + MQTT 上报（云 Broker） + 远程控制
+ * 农业物联网 ESP32 固件 v2.0
+ * 功能：传感器数据采集 + HTTP 上报 (via Tailscale Funnel) + 远程控制
+ * 传感器：DHT11/DHT22 温湿度 + 土壤湿度 + 光照
+ * 控制：继电器开关（水泵/风扇）
  */
 
 #include <WiFi.h>
-#include <PubSubClient.h>
+#include <WiFiClientSecure.h>
+#include <HTTPClient.h>
 #include <ArduinoJson.h>
 #include <DHT.h>
 
-// ==================== 配置（首次使用请修改） ====================
+// ==================== 配置 ====================
 
-// WiFi 配置 — 手机热点或路由器
-const char* WIFI_SSID = "YOUR_WIFI_SSID";
-const char* WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";
+// WiFi 配置
+const char* WIFI_SSID = "iPhone";
+const char* WIFI_PASSWORD = "12345678";
 
-// MQTT 配置 — 云 Broker
-const char* MQTT_SERVER = "broker.emqx.io";
-const int MQTT_PORT = 1883;
-const char* NODE_ID = "esp32-node-001";
+// HTTP API 配置（Tailscale Funnel 公网地址）
+const char* API_BASE = "https://zero-1.taile2b316.ts.net";
+const char* NODE_ID = "esp32-node-001";       // 设备唯一标识
 
 // 引脚定义
-#define DHTPIN 15               // DHT22 数据引脚
-#define DHTTYPE DHT22           // DHT22 温湿度传感器
-#define RELAY_PIN 16            // 继电器控制引脚
+#define DHTPIN 15
+#define DHTTYPE DHT22          // 使用 DHT11，如使用 DHT22 改为 DHT22
+#define SOIL_MOISTURE_PIN 34   // 土壤湿度传感器 (ADC1)
+#define LIGHT_PIN 35           // 光照传感器 (ADC1)
+#define RELAY_PIN 16           // 继电器控制引脚
 
 // 采集间隔 (毫秒)
-const unsigned long READ_INTERVAL = 10000;
+const unsigned long READ_INTERVAL = 10000;  // 10秒采集一次
+const unsigned long COMMAND_POLL_INTERVAL = 3000;  // 3秒轮询命令
 
 // ==================== 全局变量 ====================
 
-WiFiClient espClient;
-PubSubClient mqtt(espClient);
+WiFiClientSecure client;
 DHT dht(DHTPIN, DHTTYPE);
 
 unsigned long lastRead = 0;
+unsigned long lastCommandPoll = 0;
 bool relayState = false;
 
 // ==================== 初始化 ====================
 
 void setup() {
     Serial.begin(115200);
-    Serial.println("\n=== Agri-IoT ESP32 DHT22 ===");
+    Serial.println("\n=== 农业物联网 ESP32 固件 v2.0 (HTTP+Funnel) ===");
 
     pinMode(RELAY_PIN, OUTPUT);
     digitalWrite(RELAY_PIN, LOW);
 
     dht.begin();
+
+    client.setInsecure();  // Tailscale 证书可信，但 ESP32 可能没有完整 CA 包
+
     setupWiFi();
-    setupMQTT();
 }
 
 // ==================== WiFi ====================
 
 void setupWiFi() {
-    Serial.printf("Connecting WiFi: %s\n", WIFI_SSID);
+    Serial.printf("连接 WiFi: %s\n", WIFI_SSID);
     WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
     WiFi.setAutoReconnect(true);
 
@@ -65,114 +72,165 @@ void setupWiFi() {
     }
 
     if (WiFi.status() == WL_CONNECTED) {
-        Serial.printf("\nWiFi connected! IP: %s\n", WiFi.localIP().toString().c_str());
+        Serial.printf("\nWiFi 已连接! IP: %s\n", WiFi.localIP().toString().c_str());
     } else {
-        Serial.println("\nWiFi failed, deep sleeping...");
+        Serial.println("\nWiFi 连接失败，进入深度休眠...");
         ESP.deepSleep(0);
     }
 }
 
-// ==================== MQTT ====================
+// ==================== HTTP 请求工具 ====================
 
-void setupMQTT() {
-    mqtt.setServer(MQTT_SERVER, MQTT_PORT);
-    mqtt.setCallback(onCommand);
-    mqtt.setKeepAlive(30);
+String httpGet(const char* url) {
+    HTTPClient http;
+    http.begin(client, url);
+    http.setTimeout(5000);
+    int code = http.GET();
+    if (code > 0) {
+        String body = http.getString();
+        http.end();
+        return body;
+    }
+    Serial.printf("HTTP GET 失败: %d\n", code);
+    http.end();
+    return "";
 }
 
-void reconnectMQTT() {
-    while (!mqtt.connected()) {
-        Serial.print("Connecting MQTT...");
-
-        String willTopic = String("agri/node/") + NODE_ID + "/status";
-
-        if (mqtt.connect(NODE_ID, willTopic.c_str(), 1, true, "offline")) {
-            Serial.println(" connected");
-
-            mqtt.publish(willTopic.c_str(), "online");
-
-            String cmdTopic = String("agri/node/") + NODE_ID + "/command/#";
-            mqtt.subscribe(cmdTopic.c_str());
-            Serial.printf(" Subscribed: %s\n", cmdTopic.c_str());
-        } else {
-            Serial.printf(" failed (rc=%d), retry in 5s...\n", mqtt.state());
-            delay(5000);
-        }
+String httpPost(const char* url, const char* body) {
+    HTTPClient http;
+    http.begin(client, url);
+    http.setTimeout(5000);
+    http.addHeader("Content-Type", "application/json");
+    int code = http.POST(body);
+    if (code > 0) {
+        String resp = http.getString();
+        http.end();
+        return resp;
     }
+    Serial.printf("HTTP POST 失败: %d\n", code);
+    http.end();
+    return "";
+}
+
+String httpPut(const char* url, const char* body) {
+    HTTPClient http;
+    http.begin(client, url);
+    http.setTimeout(5000);
+    http.addHeader("Content-Type", "application/json");
+    int code = http.PUT(body);
+    if (code > 0) {
+        String resp = http.getString();
+        http.end();
+        return resp;
+    }
+    Serial.printf("HTTP PUT 失败: %d\n", code);
+    http.end();
+    return "";
 }
 
 // ==================== 主循环 ====================
 
 void loop() {
-    if (!mqtt.connected()) {
-        reconnectMQTT();
-    }
-    mqtt.loop();
-
     unsigned long now = millis();
+
+    // 定期采集并上报遥测
     if (now - lastRead >= READ_INTERVAL) {
         publishTelemetry();
         lastRead = now;
+    }
+
+    // 轮询待处理命令
+    if (now - lastCommandPoll >= COMMAND_POLL_INTERVAL) {
+        pollCommands();
+        lastCommandPoll = now;
     }
 }
 
 // ==================== 数据采集与上报 ====================
 
 void publishTelemetry() {
-    StaticJsonDocument<192> doc;
+    StaticJsonDocument<256> doc;
+    doc["node_id"] = NODE_ID;
     JsonObject metrics = doc.createNestedObject("metrics");
 
-    // DHT22 温湿度
+    // 读取 DHT 传感器
     float temp = dht.readTemperature();
     float hum = dht.readHumidity();
 
     if (!isnan(temp)) {
         metrics["temperature"] = round(temp * 100) / 100.0;
-        Serial.printf("Temp: %.1fC | ", temp);
+        Serial.printf("温度: %.1f℃ | ", temp);
     }
     if (!isnan(hum)) {
         metrics["humidity"] = round(hum * 100) / 100.0;
-        Serial.printf("Hum: %.1f%% | ", hum);
+        Serial.printf("湿度: %.1f%% | ", hum);
     }
 
-    // 网络信号
+    // 读取土壤湿度 (0-4095)
+    int soilRaw = analogRead(SOIL_MOISTURE_PIN);
+    int soilPercent = map(soilRaw, 4095, 0, 0, 100);
+    metrics["soil_moisture"] = soilPercent;
+    Serial.printf("土壤湿度: %d%% | ", soilPercent);
+
+    // 读取光照 (0-4095)
+    int lightRaw = analogRead(LIGHT_PIN);
+    int lightLux = map(lightRaw, 0, 4095, 0, 10000);
+    metrics["light"] = lightLux;
+    Serial.printf("光照: %d lux", lightLux);
+
+    metrics["relay_state"] = relayState;
     metrics["rssi"] = WiFi.RSSI();
 
     char buf[256];
     serializeJson(doc, buf);
 
-    String topic = String("agri/node/") + NODE_ID + "/telemetry";
-    bool ok = mqtt.publish(topic.c_str(), buf);
+    // 通过 HTTP POST 上报遥测
+    String url = String(API_BASE) + "/api/v1/telemetry";
+    String resp = httpPost(url.c_str(), buf);
+    bool ok = resp.length() > 0;
 
-    Serial.printf("Publish: %s\n", ok ? "OK" : "FAIL");
+    Serial.printf(" | HTTP: %s\n", ok ? "成功" : "失败");
 }
 
-// ==================== 控制指令处理 ====================
+// ==================== 命令轮询与处理 ====================
 
-void onCommand(char* topic, byte* payload, unsigned int length) {
-    String msg;
-    for (unsigned int i = 0; i < length; i++) {
-        msg += (char)payload[i];
-    }
+void pollCommands() {
+    if (WiFi.status() != WL_CONNECTED) return;
 
-    StaticJsonDocument<128> doc;
-    DeserializationError err = deserializeJson(doc, msg);
+    String url = String(API_BASE) + "/api/v1/commands/node/" + NODE_ID;
+    String resp = httpGet(url.c_str());
+    if (resp.length() == 0) return;
+
+    // 解析命令列表
+    StaticJsonDocument<1024> doc;
+    DeserializationError err = deserializeJson(doc, resp);
     if (err) {
-        Serial.printf("JSON parse error: %s\n", err.c_str());
+        Serial.printf("命令 JSON 解析失败: %s\n", err.c_str());
         return;
     }
 
-    String command = doc["command"] | "";
-    Serial.printf("Command: %s -> %s\n", topic, msg.c_str());
+    JsonArray arr = doc.as<JsonArray>();
+    for (JsonObject cmd : arr) {
+        const char* id = cmd["id"];
+        const char* command = cmd["command"] | "";
+        JsonObject params = cmd["params"];
 
-    if (command == "switch") {
-        bool on = doc["params"]["on"] | false;
-        relayState = on;
-        digitalWrite(RELAY_PIN, on ? HIGH : LOW);
-        Serial.printf("Relay: %s\n", on ? "ON" : "OFF");
+        Serial.printf("收到指令: %s\n", command);
+
+        if (strcmp(command, "switch") == 0) {
+            bool on = params["on"] | false;
+            relayState = on;
+            digitalWrite(RELAY_PIN, on ? HIGH : LOW);
+            Serial.printf("继电器状态: %s\n", on ? "开启" : "关闭");
+        }
+        else if (strcmp(command, "set_interval") == 0) {
+            // 仅记录，运行时调整比较复杂
+            Serial.printf("采集间隔设置请求 (当前: %dms)\n", READ_INTERVAL);
+        }
+
+        // 标记命令已执行
+        String statusUrl = String(API_BASE) + "/api/v1/commands/" + id + "/status";
+        httpPut(statusUrl.c_str(), "{\"status\":\"executed\"}");
+        Serial.printf("命令 %s 已确认\n", id);
     }
-
-    // 发送响应
-    String responseTopic = String("agri/node/") + NODE_ID + "/response/cmd";
-    mqtt.publish(responseTopic.c_str(), "{\"status\":\"ok\"}");
 }

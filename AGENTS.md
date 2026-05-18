@@ -5,113 +5,124 @@
 - **agri-core**: 核心库（模型、DB、错误定义）
 - **agri-server**: 后端服务（Axum + SQLx）
 - **agri-mqtt**: MQTT 通信（rumqttd broker + rumqttc client）
-- **agri-ui**: 前端（React + TypeScript + Vite + Ant Design）
-- **esp32-firmware**: ESP32 固件（Arduino）
+- **agri-frontend**: React SPA（Vite + Recharts）
+- **esp32-firmware**: ESP32 固件 v2.0（HTTP + Tailscale Funnel）
 
-## 后端整改完成（2026-05-06）
+## 架构
 
-### 已修复问题
-1. **SQL 注入风险** → `routes.rs` 改用参数化查询
-2. **MQTT 功能未启用** → `main.rs` 启动 broker/client，`handler.rs` 监听消息
-3. **中间件未生效** → 添加 `.layer(middleware::from_fn(...))`
-4. **错误处理不统一** → `AppError` 增加 `RuleNotFound`，实现 `IntoResponse` 转换
-5. **规则引擎时间检查粗糙** → 改为精确秒级判断
-6. **MQTT topic 不一致** → 模拟器 topic 与 handler 匹配
-7. **rumqttc API 不匹配** → 使用正确的 `AsyncClient + EventLoop` 模式
-8. **中间件模块冲突** → 重命名 `middleware.rs` 为 `request_logger.rs`
+```
+ESP32 真实节点 ───HTTPS──→ Tailscale Funnel ──→ agri-server (公网可达)
+MQTT 模拟器     ───MQTT──→ rumqttd Broker   ──→ agri-server (本地)
+ESP32(串口)     ───串口──→ serial_bridge.py ─HTTP→ agri-server (USB直连)
+```
 
-### 编译状态（2026-05-13 最新）
-- ✅ `cargo check` 全项目通过
-- 构建产物：`target/debug/agri-server`
-- MQTT：支持云 Broker（通过 `MQTT_HOST` 配置，默认 `broker.emqx.io`），非本地地址时自动跳过内置 Broker
+## 数据库重构 — 设备 capabilities 模型（2026-05-17）
 
-## 后端优化进度
+### 背景
+旧模型将一块物理 ESP32 拆为 sensor + actuator 两条记录，共用 node_id，导致 KPI 翻倍。
 
-### 响应 JSON 序列化（未完成）
-- 所有 API 当前使用手动 `serde_json::json!()` 构建 JSON
-- 枚举（`DeviceType`、`DeviceStatus`、`TriggerType`）未实现 `sqlx::Type`，无法直接 `FromRow`
-- 后续建议：为枚举实现 sqlx 支持，或保持手动构建
+### 变更
+- **`agri-core/migrations/001_init.sql`** → 原表结构，`node_id` 无 UNIQUE
+- **`agri-core/src/db.rs`** → Rust 启动代码幂等补充：
+  - `capabilities TEXT` 列（JSON 数组，如 `["sensor","actuator"]`）
+  - `UNIQUE INDEX idx_devices_node_id`
+  - 合并旧 DB 中 sensor+actuator 重复记录
+- **`agri-core/src/models.rs`** → `Device` 增加 `capabilities: Option<JsonValue>`，`has_capability()` 方法
+- **`agri-server/src/routes.rs`**：
+  - `POST /api/v1/devices` → UPSERT 模式，同 node_id 自动更新
+  - `send_command` → 检查 `capabilities` 包含 `"actuator"` 而非 device_type
+  - `ingest_telemetry` → 不再按 `device_type = 'sensor'` 过滤
+  - `get_pending_commands` → `id` 返回字符串（修复 ESP32 空指针崩溃）
+- **`agri-mqtt/src/handler.rs`** → 同上去除 device_type 过滤
 
-### 单元测试（已有 54 个测试）
-- `agri-core`：模型 9 个 + 错误处理 9 个 = 18 个
-- `agri-mqtt`：消息处理 15 个 + 集成 7 个 = 22 个
-- `agri-server`：路由 11 个 + 规则引擎 3 个 = 14 个
+### 效果
+- 一块板子 = 一个设备，KPI 正确
+- 未来扩展（摄像头、屏幕等）只需追加 capabilities 数组
 
-### 配置管理统一（已完成）
-- `config/` 已移除，统一使用 `.env` 加载配置
-- `agri-core/src/models.rs`：移除死代码 `AggregatedReading`、`CommandLog`、`CommandStatus`、`SensorUtils`、`FromRow` 派生
-- `agri-core/migrations/001_init.sql`：替为 `migrations/` 的符号链接（消除重复）
-- `agri-server/src/routes.rs`：`AggregatedQuery.metric` 接入实际查询（原为死字段）
-- `deploy/verify.sh`：修复 `middleware.rs` → `request_logger.rs` 过时引用
+## ESP32 固件 v2.0（2026-05-18）
 
-## 前端（React + Vite，已完成迁移）
-- 新 UI 替换旧 Yew WASM 前端（2026-05-13）
-- 旧 `agri-frontend/` 已移除
-- 构建输出到 `agri-server/static/`，由后端 fallback 服务托管
-- 技术栈：React 19 + Ant Design 6 + ECharts + Zustand + React Router 7
+### 数据通路
+```
+ESP32 (DHT22 + 土壤湿度 + 光照 + 继电器)
+  → WiFi ("iPhone")
+  → HTTPS → zero-1.taile2b316.ts.net/api/v1/telemetry
+  → Tailscale Funnel → http://172.20.10.2:3001 → agri-server → DB
+```
 
-## ESP32（更新于 2026-05-13）
-- 固件：仅采集 DHT22 温湿度，上报至云 MQTT Broker（`broker.emqx.io`）
-- 使用前需修改 `src/main.ino` 中的 WiFi 凭据（`WIFI_SSID` / `WIFI_PASSWORD`）
-- 冗余传感器（土壤湿度、光照）和控制指令保留代码已清理
-- 根目录 `main.ino` 重复文件已移除，`src/main.ino` 为唯一源文件
+### 关键特性
+- `esp32-firmware/src/main.ino`：HTTP 直连（非 MQTT），走 Tailscale Funnel
+- 每 10 秒采集传感器，每 3 秒轮询命令
+- `setInsecure()` 跳过 SSL 验证（Tailscale 自有证书）
+- 指令：`switch`（继电器开关）、命令完成 PUT 回执
 
-## 关键文件位置
-- 路由：`agri-server/src/routes.rs`（返回 `Response`，错误处理用 `app_error_to_response`）
-- 状态管理：`agri-server/src/state.rs`（持有 `pool`、`mqtt_client`、`rules_cache`）
-- 规则引擎：`agri-server/src/rule_engine.rs`（5秒轮询 + 每分钟刷新缓存）
-- MQTT 处理：`agri-mqtt/src/handler.rs`（监听 `agri/node/+/telemetry` 和 `agri/node/+/status`）
-- 数据库迁移：`migrations/001_init.sql`
-- 请求日志：`agri-server/src/request_logger.rs`（原 `middleware.rs`）
-- 前端页面：`agri-ui/src/pages/`
-- 前端组件：`agri-ui/src/components/`
-- 前端 API：`agri-ui/src/services/api.ts`
-- 前端状态：`agri-ui/src/stores/`
+### 已知 Bug（已修复）
+- 服务端 `get_pending_commands` 返回 `id` 为整数，ESP32 用 `const char*` 接收时 null → `LoadProhibited` panic
+- 修复：`routes.rs:274` → `"id": r.0.to_string()`
+
+## 前端（2026-05-18）
+
+### React SPA（生产）
+- `agri-frontend/` 为 Vite + React + Recharts + Tailwind CSS 项目
+- 预构建产物部署在 `agri-server/static/`
+- 通过 SSE `/api/v1/events` 接收实时数据推送
+
+### 完成页面
+- 概览/仪表盘
+- 设备列表/详情
+- 告警记录
+- 规则管理
+- 系统设置
+- 区域管理（ZoneDetail + FarmScene 3D 可视化）
+
+## 后端 API 端点
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET/POST | `/api/v1/devices` | 设备列表/创建（UPSERT） |
+| GET/PUT/DELETE | `/api/v1/devices/:id` | 设备详情/更新/删除 |
+| GET | `/api/v1/devices/:id/readings` | 传感器历史数据 |
+| POST | `/api/v1/devices/:id/command` | 发送控制指令（检查 capabilities） |
+| POST | `/api/v1/telemetry` | 遥测数据接入（HTTP 直连） |
+| GET | `/api/v1/commands/node/:node_id` | 查询待处理命令 |
+| PUT | `/api/v1/commands/:id/status` | 更新命令状态 |
+| CRUD | `/api/v1/areas` | 区域管理 |
+| CRUD | `/api/v1/crops` | 作物管理 |
+| CRUD | `/api/v1/crop-batches` | 茬口管理 |
+| GET | `/api/v1/dashboard/summary` | 仪表盘汇总 |
+| GET | `/api/v1/dashboard/area-readings` | 分区图表数据 |
+| GET | `/api/v1/dashboard/node-readings` | 节点实时数据 |
+| GET | `/api/v1/system/info` | 系统信息 |
+| GET | `/api/v1/events` | SSE 实时事件推送 |
 
 ## 启动方式
+
 ```bash
-# 1. 构建前端（首次或修改后）
-cd agri-ui && npm install && npm run build && cd ..
+# 构建
+cargo build -p agri-server
 
-# 2. 构建后端
-cargo build
-
-# 3. 启动后端
+# 启动服务
 ./target/debug/agri-server
 
-# 4. 模拟传感器数据（新终端）
+# 或作为后台进程
+nohup ./target/debug/agri-server > /tmp/agri-server.log 2>&1 &
+
+# 模拟传感器（本地 MQTT）
 python3 scripts/simulate_node.py
+
+# 模拟传感器（HTTP 直连）
+python3 scripts/simulate_http.py
+
+# 真实 ESP32 串口桥接
+python3 scripts/serial_bridge.py /dev/ttyUSB0
 ```
 
-## 下次上手快速指南
-
-### 1. 验证当前状态
-```bash
-cd /home/admino/Agri-iot
-cargo check  # 应该全项目通过
-```
-
-### 2. 接着做优化（建议顺序）
-1. **配置管理统一**：已完成（使用 `.env`）
-2. **单元测试**：已有 54 个，可继续增加路由集成测试
-3. **JSON 序列化**：解决枚举的 sqlx 支持问题，或为枚举实现 `FromRow`
-
-### 3. 前端开发
-```bash
-cd agri-ui
-npm install
-npm run dev    # 开发模式，端口 3001，API 代理到后端 3000
-npm run build  # 构建到 agri-server/static/
-```
+Dashboard: http://localhost:3001
+Tailscale Funnel: https://zero-1.taile2b316.ts.net
 
 ## 已知坑点
-- `rumqttc` 0.24 的 `AsyncClient` 和 `EventLoop` 要分开创建（`AsyncClient::new` 返回 `(AsyncClient, EventLoop)`）
-- `axum` 的路由函数返回 `Response` 比返回 `Result<T, AppError>` 更简单（`AppError` 已实现 `IntoResponse`）
-- SQLite 的 `enabled` 字段是 `INTEGER`，读取时是 `i64`，与 `bool` 比较要用 `== 1i64`
-- 时间戳：数据库存 `i64`（Unix 秒），模型用 `DateTime<Utc>`，API 层需要转换
 
-## 项目记忆
-- 本文档（`AGENTS.md`）是项目记忆，每次新对话先看这个
-- 后端核心功能已完善，优先做优化和测试
-- 前端已迁移到 React（agri-ui），旧 Yew 前端已移除
-- ESP32 按用户要求暂不处理
+- `rumqttc` 0.24 的 `AsyncClient` 和 `EventLoop` 要分开创建
+- SQLite `enabled` 字段是 `INTEGER`，与 `bool` 比较用 `== 1i64`
+- 命令轮询返回的 `id` 必须是字符串（ESP32 `const char*` 接收），否则崩溃
+- 设备状态无超时离线检测（需 telemetry 或 MQTT 消息才更新）
+- `mosquitto` 子进程启动后即退出（不影响 MQTT 功能，但需排查）

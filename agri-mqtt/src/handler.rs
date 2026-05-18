@@ -1,20 +1,22 @@
 use chrono::Utc;
 use sqlx::SqlitePool;
 use rumqttc::{Event, Incoming};
+use tokio::sync::broadcast;
 use tracing::info;
 
 pub async fn handle_telemetry(
     pool: &SqlitePool,
     node_id: &str,
     payload: &str,
+    event_tx: Option<&broadcast::Sender<String>>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let data: serde_json::Value = serde_json::from_str(payload)?;
+    let mut inserted = false;
+    let now = Utc::now().timestamp();
 
     if let Some(metrics) = data.get("metrics").and_then(|m| m.as_object()) {
-        let now = Utc::now().timestamp();
-
         let devices = sqlx::query_as::<_, (String, String)>(
-            "SELECT id, node_id FROM devices WHERE node_id = ? AND device_type = 'sensor'",
+            "SELECT id, node_id FROM devices WHERE node_id = ?",
         )
         .bind(node_id)
         .fetch_all(pool)
@@ -26,8 +28,10 @@ pub async fn handle_telemetry(
                     let unit = match metric.as_str() {
                         "temperature" => "℃",
                         "humidity" => "%",
+                        "soil_temperature" => "℃",
                         "light" => "lux",
                         "soil_moisture" => "%",
+                        "ec" => "mS/cm",
                         _ => "",
                     };
 
@@ -43,12 +47,23 @@ pub async fn handle_telemetry(
                     .execute(pool)
                     .await?;
 
+                    inserted = true;
                     info!(
                         "Stored reading: device={} metric={} value={}{}",
                         device_id, metric, val, unit
                     );
                 }
             }
+        }
+    }
+
+    if inserted {
+        if let Some(tx) = event_tx {
+            let _ = tx.send(serde_json::json!({
+                "type": "telemetry",
+                "node_id": node_id,
+                "timestamp": now,
+            }).to_string());
         }
     }
 
@@ -76,22 +91,16 @@ pub async fn handle_status_change(
     .execute(pool)
     .await?;
 
-    sqlx::query(
-        "UPDATE sensor_nodes SET status = ?, last_seen = ?, updated_at = ? WHERE id = ?",
-    )
-    .bind(db_status)
-    .bind(now)
-    .bind(now)
-    .bind(node_id)
-    .execute(pool)
-    .await?;
-
     info!("Device {} status changed to {}", node_id, db_status);
 
     Ok(())
 }
 
-pub async fn start_listener(mut eventloop: rumqttc::EventLoop, pool: SqlitePool) {
+pub async fn start_listener(
+    mut eventloop: rumqttc::EventLoop,
+    pool: SqlitePool,
+    event_tx: Option<broadcast::Sender<String>>,
+) {
     info!("MQTT listener started, waiting for messages");
 
     loop {
@@ -100,7 +109,6 @@ pub async fn start_listener(mut eventloop: rumqttc::EventLoop, pool: SqlitePool)
                 let topic = p.topic;
                 let payload = String::from_utf8_lossy(&p.payload);
 
-                // 解析主题: agri/node/{node_id}/telemetry 或 agri/node/{node_id}/status
                 let parts: Vec<&str> = topic.split('/').collect();
                 if parts.len() >= 4 && parts[0] == "agri" && parts[1] == "node" {
                     let node_id = parts[2];
@@ -108,7 +116,7 @@ pub async fn start_listener(mut eventloop: rumqttc::EventLoop, pool: SqlitePool)
 
                     match topic_type {
                         "telemetry" => {
-                            if let Err(e) = handle_telemetry(&pool, node_id, &payload).await {
+                            if let Err(e) = handle_telemetry(&pool, node_id, &payload, event_tx.as_ref()).await {
                                 tracing::warn!("Failed to handle telemetry: {}", e);
                             }
                         }
@@ -148,6 +156,9 @@ mod tests {
                 device_type TEXT NOT NULL,
                 status TEXT NOT NULL DEFAULT 'offline',
                 config TEXT,
+                area_id TEXT,
+                comfort_config TEXT,
+                capabilities TEXT NOT NULL DEFAULT '[\"sensor\"]',
                 created_at INTEGER NOT NULL,
                 updated_at INTEGER NOT NULL
             )"
@@ -171,41 +182,12 @@ mod tests {
         .execute(&pool)
         .await
         .unwrap();
-
-        // 创建 sensor_nodes 表
-        sqlx::query(
-            "CREATE TABLE IF NOT EXISTS sensor_nodes (
-                id TEXT PRIMARY KEY,
-                name TEXT NOT NULL,
-                zone_id TEXT NOT NULL,
-                has_irrigation INTEGER NOT NULL DEFAULT 0,
-                has_side_vent INTEGER NOT NULL DEFAULT 0,
-                has_roof_vent INTEGER NOT NULL DEFAULT 0,
-                vent_range TEXT NOT NULL DEFAULT '{\"min\": 0, \"max\": 100}',
-                status TEXT NOT NULL DEFAULT 'offline',
-                last_seen INTEGER,
-                created_at INTEGER NOT NULL,
-                updated_at INTEGER NOT NULL
-            )"
-        )
-        .execute(&pool)
-        .await
-        .unwrap();
         
         // 插入测试设备
         let now = Utc::now().timestamp();
         sqlx::query(
-            "INSERT INTO devices (id, name, node_id, device_type, status, created_at, updated_at) 
-             VALUES ('test-device-uuid', 'Test Sensor', 'node-001', 'sensor', 'online', ?1, ?1)"
-        )
-        .bind(now)
-        .execute(&pool)
-        .await
-        .unwrap();
-
-        sqlx::query(
-            "INSERT INTO sensor_nodes (id, name, zone_id, status, created_at, updated_at)
-             VALUES ('node-001', 'Test Node', 'zone-001', 'online', ?1, ?1)"
+            "INSERT INTO devices (id, name, node_id, device_type, status, capabilities, created_at, updated_at) 
+             VALUES ('test-device-uuid', 'Test Sensor', 'node-001', 'sensor', 'online', '[\"sensor\"]', ?1, ?1)"
         )
         .bind(now)
         .execute(&pool)
@@ -221,7 +203,7 @@ mod tests {
         let pool = setup_test_db().await;
 
         let payload = r#"{"metrics": {"temperature": 25.5, "humidity": 60.0}}"#;
-        let result = handle_telemetry(&pool, "node-001", payload).await;
+        let result = handle_telemetry(&pool, "node-001", payload, None).await;
 
         assert!(result.is_ok(), "合法的 telemetry 应该处理成功");
 
@@ -246,7 +228,7 @@ mod tests {
         let pool = setup_test_db().await;
         
         let payload = r#"not a valid json {"metrics": }"#;
-        let result = handle_telemetry(&pool, "node-001", payload).await;
+        let result = handle_telemetry(&pool, "node-001", payload, None).await;
         
         assert!(result.is_err(), "非法 JSON 应该返回错误");
     }
@@ -257,7 +239,7 @@ mod tests {
         let pool = setup_test_db().await;
         
         let payload = r#"{"data": {"temperature": 25.5}}"#;
-        let result = handle_telemetry(&pool, "node-001", payload).await;
+        let result = handle_telemetry(&pool, "node-001", payload, None).await;
         
         assert!(result.is_ok(), "缺少 metrics 字段不应报错，只是不处理");
         
@@ -275,7 +257,7 @@ mod tests {
         let pool = setup_test_db().await;
         
         let payload = r#"{"metrics": {"temperature": 25.5}}"#;
-        let result = handle_telemetry(&pool, "non-existent-node", payload).await;
+        let result = handle_telemetry(&pool, "non-existent-node", payload, None).await;
         
         assert!(result.is_ok(), "设备不存在不应报错，只是不处理");
     }
@@ -316,7 +298,7 @@ mod tests {
         let pool = setup_test_db().await;
         
         let payload = r#"{"metrics": {"temperature": "not_a_number"}}"#;
-        let result = handle_telemetry(&pool, "node-001", payload).await;
+        let result = handle_telemetry(&pool, "node-001", payload, None).await;
         
         assert!(result.is_ok(), "类型错误不应报错，只是跳过该 metric");
         

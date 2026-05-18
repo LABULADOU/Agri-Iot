@@ -26,9 +26,12 @@ sqlx = { version = "0.7", features = ["runtime-tokio", "sqlite", "chrono", "uuid
 axum = "0.7"
 tower = "0.4"
 tower-http = { version = "0.5", features = ["fs", "trace", "cors"] }
+jsonwebtoken = "9.2"
 rumqttd = "0.18"
 rumqttc = "0.24"
 dotenvy = "0.15"
+tokio-stream = { version = "0.1", features = ["sync"] }
+reqwest = { version = "0.12", features = ["json", "rustls-tls", "gzip"], default-features = false }
 
 [profile.release]
 opt-level = 3

@@ -69,11 +69,29 @@ mod tests {
         assert_eq!(err.status_code(), 400);
     }
 
-    /// 测试 Database 错误状态码（应为500）
+    /// 测试 AppError Display 格式化
     #[test]
-    fn test_database_error_status_code() {
-        // 注意：这里我们无法直接构造 sqlx::Error，但可以通过其他方式测试
-        // 暂时跳过，因为 sqlx::Error 不容易构造
+    fn test_app_error_display() {
+        assert_eq!(
+            AppError::DeviceNotFound("dev-1".into()).to_string(),
+            "Device not found: dev-1"
+        );
+        assert_eq!(
+            AppError::InvalidInput("bad".into()).to_string(),
+            "Invalid input: bad"
+        );
+        assert_eq!(
+            AppError::RuleNotFound("rule-1".into()).to_string(),
+            "Rule not found: rule-1"
+        );
+        assert_eq!(
+            AppError::Mqtt("timeout".into()).to_string(),
+            "MQTT error: timeout"
+        );
+        assert_eq!(
+            AppError::Internal("oops".into()).to_string(),
+            "Internal error: oops"
+        );
     }
 
     /// 测试 DeviceNotFound 错误响应格式
