@@ -30,6 +30,12 @@ error.txt
 *.docx
 *.mdx
 
+# Project docs
+config/default.toml
+migrations/001_init.sql
+和风天气API.md
+数字孪生.md
+
 # Python
 __pycache__/
 *.pyc
