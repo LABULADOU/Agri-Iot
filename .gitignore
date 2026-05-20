@@ -24,6 +24,7 @@ Thumbs.db
 
 # Backups and logs
 *.bak
+*~
 error.txt
 *-error.txt
 
