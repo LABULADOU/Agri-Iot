@@ -28,6 +28,8 @@ mod request_logger;
 mod rule_engine;
 mod areas;
 mod weather;
+mod ai_routes;
+mod response;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -129,8 +131,9 @@ async fn main() -> Result<()> {
         .route("/api/v1/weather/geo", axum::routing::get(weather::geo_lookup));
 
     let api_router = routes::create_router(app_state.clone())
-        .merge(areas::create_router(app_state))
-        .merge(weather_router);
+        .merge(areas::create_router(app_state.clone()))
+        .merge(weather_router)
+        .merge(ai_routes::create_router(app_state));
 
     let static_dir = std::path::PathBuf::from("agri-server/static");
     let app = Router::new()

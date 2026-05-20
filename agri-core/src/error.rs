@@ -17,6 +17,9 @@ pub enum AppError {
     #[error("MQTT error: {0}")]
     Mqtt(String),
 
+    #[error("Knowledge error: {0}")]
+    Knowledge(String),
+
     #[error("Internal error: {0}")]
     Internal(String),
 }
@@ -26,6 +29,7 @@ impl AppError {
         match self {
             AppError::DeviceNotFound(_) | AppError::RuleNotFound(_) => 404,
             AppError::InvalidInput(_) => 400,
+            AppError::Knowledge(_) => 404,
             _ => 500,
         }
     }
@@ -35,6 +39,7 @@ impl AppError {
             AppError::DeviceNotFound(_) => "DEVICE_NOT_FOUND",
             AppError::RuleNotFound(_) => "RULE_NOT_FOUND",
             AppError::InvalidInput(_) => "INVALID_INPUT",
+            AppError::Knowledge(_) => "KNOWLEDGE_ERROR",
             _ => "INTERNAL_ERROR",
         };
         serde_json::json!({

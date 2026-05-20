@@ -1,4 +1,5 @@
 use chrono::{DateTime, Utc};
+use chrono::NaiveTime;
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, Type, Decode};
 use sqlx::sqlite::{SqliteTypeInfo, SqliteValueRef};
@@ -254,6 +255,635 @@ impl SensorUtils {
             Some(m) if x > m => Some(x),
             _ => max,
         })
+    }
+}
+
+// ========== AI 决策系统模型 ==========
+
+/// 作物知识库
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct CropProfile {
+    pub id: String,
+    pub name: String,
+    pub variety: Option<String>,
+    pub growth_stages: Option<String>,
+    pub soil_temp_min: Option<f64>,
+    pub soil_temp_max: Option<f64>,
+    pub soil_temp_optimal: Option<f64>,
+    pub soil_moisture_min: Option<f64>,
+    pub soil_moisture_max: Option<f64>,
+    pub soil_moisture_optimal: Option<f64>,
+    pub air_temp_min: Option<f64>,
+    pub air_temp_max: Option<f64>,
+    pub air_temp_optimal: Option<f64>,
+    pub air_humidity_min: Option<f64>,
+    pub air_humidity_max: Option<f64>,
+    pub air_humidity_optimal: Option<f64>,
+    pub ec_min: Option<f64>,
+    pub ec_max: Option<f64>,
+    pub ec_optimal: Option<f64>,
+    pub ventilation_preference: Option<String>,
+    pub wind_sensitivity: Option<f64>,
+    pub embedding_id: Option<String>,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+/// 病虫害知识库
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct PestKnowledge {
+    pub id: String,
+    pub name: String,
+    pub crop_types: Option<String>,
+    pub trigger_conditions: Option<String>,
+    pub symptoms: Option<String>,
+    pub severity: Option<String>,
+    pub prevention: Option<String>,
+    pub treatment: Option<String>,
+    pub medication: Option<String>,
+    pub is_emergency: i64,
+    pub emergency_action: Option<String>,
+    pub source: Option<String>,
+    pub confidence: f64,
+    pub embedding_id: Option<String>,
+    pub created_at: i64,
+}
+
+/// 调控案例库
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct ControlCase {
+    pub id: String,
+    pub area_id: Option<String>,
+    pub crop_profile_id: Option<String>,
+    pub situation: Option<String>,
+    pub weather_forecast: Option<String>,
+    pub action_taken: Option<String>,
+    pub manual_override: i64,
+    pub outcome: Option<String>,
+    pub effect_rating: Option<i64>,
+    pub health_improvement: Option<f64>,
+    pub action_duration_minutes: Option<i64>,
+    pub recovery_time_minutes: Option<i64>,
+    pub notes: Option<String>,
+    pub timestamp: i64,
+    pub embedding_id: Option<String>,
+}
+
+/// 案例有效性追踪
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct CaseEffectiveness {
+    pub id: i64,
+    pub case_id: String,
+    pub assessment_time: i64,
+    pub soil_temp_score: Option<f64>,
+    pub soil_moisture_score: Option<f64>,
+    pub pest_occurred: i64,
+    pub notes: Option<String>,
+}
+
+/// 气象知识库
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct WeatherKnowledge {
+    pub id: String,
+    pub condition_type: String,
+    pub thresholds: Option<String>,
+    pub protection_rules: Option<String>,
+    pub time_constraints: Option<String>,
+    pub contact_required: i64,
+    pub contact_urgency: Option<String>,
+    pub contact_message: Option<String>,
+    pub notes: Option<String>,
+    pub embedding_id: Option<String>,
+    pub created_at: i64,
+}
+
+/// 大棚设备配置
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct GreenhouseConfig {
+    pub id: String,
+    pub area_id: String,
+    pub top_vent_min_percent: f64,
+    pub top_vent_max_percent: f64,
+    pub top_vent_current_percent: f64,
+    pub top_vent_device_id: Option<String>,
+    pub side_vent_min_percent: f64,
+    pub side_vent_max_percent: f64,
+    pub side_vent_current_percent: f64,
+    pub side_vent_device_id: Option<String>,
+    pub irrigation_device_id: Option<String>,
+    pub fertigation_device_id: Option<String>,
+    pub emergency_contact_name: Option<String>,
+    pub emergency_contact_phone: Option<String>,
+    pub top_vent_calibrated: i64,
+    pub side_vent_calibrated: i64,
+    pub calibration_date: Option<i64>,
+    pub updated_at: i64,
+}
+
+/// 传感器配置
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct SensorConfig {
+    pub id: String,
+    pub area_id: String,
+    pub sensor_type: String,
+    pub device_id: Option<String>,
+    pub calibration_offset: f64,
+    pub is_active: i64,
+    pub last_reading: Option<i64>,
+    pub created_at: i64,
+}
+
+/// 气象数据
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct WeatherData {
+    pub id: i64,
+    pub area_id: Option<String>,
+    pub source: String,
+    pub temperature: Option<f64>,
+    pub humidity: Option<f64>,
+    pub wind_speed: Option<f64>,
+    pub wind_direction: Option<String>,
+    pub precipitation: Option<f64>,
+    pub snow_probability: Option<f64>,
+    pub uv_index: Option<f64>,
+    pub forecast_hour: Option<i64>,
+    pub timestamp: i64,
+}
+
+/// 环境评估记录
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct EnvAssessment {
+    pub id: String,
+    pub area_id: Option<String>,
+    pub crop_profile_id: Option<String>,
+    pub timestamp: i64,
+    pub overall_score: Option<f64>,
+    pub soil_temp_score: Option<f64>,
+    pub soil_moisture_score: Option<f64>,
+    pub ec_score: Option<f64>,
+    pub air_temp_score: Option<f64>,
+    pub air_humidity_score: Option<f64>,
+    pub deviations: Option<String>,
+    pub pest_risks: Option<String>,
+    pub recommendations: Option<String>,
+    pub weather_impact: Option<String>,
+    pub is_emergency: i64,
+    pub emergency_type: Option<String>,
+}
+
+/// 知识库更新日志
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct KbUpdateLog {
+    pub id: i64,
+    pub update_type: String,
+    pub source: String,
+    pub content_summary: Option<String>,
+    pub effectiveness_score: Option<f64>,
+    pub timestamp: i64,
+}
+
+// ========== 通风偏好枚举 ==========
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum VentPreference {
+    High,
+    Medium,
+    Low,
+}
+
+impl_sqlx_enum!(VentPreference, High => "high", Medium => "medium", Low => "low");
+
+// ========== 严重程度枚举 ==========
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Severity {
+    Low,
+    Medium,
+    High,
+    Critical,
+}
+
+impl_sqlx_enum!(Severity, Low => "low", Medium => "medium", High => "high", Critical => "critical");
+
+// ========== 评估结果枚举 ==========
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Outcome {
+    Success,
+    Partial,
+    Failed,
+}
+
+impl_sqlx_enum!(Outcome, Success => "success", Partial => "partial", Failed => "failed");
+
+// ========== 气象条件类型枚举 ==========
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ConditionType {
+    Wind,
+    Rain,
+    Snow,
+    Storm,
+    Heat,
+    Frost,
+}
+
+impl_sqlx_enum!(ConditionType, Wind => "wind", Rain => "rain", Snow => "snow", Storm => "storm", Heat => "heat", Frost => "frost");
+
+// ========== 传感器类型枚举 ==========
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SensorType {
+    SoilTemp,
+    SoilMoisture,
+    Ec,
+    AirTemp,
+    AirHumidity,
+}
+
+impl_sqlx_enum!(SensorType, SoilTemp => "soil_temp", SoilMoisture => "soil_moisture", Ec => "ec", AirTemp => "air_temp", AirHumidity => "air_humidity");
+
+// ========== 数据来源枚举 ==========
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WeatherSource {
+    Api,
+    Local,
+    Forecast,
+}
+
+impl_sqlx_enum!(WeatherSource, Api => "api", Local => "local", Forecast => "forecast");
+
+// ========== 更新类型枚举 ==========
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum KbUpdateType {
+    CaseAdded,
+    KnowledgeCurated,
+    FeedbackReceived,
+}
+
+impl_sqlx_enum!(KbUpdateType, CaseAdded => "case_added", KnowledgeCurated => "knowledge_curated", FeedbackReceived => "feedback_received");
+
+// ========== 更新来源枚举 ==========
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum KbSource {
+    Manual,
+    Auto,
+    AiReview,
+}
+
+impl_sqlx_enum!(KbSource, Manual => "manual", Auto => "auto", AiReview => "ai_review");
+
+// ========== AI 模块中的辅助结构体 ==========
+
+/// 环境评估结果（用于 API 响应）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EnvironmentAssessment {
+    pub overall_score: f64,
+    pub soil_temp_score: f64,
+    pub soil_moisture_score: f64,
+    pub ec_score: f64,
+    pub air_temp_score: f64,
+    pub air_humidity_score: f64,
+    pub deviations: Vec<Deviation>,
+    pub trend: String,
+    pub weather_impact: WeatherImpact,
+}
+
+/// 参数偏差
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Deviation {
+    pub param: String,
+    pub current: f64,
+    pub optimal: f64,
+    pub deviation_pct: f64,
+}
+
+/// 气象影响
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WeatherImpact {
+    pub has_alert: bool,
+    pub alert_type: Option<String>,
+    pub impact_hours: Vec<HourlyImpact>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub recommendation: Option<String>,
+}
+
+/// 逐小时影响
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HourlyImpact {
+    pub hour: i64,
+    pub temp_impact: String,
+    pub humidity_impact: String,
+}
+
+/// 通风决策
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VentilationDecision {
+    pub target_percent: f64,
+    pub estimated_duration_minutes: i64,
+    pub priority: ActionPriority,
+}
+
+/// 动作优先级
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ActionPriority {
+    Normal,
+    High,
+    Critical,
+}
+
+/// 动作
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Action {
+    pub command: String,
+    pub device_type: String,
+    pub target_percent: f64,
+    pub requires_confirmation: bool,
+    pub is_emergency: bool,
+    pub notification: Option<String>,
+}
+
+/// 紧急情况类型
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EmergencyType {
+    StrongWind,
+    HeavyRain,
+    Snow,
+    ExtremeHeat,
+    ExtremeCold,
+    SystemFailure,
+}
+
+/// 气象参数类型
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum WeatherParam {
+    WindSpeed,
+    Precipitation,
+    Temperature,
+    SnowProbability,
+    Humidity,
+}
+
+impl WeatherParam {
+    /// 映射到 weather_data 表的列名
+    pub fn as_db_field(&self) -> &'static str {
+        match self {
+            WeatherParam::WindSpeed => "wind_speed",
+            WeatherParam::Precipitation => "precipitation",
+            WeatherParam::Temperature => "temperature",
+            WeatherParam::SnowProbability => "snow_probability",
+            WeatherParam::Humidity => "humidity",
+        }
+    }
+}
+
+/// 比较运算符
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum CompareOp {
+    Gt,
+    Lt,
+    Gte,
+    Lte,
+    Eq,
+}
+
+impl CompareOp {
+    pub fn as_operator_str(&self) -> &'static str {
+        match self {
+            CompareOp::Gt => ">",
+            CompareOp::Lt => "<",
+            CompareOp::Gte => ">=",
+            CompareOp::Lte => "<=",
+            CompareOp::Eq => "==",
+        }
+    }
+
+    pub fn evaluate(&self, value: f64, threshold: f64) -> bool {
+        match self {
+            CompareOp::Gt => value > threshold,
+            CompareOp::Lt => value < threshold,
+            CompareOp::Gte => value >= threshold,
+            CompareOp::Lte => value <= threshold,
+            CompareOp::Eq => (value - threshold).abs() < 0.001,
+        }
+    }
+}
+
+/// 紧急规则触发条件
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TriggerCondition {
+    pub weather_param: WeatherParam,
+    pub operator: CompareOp,
+    pub threshold: f64,
+    pub duration_minutes: Option<u32>,
+}
+
+/// 紧急规则
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EmergencyRule {
+    pub emergency_type: EmergencyType,
+    pub condition: TriggerCondition,
+    pub immediate_action: Action,
+    pub requires_confirmation: bool,
+    pub contact_required: bool,
+    pub contact_urgency: String,
+    pub notification_template: String,
+    pub night_alert: bool,
+}
+
+/// 紧急情况
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Emergency {
+    pub emergency_type: EmergencyType,
+    pub confidence: f64,
+    pub message: String,
+    pub triggered_at: DateTime<Utc>,
+    pub pauses_auto_mode: bool,
+    pub night_additional_contact: bool,
+}
+
+/// 通风类型
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum VentType {
+    Top,
+    Side,
+}
+
+/// EC 趋势
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ECTrend {
+    InsufficientData,
+    Rising,
+    Falling,
+    Stable,
+}
+
+/// EC 趋势数据
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ECTrends {
+    pub readings: Vec<(DateTime<Utc>, f64)>,
+    pub period_hours: u32,
+}
+
+impl ECTrends {
+    pub fn analyze(&self) -> ECTrend {
+        if self.readings.len() < 3 {
+            return ECTrend::InsufficientData;
+        }
+        let slope = self.calculate_slope();
+        match slope {
+            s if s > 0.1 => ECTrend::Rising,
+            s if s < -0.1 => ECTrend::Falling,
+            _ => ECTrend::Stable,
+        }
+    }
+
+    fn calculate_slope(&self) -> f64 {
+        let n = self.readings.len() as f64;
+        let sum_x: f64 = self.readings.iter().enumerate().map(|(i, _)| i as f64).sum();
+        let sum_y: f64 = self.readings.iter().map(|(_, v)| v).sum();
+        let sum_xy: f64 = self.readings.iter().enumerate().map(|(i, (_, v))| i as f64 * v).sum();
+        let sum_xx: f64 = self.readings.iter().enumerate().map(|(i, _)| (i as f64).powi(2)).sum();
+        (n * sum_xy - sum_x * sum_y) / (n * sum_xx - sum_x.powi(2))
+    }
+}
+
+/// EC 推荐
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", content = "data")]
+pub enum ECRecommendation {
+    NoAction,
+    IncreaseEC { suggested_delta: f64, reason: String },
+    DecreaseEC { suggested_delta: f64, reason: String },
+    ManualIntervention { reason: String, urgency: String },
+}
+
+/// 夜间模式配置
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NightModeConfig {
+    pub enabled: bool,
+    pub start_time: NaiveTime,
+    pub end_time: NaiveTime,
+    pub enhanced_monitoring: bool,
+    pub reduced_action_threshold: f64,
+    pub night_contact_list: Vec<Contact>,
+}
+
+impl NightModeConfig {
+    pub fn is_night_time_naive(&self, current_time: NaiveTime) -> bool {
+        if self.start_time > self.end_time {
+            current_time >= self.start_time || current_time <= self.end_time
+        } else {
+            current_time >= self.start_time && current_time <= self.end_time
+        }
+    }
+
+    pub fn is_night_time(&self, now: DateTime<Utc>) -> bool {
+        let local = now.with_timezone(&chrono::Local);
+        self.is_night_time_naive(local.time())
+    }
+}
+
+/// 联系人
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Contact {
+    pub name: String,
+    pub phone: String,
+    pub priority: u32,
+}
+
+/// 量程校准结果
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CalibrationResult {
+    pub device_id: String,
+    pub range: (f64, f64),
+    pub calibration_date: DateTime<Utc>,
+    pub verified: bool,
+}
+
+/// EC 管理器
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ECManager {
+    pub optimal_ec_min: f64,
+    pub optimal_ec_max: f64,
+    pub warning_threshold_low: f64,
+    pub warning_threshold_high: f64,
+}
+
+impl ECManager {
+    pub fn analyze_ec(&self, current_ec: f64, _trend: &ECTrends, _area_id: &str) -> ECRecommendation {
+        match current_ec {
+            x if x < self.warning_threshold_low => ECRecommendation::ManualIntervention {
+                reason: format!("EC值({:.2})严重偏低，可能需要补充肥料", current_ec),
+                urgency: "high".to_string(),
+            },
+            x if x < self.optimal_ec_min => ECRecommendation::IncreaseEC {
+                suggested_delta: self.optimal_ec_min - current_ec,
+                reason: "EC 略低，建议增加施肥浓度".to_string(),
+            },
+            x if x > self.optimal_ec_max && x < self.warning_threshold_high => ECRecommendation::DecreaseEC {
+                suggested_delta: current_ec - self.optimal_ec_max,
+                reason: "EC 偏高，建议降低施肥浓度或清水冲洗".to_string(),
+            },
+            x if x > self.warning_threshold_high => ECRecommendation::ManualIntervention {
+                reason: format!("EC值({:.2})过高，可能造成盐害，请立即处理", current_ec),
+                urgency: "critical".to_string(),
+            },
+            _ => ECRecommendation::NoAction,
+        }
+    }
+}
+
+/// 通风控制器
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VentilationController {
+    pub top_vent_range: (f64, f64),
+    pub side_vent_range: (f64, f64),
+    pub top_vent_current: f64,
+    pub side_vent_current: f64,
+}
+
+impl VentilationController {
+    pub fn calculate_target_position(
+        &self,
+        target_temp: f64,
+        current_temp: f64,
+        target_humidity: f64,
+        current_humidity: f64,
+        ventilation_type: VentType,
+    ) -> VentilationDecision {
+        let range = match ventilation_type {
+            VentType::Top => self.top_vent_range,
+            VentType::Side => self.side_vent_range,
+        };
+        let temp_score = ((current_temp - target_temp) / 10.0).clamp(-1.0, 1.0);
+        let hum_score = ((current_humidity - target_humidity) / 20.0).clamp(0.0, 1.0);
+        let open_percent = ((temp_score + hum_score) / 2.0 * 100.0).clamp(range.0, range.1);
+        VentilationDecision {
+            target_percent: open_percent,
+            estimated_duration_minutes: (open_percent / 10.0 * 5.0) as i64,
+            priority: if temp_score > 0.5 || hum_score > 0.7 { ActionPriority::High } else { ActionPriority::Normal },
+        }
+    }
+
+    pub fn emergency_close(&self, _target: VentType) -> Action {
+        Action {
+            command: "CLOSE".to_string(),
+            device_type: "vent".to_string(),
+            target_percent: 0.0,
+            requires_confirmation: false,
+            is_emergency: true,
+            notification: Some("紧急关闭通风口".to_string()),
+        }
     }
 }
 

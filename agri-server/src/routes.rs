@@ -1,3 +1,4 @@
+use crate::response::{bad_request, internal_err, not_found, ok_json};
 use agri_core::error::AppError;
 use agri_core::models::{CommandPayload, Device, SensorReading, Rule};
 use axum::{
@@ -67,7 +68,7 @@ async fn create_device(
 ) -> impl IntoResponse {
     let device_type = req.device_type.as_deref().unwrap_or("sensor");
     if device_type != "sensor" && device_type != "actuator" {
-        return (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": "Invalid device type"}))).into_response();
+        return bad_request("Invalid device type");
     }
     let now = Utc::now();
     let id = Uuid::new_v4();
@@ -106,7 +107,7 @@ async fn create_device(
 
     match result {
         Ok(device_id) => (StatusCode::CREATED, Json(serde_json::json!({"id": device_id, "message": "Device created/updated"}))).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+        Err(e) => internal_err(e),
     }
 }
 
@@ -129,7 +130,7 @@ async fn list_devices(State(state): State<AppState>) -> impl IntoResponse {
             }).collect();
             Json(result).into_response()
         }
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+        Err(e) => internal_err(e),
     }
 }
 
@@ -165,9 +166,9 @@ async fn update_device(
         .bind(&comfort_config_str).bind(&capabilities).bind(now).bind(&id)
         .execute(&state.pool).await;
     match result {
-        Ok(r) if r.rows_affected() > 0 => Json(serde_json::json!({"message": "Device updated"})).into_response(),
-        Ok(_) => (StatusCode::NOT_FOUND, Json(serde_json::json!({"error": "Device not found"}))).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+        Ok(r) if r.rows_affected() > 0 => ok_json(serde_json::json!({"message": "Device updated"})),
+        Ok(_) => not_found(Some("Device not found")),
+        Err(e) => internal_err(e),
     }
 }
 
@@ -244,7 +245,7 @@ async fn send_command(
         "INSERT INTO command_log (device_id, command, payload, status, created_at) VALUES (?, ?, ?, ?, ?)",
     ).bind(&id).bind(&cmd.command).bind(payload_str).bind("pending").bind(now).execute(&state.pool).await;
     match result {
-        Ok(r) => Json(serde_json::json!({"id": r.last_insert_rowid(), "message": "Command queued"})).into_response(),
+        Ok(r) => Json(serde_json::json!({"id": r.last_insert_rowid().to_string(), "message": "Command queued"})).into_response(),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response(),
     }
 }
@@ -282,7 +283,7 @@ async fn get_pending_commands(
 
 #[derive(Debug, Deserialize)]
 struct UpdateCommandStatusRequest {
-    status: String,  // "executed" | "failed"
+    status: String,  // "completed" | "executed" (alias) | "failed"
 }
 
 async fn update_command_status(
@@ -290,15 +291,16 @@ async fn update_command_status(
     Path(id): Path<String>,
     Json(req): Json<UpdateCommandStatusRequest>,
 ) -> impl IntoResponse {
-    if req.status != "executed" && req.status != "failed" {
-        return (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": "Status must be 'executed' or 'failed'"}))).into_response();
+    if req.status != "completed" && req.status != "executed" && req.status != "failed" {
+        return (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": "Status must be 'completed' or 'failed'"}))).into_response();
     }
     let id: i64 = match id.parse() {
         Ok(v) => v,
         Err(_) => return (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": "Invalid command id"}))).into_response(),
     };
+    let db_status = if req.status == "executed" { "completed" } else { &req.status };
     let result = sqlx::query("UPDATE command_log SET status = ? WHERE id = ?")
-        .bind(&req.status)
+        .bind(db_status)
         .bind(id)
         .execute(&state.pool)
         .await;
@@ -562,7 +564,7 @@ async fn dashboard_node_readings(State(state): State<AppState>) -> impl IntoResp
                 let mut latest = serde_json::Map::new();
                 let mut history = serde_json::Map::new();
 
-                let known_metrics = ["temperature", "humidity", "soil_temperature", "soil_moisture", "ec", "light"];
+                let known_metrics = ["temperature", "humidity", "soil_moisture", "soil_temperature", "ec", "light"];
                 for metric in &known_metrics {
                     let readings_list = metric_map.get(*metric);
                     if let Some(list) = readings_list {
@@ -606,7 +608,7 @@ async fn list_alerts(State(state): State<AppState>) -> impl IntoResponse {
         Ok(rows) => {
             let result: Vec<serde_json::Value> = rows.into_iter().map(|r| {
                 serde_json::json!({
-                    "id": r.0,
+                    "id": r.0.to_string(),
                     "device_id": r.1,
                     "device_name": r.6,
                     "command": r.2,
@@ -723,83 +725,14 @@ async fn ingest_telemetry(
     State(state): State<AppState>,
     Json(req): Json<IngestTelemetryRequest>,
 ) -> impl IntoResponse {
-    let devices = sqlx::query_as::<_, (String, String)>(
-        "SELECT id, node_id FROM devices WHERE node_id = ?",
-    )
-    .bind(&req.node_id)
-    .fetch_all(&state.pool)
-    .await;
-
-    let devices = match devices {
-        Ok(d) if d.is_empty() => return (StatusCode::NOT_FOUND, Json(serde_json::json!({"error": "No device found for this node_id"}))).into_response(),
-        Ok(d) => d,
-        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+    let Some(metrics) = req.metrics.as_object() else {
+        return (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": "metrics must be an object"}))).into_response();
     };
 
-    let now = Utc::now().timestamp();
-    let mut inserted: i64 = 0;
-
-    if let Some(metrics) = req.metrics.as_object() {
-        const KNOWN_METRICS: &[&str] = &["temperature", "humidity", "soil_moisture", "soil_temperature", "ec", "light"];
-        for (device_id, _) in &devices {
-            for (metric, value) in metrics {
-                let Some(val) = value.as_f64() else { continue };
-                let m = metric.as_str();
-                if !KNOWN_METRICS.contains(&m) { continue; }
-                let valid = match m {
-                    "temperature" => val >= -10.0 && val <= 60.0,
-                    "humidity" => val >= 0.0 && val <= 100.0,
-                    "soil_moisture" => val >= 0.0 && val <= 100.0,
-                    "soil_temperature" => val >= -10.0 && val <= 60.0,
-                    "ec" => val >= 0.0 && val <= 10.0,
-                    "light" => val >= 0.0 && val <= 200000.0,
-                    _ => false,
-                };
-                if !valid { continue; }
-                let unit = match m {
-                    "temperature" => "℃",
-                    "humidity" => "%",
-                    "soil_temperature" => "℃",
-                    "light" => "lux",
-                    "soil_moisture" => "%",
-                    "ec" => "mS/cm",
-                    _ => "",
-                };
-                if let Err(e) = sqlx::query(
-                    "INSERT INTO sensor_readings (device_id, metric, value, unit, timestamp) VALUES (?, ?, ?, ?, ?)"
-                )
-                .bind(device_id)
-                .bind(metric)
-                .bind(val)
-                .bind(unit)
-                .bind(now)
-                .execute(&state.pool)
-                .await
-                {
-                    tracing::warn!("Failed to insert reading: {}", e);
-                } else {
-                    inserted += 1;
-                }
-            }
-        }
+    match agri_core::telemetry::process_telemetry(&state.pool, &req.node_id, metrics, Some(&state.event_tx)).await {
+        Ok(inserted) => Json(serde_json::json!({"inserted": inserted, "message": "Telemetry ingested"})).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response(),
     }
-
-    if inserted > 0 {
-        sqlx::query("UPDATE devices SET status = 'online', updated_at = ? WHERE node_id = ?")
-            .bind(now)
-            .bind(&req.node_id)
-            .execute(&state.pool)
-            .await
-            .ok();
-
-        let _ = state.event_tx.send(serde_json::json!({
-            "type": "telemetry",
-            "node_id": req.node_id,
-            "timestamp": now,
-        }).to_string());
-    }
-
-    Json(serde_json::json!({"inserted": inserted, "message": "Telemetry ingested"})).into_response()
 }
 
 #[cfg(test)]

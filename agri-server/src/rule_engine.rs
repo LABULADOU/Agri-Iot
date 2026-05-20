@@ -1,6 +1,7 @@
 use sqlx::Row;
 use crate::state::AppState;
-use agri_core::models::Rule;
+use agri_core::ai::emergency::{check_emergency, WeatherAlertInput};
+use agri_core::models::{Rule, WeatherData};
 use agri_mqtt::client::publish_command;
 use anyhow::Result;
 use chrono::{Timelike, Utc};
@@ -49,8 +50,93 @@ async fn refresh_rules_cache(state: &AppState) -> Result<()> {
 }
 
 async fn evaluate_rules(state: &AppState) -> Result<()> {
-    let rules = state.rules_cache.lock().await.clone();
+    // Step 1: 检查紧急情况
+    let weather = sqlx::query_as::<_, WeatherData>(
+        "SELECT * FROM weather_data ORDER BY timestamp DESC LIMIT 1"
+    )
+    .fetch_optional(&state.pool)
+    .await?;
 
+    if let Some(w) = weather {
+        let input = WeatherAlertInput {
+            wind_speed_kmh: w.wind_speed,
+            precipitation_mm_per_hour: w.precipitation,
+            temperature_celsius: w.temperature,
+            snow_probability: w.snow_probability,
+            humidity: w.humidity,
+        };
+        let mut ctx = state.emergency_ctx.lock().await;
+        let output = check_emergency(&input, &mut ctx, "all");
+
+        if !output.emergencies.is_empty() {
+            for emergency in &output.emergencies {
+                let action = agri_core::ai::emergency::get_emergency_action(emergency);
+                info!(
+                    "EMERGENCY triggered: {:?} — {}",
+                    emergency.emergency_type, emergency.message
+                );
+
+                // 写入 command_log
+                let device_type = &action.device_type;
+                let cmd = &action.command;
+                let payload = serde_json::json!({
+                    "emergency": true,
+                    "emergency_type": format!("{:?}", emergency.emergency_type),
+                    "command": cmd,
+                    "target_percent": action.target_percent,
+                });
+
+                let _ = sqlx::query(
+                    "INSERT INTO command_log (device_id, command, payload, status, created_at)
+                     VALUES ('emergency', ?, ?, 'pending', datetime('now'))"
+                )
+                .bind(cmd)
+                .bind(payload.to_string())
+                .execute(&state.pool)
+                .await;
+
+                // 如果有 MQTT 客户端，直接发送紧急命令
+                if let Some(client) = state.mqtt_client.lock().await.as_ref() {
+                    let cmd_id = uuid::Uuid::new_v4().to_string();
+                    let _ = publish_command(client, device_type, &cmd_id, &payload.to_string()).await;
+                }
+
+                // 广播 SSE 事件
+                let _ = state.event_tx.send(serde_json::json!({
+                    "type": "emergency",
+                    "emergency_type": format!("{:?}", emergency.emergency_type),
+                    "message": emergency.message,
+                    "pauses_auto_mode": output.pauses_auto_mode,
+                }).to_string());
+            }
+
+            // Step 2: 如果紧急情况要求暂停自动模式，跳过规则评估
+            if output.pauses_auto_mode {
+                info!("Emergency pauses auto mode — skipping rule evaluation");
+                return Ok(());
+            }
+        }
+    }
+
+    // Step 3: 更新设备在线状态（用于 SystemFailure 检测）
+    {
+        let devices = sqlx::query(
+            "SELECT id, updated_at FROM devices WHERE status = 'online'"
+        )
+        .fetch_all(&state.pool)
+        .await?;
+        let mut ctx = state.emergency_ctx.lock().await;
+        for row in devices {
+            let device_id: String = row.try_get(0)?;
+            let updated_at: i64 = row.try_get(1)?;
+            let dt = chrono::DateTime::from_timestamp(updated_at, 0)
+                .unwrap_or_else(|| Utc::now());
+            ctx.track_device(&device_id, dt);
+        }
+    }
+
+    // Step 4: 正常规则评估
+    let rules = state.rules_cache.lock().await.clone();
     for rule in rules {
         if !rule.enabled {
             continue;
@@ -267,6 +353,26 @@ mod tests {
         .await
         .unwrap();
 
+        sqlx::query(
+            "CREATE TABLE weather_data (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                area_id TEXT,
+                source TEXT NOT NULL,
+                temperature REAL,
+                humidity REAL,
+                wind_speed REAL,
+                wind_direction TEXT,
+                precipitation REAL,
+                snow_probability REAL,
+                uv_index REAL,
+                forecast_hour INTEGER,
+                timestamp INTEGER NOT NULL
+            )"
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
         pool
     }
 
@@ -277,6 +383,10 @@ mod tests {
             mqtt_client: Arc::new(Mutex::new(None)),
             rules_cache: Arc::new(Mutex::new(Vec::new())),
             event_tx: tx,
+            obsidian_vault_path: None,
+            emergency_ctx: Arc::new(Mutex::new(
+                agri_core::ai::emergency::EmergencyContext::new()
+            )),
         }
     }
 

@@ -7,7 +7,7 @@
 ```
 ┌─────────────────────────────────────────────────────┐
 │  ESP32 真实节点 (HTTP+Funnel)                        │
-│  DHT22 + 土壤湿度 + 光照 + 继电器                    │
+│  DHT22 + RS485 土壤三合一（温度/湿度/EC）+ 继电器     │
 │  └── HTTPS → zero-1.taile2b316.ts.net/api/v1/*       │
 │         ↕ Tailscale Funnel                           │
 │         → http://172.20.10.2:3001 → agri-server      │
@@ -24,14 +24,14 @@
 └──────────────────────────────────────────────┘
 ```
 
-| 组件 | 技术栈 | 说明 |
-|------|--------|------|
-| **agri-core** | Rust | 核心类型、数据库工具、错误定义 |
-| **agri-server** | Rust + Axum + SQLx | HTTP API 服务、规则引擎 |
-| **agri-mqtt** | Rust + rumqttd/rumqttc | MQTT Broker 和客户端 |
-| **agri-frontend** | React + Vite + Recharts | 前端 SPA（预构建到 static/） |
-| **esp32-firmware** | Arduino + ESP32 | 传感器采集 + HTTP 直连 |
-| **serial_bridge** | Python | ESP32 串口数据 → HTTP 桥接 |
+| 组件                 | 技术栈                     | 说明                   |
+| ------------------ | ----------------------- | -------------------- |
+| **agri-core**      | Rust                    | 核心类型、数据库工具、错误定义      |
+| **agri-server**    | Rust + Axum + SQLx      | HTTP API 服务、规则引擎     |
+| **agri-mqtt**      | Rust + rumqttd/rumqttc  | MQTT Broker 和客户端     |
+| **agri-ui**        | React + TypeScript + Ant Design + ECharts | 前端 SPA（预构建到 static/） |
+| **esp32-firmware** | Arduino + ESP32         | 传感器采集 + HTTP 直连      |
+| **serial_bridge**  | Python                  | ESP32 串口数据 → HTTP 桥接 |
 
 ## 快速启动
 
@@ -66,16 +66,19 @@ nohup ./target/debug/agri-server > /tmp/agri-server.log 2>&1 &
 ### 4. 数据接入
 
 **HTTP 模拟器（推荐）**：
+
 ```bash
 python3 scripts/simulate_http.py
 ```
 
 **MQTT 模拟器**：
+
 ```bash
 python3 scripts/simulate_node.py
 ```
 
 **串口桥接（真实 ESP32）**：
+
 ```bash
 python3 scripts/serial_bridge.py /dev/ttyUSB0
 ```
@@ -94,40 +97,67 @@ http://172.20.10.2:3001 (内网)
 
 ## API 概览
 
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| GET | `/api/v1/dashboard/summary` | 仪表盘汇总 |
-| GET | `/api/v1/dashboard/area-readings` | 分区图表数据 |
-| GET/POST | `/api/v1/devices` | 设备列表/创建（UPSERT） |
-| GET/PUT/DELETE | `/api/v1/devices/:id` | 设备详情/更新/删除 |
-| GET | `/api/v1/devices/:id/readings` | 传感器历史数据 |
-| POST | `/api/v1/devices/:id/command` | 发送控制指令 |
-| POST | `/api/v1/telemetry` | 遥测数据接入 |
-| GET | `/api/v1/commands/node/:node_id` | 查询待处理命令 |
-| PUT | `/api/v1/commands/:id/status` | 更新命令状态 |
-| GET/POST | `/api/v1/rules` | 规则列表/创建 |
-| PUT/DELETE | `/api/v1/rules/:id` | 规则更新/删除 |
-| GET | `/api/v1/alerts` | 告警/命令日志 |
-| GET | `/api/v1/system/info` | 系统信息 |
-| GET | `/api/v1/events` | SSE 实时事件推送 |
-| CRUD | `/api/v1/areas` | 区域管理 |
-| CRUD | `/api/v1/crops` | 作物管理 |
-| CRUD | `/api/v1/crop-batches` | 茬口管理 |
+| 方法             | 路径                                | 说明              |
+| GET            | `/api/v1/dashboard/summary`       | 仪表盘汇总           |
+| GET            | `/api/v1/dashboard/area-readings` | 分区图表数据          |
+| GET/POST       | `/api/v1/devices`                 | 设备列表/创建（UPSERT） |
+| GET/PUT/DELETE | `/api/v1/devices/:id`             | 设备详情/更新/删除      |
+| GET            | `/api/v1/devices/:id/readings`    | 传感器历史数据         |
+| POST           | `/api/v1/devices/:id/command`     | 发送控制指令          |
+| POST           | `/api/v1/telemetry`               | 遥测数据接入          |
+| GET            | `/api/v1/commands/node/:node_id`  | 查询待处理命令         |
+| PUT            | `/api/v1/commands/:id/status`     | 更新命令状态          |
+| GET/POST       | `/api/v1/rules`                   | 规则列表/创建         |
+| PUT/DELETE     | `/api/v1/rules/:id`               | 规则更新/删除         |
+| GET            | `/api/v1/alerts`                  | 告警/命令日志         |
+| GET            | `/api/v1/system/info`             | 系统信息            |
+| GET            | `/api/v1/events`                  | SSE 实时事件推送      |
+| CRUD           | `/api/v1/areas`                   | 区域管理            |
+| CRUD           | `/api/v1/crops`                   | 作物管理            |
+| CRUD           | `/api/v1/crop-batches`            | 茬口管理            |
+| POST           | `/api/v1/ai/assess`               | AI 环境评估          |
+| GET            | `/api/v1/ai/emergency/status`     | 紧急情况状态          |
+| GET            | `/api/v1/ai/knowledge/search`     | 知识库搜索           |
+| GET/POST       | `/api/v1/ai/knowledge/cases`      | 调控案例管理          |
+| POST           | `/api/v1/ai/ventilation/calibrate/:device_id` | 卷膜器校准 |
+| GET            | `/api/v1/ai/ventilation/config/:area_id`      | 通风配置查询 |
+| GET            | `/api/v1/ai/ec/analyze/:area_id`  | EC 分析            |
+| POST           | `/api/v1/ai/control/ventilation`  | 手动控制通风          |
+| GET            | `/api/v1/weather/now`             | 实时天气            |
+| GET            | `/api/v1/weather/3d`              | 3 天预报           |
+| GET            | `/api/v1/weather/24h`             | 24 小时预报         |
+| GET            | `/api/v1/weather/minutely`        | 分钟级降水           |
+| GET            | `/api/v1/weather/air`             | 空气质量            |
+| GET            | `/api/v1/weather/indices`         | 生活指数            |
+| GET            | `/api/v1/weather/warning`         | 灾害预警            |
+| GET            | `/api/v1/weather/geo`             | 城市查找            |
 
 ## 项目结构
 
 ```
 agri-core/src/          # 核心库
 ├── models.rs           # 数据模型（capabilities 字段）
+├── telemetry.rs        # 遥测处理（归一化/验证/写入 — 共享 MQTT+HTTP）
 ├── db.rs               # 数据库连接和迁移
-└── error.rs            # 错误类型定义
+├── error.rs            # 错误类型定义
+└── ai/                 # AI 决策系统
+    ├── assess.rs       # 环境评估（评分系统）
+    ├── emergency.rs    # 紧急情况检测（大风/雨/雪）
+    ├── ventilation.rs  # 通风决策
+    ├── fertigation.rs  # EC 分析
+    ├── night_mode.rs   # 夜间模式
+    ├── calibration.rs  # 卷膜器校准
+    └── knowledge.rs    # Obsidian 知识库 RAG
 
 agri-server/src/        # 后端服务
 ├── main.rs             # 入口
 ├── routes.rs           # API 路由
+├── response.rs         # 响应辅助函数（ok_json/err_json/internal_err）
 ├── areas.rs            # 区域/作物/茬口管理
 ├── state.rs            # AppState
 ├── rule_engine.rs      # 规则引擎
+├── weather.rs          # 天气 API 代理 (和风天气)
+├── ai_routes.rs        # AI 决策 API 路由
 └── request_logger.rs   # 请求日志
 
 agri-mqtt/src/          # MQTT 通信
@@ -135,10 +165,11 @@ agri-mqtt/src/          # MQTT 通信
 ├── client.rs           # MQTT 客户端
 └── handler.rs          # 遥测/状态处理
 
-agri-frontend/          # React SPA (Vite)
+agri-ui/                # React SPA (TypeScript + Ant Design + ECharts)
 ├── src/pages/          # 页面组件
 ├── src/components/     # 通用组件
-└── prebuilt → agri-server/static/
+├── src/services/       # API 服务封装
+└── build → agri-server/static/
 
 esp32-firmware/src/     # ESP32 固件
 └── main.ino            # HTTP+Funnel 模式
@@ -147,6 +178,10 @@ scripts/                # 工具脚本
 ├── simulate_http.py    # HTTP 模拟器
 ├── simulate_node.py    # MQTT 模拟器
 └── serial_bridge.py    # 串口桥接
+
+agri-core/migrations/   # 数据库迁移（单一来源）
+├── 001_init.sql        # 基础表（devices, sensor_readings 等）
+└── 002_ai_knowledge.sql # AI 知识库 + 气象 + 评估表
 ```
 
 ## 设备模型
@@ -169,11 +204,11 @@ scripts/                # 工具脚本
 # 编译检查
 cargo check -p agri-server -p agri-mqtt -p agri-core
 
-# 运行测试
-cargo test -p agri-core
-cargo test -p agri-mqtt
-cargo test -p agri-server
+# 运行全部测试（146 个）
+cargo test -p agri-core   # 92 测试（models 32 + ai 52 + error 8）
+cargo test -p agri-server # 32 测试（routes 11 + rule_engine 12 + ai_routes 9）
+cargo test -p agri-mqtt   # 22 测试（handler 10 + mqtt 12）
 
 # 前端
-cd agri-frontend && npm run dev
+cd agri-ui && npm run dev
 ```

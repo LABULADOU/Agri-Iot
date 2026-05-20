@@ -11,59 +11,11 @@ pub async fn handle_telemetry(
     event_tx: Option<&broadcast::Sender<String>>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let data: serde_json::Value = serde_json::from_str(payload)?;
-    let mut inserted = false;
-    let now = Utc::now().timestamp();
 
     if let Some(metrics) = data.get("metrics").and_then(|m| m.as_object()) {
-        let devices = sqlx::query_as::<_, (String, String)>(
-            "SELECT id, node_id FROM devices WHERE node_id = ?",
-        )
-        .bind(node_id)
-        .fetch_all(pool)
-        .await?;
-
-        for (device_id, _) in devices {
-            for (metric, value) in metrics {
-                if let Some(val) = value.as_f64() {
-                    let unit = match metric.as_str() {
-                        "temperature" => "℃",
-                        "humidity" => "%",
-                        "soil_temperature" => "℃",
-                        "light" => "lux",
-                        "soil_moisture" => "%",
-                        "ec" => "mS/cm",
-                        _ => "",
-                    };
-
-                    sqlx::query(
-                        "INSERT INTO sensor_readings (device_id, metric, value, unit, timestamp)
-                         VALUES (?, ?, ?, ?, ?)",
-                    )
-                    .bind(&device_id)
-                    .bind(metric)
-                    .bind(val)
-                    .bind(unit)
-                    .bind(now)
-                    .execute(pool)
-                    .await?;
-
-                    inserted = true;
-                    info!(
-                        "Stored reading: device={} metric={} value={}{}",
-                        device_id, metric, val, unit
-                    );
-                }
-            }
-        }
-    }
-
-    if inserted {
-        if let Some(tx) = event_tx {
-            let _ = tx.send(serde_json::json!({
-                "type": "telemetry",
-                "node_id": node_id,
-                "timestamp": now,
-            }).to_string());
+        let inserted = agri_core::telemetry::process_telemetry(pool, node_id, metrics, event_tx).await?;
+        if inserted > 0 {
+            info!("Stored {} readings for node {}", inserted, node_id);
         }
     }
 
