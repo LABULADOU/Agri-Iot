@@ -1,36 +1,44 @@
-.card {
-  height: 100%;
-}
-
-.controlItem {
-  padding: 16px;
-  background: #fafafa;
-  border-radius: 8px;
-}
-
-.controlHeader {
+.panel {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 12px;
+  flex-direction: column;
+  gap: var(--space-4, 16px);
 }
 
-.icon {
-  font-size: 16px;
-  color: #1890ff;
+.title {
+  font-size: 14px;
+  padding-bottom: var(--space-2, 8px);
+  border-bottom: 1px solid var(--border-color-light, #F3F4F6);
 }
 
-.range {
-  font-size: 12px;
-  margin-left: auto;
+.empty {
+  text-align: center;
+  padding: var(--space-6, 24px);
 }
 
-.controlBody {
+.block {
   display: flex;
-  align-items: center;
-  gap: 16px;
+  flex-direction: column;
+  gap: var(--space-2, 8px);
 }
 
-.status {
-  font-size: 12px;
+.blockHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.ventValue {
+  font-size: 14px;
+  font-weight: 600;
+  font-family: var(--font-mono, monospace);
+  color: var(--color-primary, #22C55E);
+}
+
+.slider {
+  margin: 0 var(--space-2, 8px);
+}
+
+.btnGroup {
+  display: flex;
+  gap: var(--space-2, 8px);
 }

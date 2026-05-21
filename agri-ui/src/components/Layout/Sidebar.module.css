@@ -1,19 +1,37 @@
 .sider {
-  background: #001529;
+  background: #fff !important;
+  border-right: 1px solid var(--border-color, #E5E7EB);
+  transition: all 0.2s ease;
+  overflow: hidden;
 }
 
 .logo {
-  height: 64px;
+  height: 56px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 18px;
-  font-weight: bold;
-  color: #fff;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary, #1F2937);
+  border-bottom: 1px solid var(--border-color-light, #F3F4F6);
+  white-space: nowrap;
 }
 
 .menu {
   border-right: none;
   background: transparent;
+  margin-top: 4px;
+}
+
+.currentLabel {
+  position: fixed;
+  bottom: 16px;
+  left: 8px;
+  width: 40px;
+  text-align: center;
+  font-size: 10px;
+  color: var(--text-tertiary, #9CA3AF);
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  letter-spacing: 2px;
 }

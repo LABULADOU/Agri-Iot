@@ -1,14 +1,25 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Row, Col, Card, Typography, Space, Button, Descriptions, Tag, Table, Badge, Statistic, Progress } from 'antd';
-import { ArrowLeftOutlined, ThunderboltOutlined, AimOutlined, FieldNumberOutlined } from '@ant-design/icons';
+import { Typography, Button, Space } from 'antd';
+import { ArrowLeftOutlined } from '@ant-design/icons';
 import { zoneApi, nodeApi, accTempApi } from '../../services/api';
-import ComfortIndicator from '../../components/ComfortIndicator';
+import MetricRow from '../../components/MetricRow';
 import ControlPanel from '../../components/ControlPanel';
+import AIAnalysisReport from '../../components/AIAnalysisReport';
+import OperationTimeline from '../../components/OperationTimeline';
 import type { Zone, SensorNode, AccumulatedTemp } from '../../types';
 import styles from './ZoneDetail.module.css';
 
 const { Title, Text } = Typography;
+
+interface FakeReading {
+  label: string;
+  key: string;
+  value: number;
+  unit: string;
+  min: number;
+  max: number;
+}
 
 const ZoneDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -20,9 +31,7 @@ const ZoneDetail: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (id) {
-      fetchData();
-    }
+    if (id) fetchData();
   }, [id]);
 
   const fetchData = async () => {
@@ -37,9 +46,7 @@ const ZoneDetail: React.FC = () => {
       setZone(zoneData);
       setNodes(nodesData);
       setAccTemps(tempsData);
-      if (nodesData.length > 0) {
-        setSelectedNode(nodesData[0]);
-      }
+      if (nodesData.length > 0) setSelectedNode(nodesData[0]);
     } catch (err) {
       console.error(err);
     } finally {
@@ -47,110 +54,85 @@ const ZoneDetail: React.FC = () => {
     }
   };
 
-  const currentTemp = accTemps.length > 0 ? accTemps[accTemps.length - 1] : null;
+  const readings: FakeReading[] = [
+    { label: '空气温度', key: 'airTemp', value: 25.3, unit: '℃', min: 18, max: 28 },
+    { label: '空气湿度', key: 'humidity', value: 72, unit: '%', min: 60, max: 80 },
+    { label: '土壤温度', key: 'soilTemp', value: 21.5, unit: '℃', min: 15, max: 25 },
+    { label: '土壤湿度', key: 'soilMoisture', value: 38, unit: '%', min: 40, max: 70 },
+    { label: 'EC值', key: 'ecValue', value: 3.2, unit: 'dS/m', min: 1.5, max: 3.5 },
+  ];
+
+  const getStatus = (v: number, min: number, max: number): 'normal' | 'warning' | 'danger' => {
+    const margin = (max - min) * 0.2;
+    if (v < min - margin || v > max + margin) return 'danger';
+    if (v < min || v > max) return 'warning';
+    return 'normal';
+  };
 
   return (
     <div className={styles.container}>
       <div className={styles.header}>
         <Space>
-          <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/zones')}>返回</Button>
+          <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/')}>返回</Button>
           <Title level={4} style={{ margin: 0 }}>{zone?.name || '区域详情'}</Title>
+          <Text type="secondary">在线 {nodes.filter(n => n.status === 'online').length}/{nodes.length}</Text>
+          {nodes.length > 0 && (
+            <Text type="secondary">最后通讯 {nodes[0].lastSeen ? new Date(nodes[0].lastSeen).toLocaleTimeString('zh-CN') : '--'}</Text>
+          )}
         </Space>
       </div>
 
-      <Row gutter={16} className={styles.infoRow}>
-        <Col span={24}>
-          <Card size="small">
-            <Descriptions size="small" column={4}>
-              <Descriptions.Item label="位置">{zone?.location || '-'}</Descriptions.Item>
-              <Descriptions.Item label="作物">{zone?.cropType || '-'}</Descriptions.Item>
-              <Descriptions.Item label="描述">{zone?.description || '-'}</Descriptions.Item>
-              <Descriptions.Item label="节点数">
-                <Badge status={nodes.length > 0 ? 'success' : 'default'} text={`${nodes.filter(n => n.status === 'online').length}/${nodes.length}`} />
-              </Descriptions.Item>
-            </Descriptions>
-          </Card>
-        </Col>
-      </Row>
+      <div className={styles.mainGrid}>
+        <div className={styles.metricsCol}>
+          <div className={styles.metricsCard}>
+            {readings.map(r => (
+              <MetricRow
+                key={r.key}
+                label={r.label}
+                value={r.value}
+                unit={r.unit}
+                status={getStatus(r.value, r.min, r.max)}
+                range={{ min: r.min, max: r.max }}
+                aiRecommendation={r.key === 'soilMoisture' ? '启动灌溉 20min' : r.key === 'ecValue' ? '接近上限，建议检测' : undefined}
+                onExecuteRecommendation={() => console.log('execute', r.key)}
+              />
+            ))}
+          </div>
 
-      <Row gutter={16}>
-        <Col span={8}>
-          <Card title="数据采集节点" size="small">
-            <Table
-              size="small"
-              dataSource={nodes}
-              rowKey="id"
-              loading={loading}
-              pagination={false}
-              onRow={(record) => ({
-                onClick: () => setSelectedNode(record),
-                style: { cursor: 'pointer', background: selectedNode?.id === record.id ? '#e6f7ff' : undefined },
-              })}
-              columns={[
-                { title: '名称', dataIndex: 'name' },
-                { title: '状态', dataIndex: 'status', render: (s: string) => <Badge status={s === 'online' ? 'success' : 'error'} text={s === 'online' ? '在线' : '离线'} /> },
-                {
-                  title: '控制',
-                  render: (_: unknown, record: SensorNode) => (
-                    <Space size={4}>
-                      {record.hasIrrigation && <Tag icon={<ThunderboltOutlined />} color="blue">灌</Tag>}
-                      {record.hasSideVent && <Tag icon={<FieldNumberOutlined />} color="green">侧</Tag>}
-                      {record.hasRoofVent && <Tag icon={<AimOutlined />} color="orange">顶</Tag>}
-                    </Space>
-                  ),
-                },
+          <AIAnalysisReport
+            assessment={{
+              score: 65,
+              status: 'warning',
+              summary: '当前土壤湿度 38%，低于阈值，建议启动灌溉 20 分钟。EC 值接近上限，建议检测水质。',
+              details: ['土壤湿度低于下限 40%', 'EC 值 3.2 接近上限 3.5'],
+            }}
+            similarCases={[
+              { id: 'c1', title: '05-15 灌溉记录', summary: '土壤湿度 35% → 启动灌溉 25min → 恢复至 55%', date: '2026-05-15' },
+            ]}
+          />
+
+          <div className={styles.section}>
+            <Text strong className={styles.sectionTitle}>历史操作记录</Text>
+            <OperationTimeline
+              records={[
+                { id: 'op1', timestamp: '10:30', action: '启动灌溉 20min', result: 'success', aiGenerated: true },
+                { id: 'op2', timestamp: '09:15', action: '打开侧窗 50%', result: 'success', aiGenerated: true },
+                { id: 'op3', timestamp: '08:00', action: 'AI 评估', result: 'success', aiGenerated: true },
               ]}
             />
-          </Card>
+          </div>
+        </div>
 
-          {currentTemp && (
-            <Card title="积温指标" size="small" className={styles.accTempCard}>
-              <Statistic
-                title="当前日积温"
-                value={currentTemp.accumulated}
-                suffix="℃·d"
-                valueStyle={{ color: currentTemp.accumulated > currentTemp.threshold ? '#ff4d4f' : '#52c41a' }}
-              />
-              <Progress
-                percent={Math.min((currentTemp.accumulated / currentTemp.threshold) * 100, 100)}
-                status={currentTemp.accumulated > currentTemp.threshold ? 'exception' : 'success'}
-                format={(p) => `${p?.toFixed(0)}%`}
-              />
-              <Text type="secondary">阈值: {currentTemp.threshold}℃·d</Text>
-            </Card>
-          )}
-        </Col>
-
-        <Col span={16}>
+        <div className={styles.controlCol}>
           {selectedNode ? (
-            <Row gutter={16}>
-              <Col span={selectedNode.hasIrrigation || selectedNode.hasSideVent || selectedNode.hasRoofVent ? 12 : 24}>
-                {zone && (
-                  <ComfortIndicator
-                    config={zone.comfortConfig}
-                    values={{
-                      airTemp: 24 + Math.random() * 4,
-                      airHumidity: 65 + Math.random() * 15,
-                      soilTemp: 20 + Math.random() * 3,
-                      soilMoisture: 55 + Math.random() * 15,
-                      ecValue: 2.0 + Math.random() * 1.0,
-                    }}
-                  />
-                )}
-              </Col>
-              {(selectedNode.hasIrrigation || selectedNode.hasSideVent || selectedNode.hasRoofVent) && (
-                <Col span={12}>
-                  <ControlPanel node={selectedNode} />
-                </Col>
-              )}
-            </Row>
+            <div className={styles.controlCard}>
+              <ControlPanel node={selectedNode} />
+            </div>
           ) : (
-            <Card>
-              <Text type="secondary">请选择一个节点</Text>
-            </Card>
+            <Text type="secondary">请选择一个节点</Text>
           )}
-        </Col>
-      </Row>
+        </div>
+      </div>
     </div>
   );
 };

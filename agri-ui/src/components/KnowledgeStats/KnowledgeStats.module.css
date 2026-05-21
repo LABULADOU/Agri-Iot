@@ -1,0 +1,23 @@
+.grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-4, 16px);
+}
+
+.item {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1, 4px);
+}
+
+.value {
+  font-size: 28px;
+  font-weight: 700;
+  font-family: var(--font-mono, monospace);
+  line-height: 1;
+}
+
+.label {
+  font-size: 12px;
+}

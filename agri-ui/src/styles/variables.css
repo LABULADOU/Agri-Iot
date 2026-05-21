@@ -1,0 +1,34 @@
+:root {
+  --color-primary: #22C55E;
+  --color-info: #0EA5E9;
+  --color-warning: #F59E0B;
+  --color-danger: #EF4444;
+  --color-success: #22C55E;
+
+  --status-optimal: #22C55E;
+  --status-warning: #F59E0B;
+  --status-danger: #EF4444;
+  --status-offline: #9CA3AF;
+
+  --bg-page: #F8FAFC;
+  --bg-card: #FFFFFF;
+  --bg-hover: #F5F5F5;
+  --bg-alert-bg: #FFF2E8;
+
+  --border-color: #E5E7EB;
+  --border-color-light: #F3F4F6;
+
+  --text-primary: #1F2937;
+  --text-secondary: #6B7280;
+  --text-tertiary: #9CA3AF;
+
+  --font-display: "DM Sans", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", monospace;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+}

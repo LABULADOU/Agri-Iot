@@ -1,0 +1,35 @@
+.empty {
+  padding: var(--space-6, 24px);
+  text-align: center;
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.item {
+  padding: var(--space-3, 12px) 0;
+  border-bottom: 1px solid var(--border-color-light, #F3F4F6);
+}
+
+.item:last-child {
+  border-bottom: none;
+}
+
+.area {
+  font-weight: 600;
+  font-size: 13px;
+  display: block;
+  margin-bottom: var(--space-1, 4px);
+}
+
+.content {
+  font-size: 13px;
+  margin-bottom: var(--space-1, 4px) !important;
+  color: var(--text-secondary, #6B7280);
+}
+
+.link {
+  font-size: 11px;
+}

@@ -1,0 +1,66 @@
+.container {
+  border-radius: 8px;
+  border: 1px solid var(--border-color-light, #F3F4F6);
+  overflow: hidden;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-3, 12px) var(--space-4, 16px);
+  cursor: pointer;
+  background: var(--bg-hover, #F5F5F5);
+}
+
+.toggle {
+  font-size: 12px;
+}
+
+.body {
+  padding: var(--space-3, 12px) var(--space-4, 16px);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3, 12px);
+}
+
+.summary {
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.details {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1, 4px);
+}
+
+.detailItem {
+  font-size: 13px;
+}
+
+.cases {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2, 8px);
+}
+
+.casesTitle {
+  font-size: 13px;
+}
+
+.caseItem {
+  padding: var(--space-2, 8px);
+  background: var(--bg-page, #F8FAFC);
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.caseSummary {
+  font-size: 12px;
+  margin-bottom: 0 !important;
+}
+
+.caseDate {
+  font-size: 11px;
+}

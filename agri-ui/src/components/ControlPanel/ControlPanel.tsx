@@ -1,10 +1,7 @@
-import React from 'react';
-import { Card, Switch, Slider, Space, Typography, message } from 'antd';
-import {
-  ThunderboltOutlined,
-} from '@ant-design/icons';
-import type { SensorNode } from '../../types';
+import React, { useState } from 'react';
+import { Button, Slider, Typography, message } from 'antd';
 import { controlApi } from '../../services/api';
+import type { SensorNode } from '../../types';
 import styles from './ControlPanel.module.css';
 
 const { Text } = Typography;
@@ -15,19 +12,18 @@ interface ControlPanelProps {
 }
 
 const ControlPanel: React.FC<ControlPanelProps> = ({ node, onStatusChange }) => {
-  const [irrigationOn, setIrrigationOn] = React.useState(false);
-  const [loading, setLoading] = React.useState<string | null>(null);
+  const [ventValues, setVentValues] = useState<Record<string, number>>({
+    side: 50,
+    roof: 50,
+  });
+  const [loading, setLoading] = useState<string | null>(null);
 
-  const sendCommand = async (command: string, action: string | number) => {
+  const sendCommand = async (deviceId: string, command: string, payload?: Record<string, unknown>) => {
     setLoading(command);
     try {
-      await controlApi.sendCommand({
-        deviceId: node.id,
-        command: command as 'irrigation' | 'side_vent' | 'roof_vent',
-        action: action as 'on' | 'off' | number,
-      });
+      await controlApi.sendCommand({ deviceId, command: command as 'irrigation' | 'side_vent' | 'roof_vent', action: 'on' });
       message.success('命令已发送');
-      onStatusChange?.(node.id, command);
+      onStatusChange?.(deviceId, command);
     } catch {
       message.error('命令发送失败');
     } finally {
@@ -37,84 +33,73 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ node, onStatusChange }) => 
 
   const hasControl = node.hasIrrigation || node.hasSideVent || node.hasRoofVent;
 
+  if (!hasControl) {
+    return (
+      <div className={styles.panel}>
+        <Text type="secondary" className={styles.empty}>此节点无可控制设备</Text>
+      </div>
+    );
+  }
+
   return (
-    <Card title="控制面板" className={styles.card}>
-      <Space direction="vertical" size="large" style={{ width: '100%' }}>
-        {node.hasIrrigation && (
-          <div className={styles.controlItem}>
-            <div className={styles.controlHeader}>
-              <ThunderboltOutlined className={styles.icon} />
-              <Text strong>灌溉控制</Text>
-            </div>
-            <div className={styles.controlBody}>
-              <Switch
-                checked={irrigationOn}
-                onChange={(checked: boolean) => {
-                  setIrrigationOn(checked);
-                  sendCommand('irrigation', checked ? 'on' : 'off');
-                }}
-                loading={loading === 'irrigation'}
-                checkedChildren="开"
-                unCheckedChildren="关"
-              />
-              <Text type="secondary" className={styles.status}>
-                {irrigationOn ? '已开启' : '已关闭'}
-              </Text>
-            </div>
-          </div>
-        )}
+    <div className={styles.panel}>
+      <Text strong className={styles.title}>控制面板</Text>
 
-        {node.hasSideVent && (
-          <div className={styles.controlItem}>
-            <div className={styles.controlHeader}>
-              <Text strong>侧通风帘</Text>
-              <Text type="secondary" className={styles.range}>
-                (量程: {node.ventRange.min}% - {node.ventRange.max}%)
-              </Text>
-            </div>
-            <Slider
-              min={node.ventRange.min}
-              max={node.ventRange.max}
-              defaultValue={50}
-              onAfterChange={(val: number) => sendCommand('side_vent', val)}
-              disabled={loading === 'side_vent'}
-              marks={{
-                [node.ventRange.min]: `${node.ventRange.min}%`,
-                [Math.round((node.ventRange.min + node.ventRange.max) / 2)]: `${Math.round((node.ventRange.min + node.ventRange.max) / 2)}%`,
-                [node.ventRange.max]: `${node.ventRange.max}%`,
-              }}
-            />
+      {node.hasSideVent && (
+        <div className={styles.block}>
+          <div className={styles.blockHeader}>
+            <Text>侧窗通风</Text>
+            <Text className={styles.ventValue}>{ventValues.side}%</Text>
           </div>
-        )}
-
-        {node.hasRoofVent && (
-          <div className={styles.controlItem}>
-            <div className={styles.controlHeader}>
-              <Text strong>顶部通风</Text>
-              <Text type="secondary" className={styles.range}>
-                (量程: {node.ventRange.min}% - {node.ventRange.max}%)
-              </Text>
-            </div>
-            <Slider
-              min={node.ventRange.min}
-              max={node.ventRange.max}
-              defaultValue={50}
-              onAfterChange={(val: number) => sendCommand('roof_vent', val)}
-              disabled={loading === 'roof_vent'}
-              marks={{
-                [node.ventRange.min]: `${node.ventRange.min}%`,
-                [Math.round((node.ventRange.min + node.ventRange.max) / 2)]: `${Math.round((node.ventRange.min + node.ventRange.max) / 2)}%`,
-                [node.ventRange.max]: `${node.ventRange.max}%`,
-              }}
-            />
+          <Slider
+            value={ventValues.side}
+            min={node.ventRange.min}
+            max={node.ventRange.max}
+            onChange={(v) => setVentValues(prev => ({ ...prev, side: v as number }))}
+            className={styles.slider}
+          />
+          <div className={styles.btnGroup}>
+            <Button size="small" type="primary" ghost loading={loading === 'side_vent_on'} onClick={() => sendCommand(node.id, 'side_vent_on')}>打开</Button>
+            <Button size="small" danger ghost loading={loading === 'side_vent_off'} onClick={() => sendCommand(node.id, 'side_vent_off')}>关闭</Button>
+            <Button size="small" type="text" loading={loading === 'side_vent_calibrate'} onClick={() => sendCommand(node.id, 'side_vent_calibrate')}>校准</Button>
           </div>
-        )}
+        </div>
+      )}
 
-        {!hasControl && (
-          <Text type="secondary">此节点无可控制设备</Text>
-        )}
-      </Space>
-    </Card>
+      {node.hasRoofVent && (
+        <div className={styles.block}>
+          <div className={styles.blockHeader}>
+            <Text>顶部通风</Text>
+            <Text className={styles.ventValue}>{ventValues.roof}%</Text>
+          </div>
+          <Slider
+            value={ventValues.roof}
+            min={node.ventRange.min}
+            max={node.ventRange.max}
+            onChange={(v) => setVentValues(prev => ({ ...prev, roof: v as number }))}
+            className={styles.slider}
+          />
+          <div className={styles.btnGroup}>
+            <Button size="small" type="primary" ghost loading={loading === 'roof_vent_on'} onClick={() => sendCommand(node.id, 'roof_vent_on')}>打开</Button>
+            <Button size="small" danger ghost loading={loading === 'roof_vent_off'} onClick={() => sendCommand(node.id, 'roof_vent_off')}>关闭</Button>
+            <Button size="small" type="text" loading={loading === 'roof_vent_calibrate'} onClick={() => sendCommand(node.id, 'roof_vent_calibrate')}>校准</Button>
+          </div>
+        </div>
+      )}
+
+      {node.hasIrrigation && (
+        <div className={styles.block}>
+          <div className={styles.blockHeader}>
+            <Text>灌溉</Text>
+            <Text className={styles.ventValue}>idle</Text>
+          </div>
+          <div className={styles.btnGroup}>
+            <Button size="small" type="primary" loading={loading === 'irrigation_start'} onClick={() => sendCommand(node.id, 'irrigation_start')}>启动</Button>
+            <Button size="small" danger loading={loading === 'irrigation_stop'} onClick={() => sendCommand(node.id, 'irrigation_stop')}>停止</Button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 };
 

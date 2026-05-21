@@ -1,0 +1,43 @@
+.topbar {
+  background: #fff !important;
+  padding: 0 24px !important;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: 56px !important;
+  line-height: 56px !important;
+  border-bottom: 1px solid var(--border-color, #E5E7EB);
+}
+
+.center {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.weatherIcon {
+  font-size: 20px;
+}
+
+.divider {
+  color: var(--border-color, #E5E7EB);
+}
+
+.time {
+  font-variant-numeric: tabular-nums;
+  font-family: var(--font-mono, monospace);
+  font-size: 13px;
+}
+
+.alertBadge {
+  cursor: pointer;
+}
+
+.connText {
+  font-size: 12px;
+}
+
+.updateTime {
+  font-size: 11px;
+  color: var(--text-tertiary, #9CA3AF);
+}

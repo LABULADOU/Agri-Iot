@@ -4,12 +4,6 @@ import type { EChartsOption } from 'echarts';
 import type { AggregatedReading } from '../../types';
 import dayjs from 'dayjs';
 
-interface LineChartProps {
-  data: AggregatedReading[];
-  height?: number;
-  showLegend?: boolean;
-}
-
 const metricLabels: Record<string, string> = {
   air_temp: '空气温度',
   air_humidity: '空气湿度',
@@ -19,12 +13,18 @@ const metricLabels: Record<string, string> = {
 };
 
 const metricColors: Record<string, string> = {
-  air_temp: '#1890ff',
-  air_humidity: '#13c2c2',
-  soil_temp: '#faad14',
-  soil_moisture: '#52c41a',
-  ec_value: '#722ed1',
+  air_temp: '#22C55E',
+  air_humidity: '#0EA5E9',
+  soil_temp: '#F59E0B',
+  soil_moisture: '#22C55E',
+  ec_value: '#8B5CF6',
 };
+
+interface LineChartProps {
+  data: AggregatedReading[];
+  height?: number;
+  showLegend?: boolean;
+}
 
 const LineChart: React.FC<LineChartProps> = ({ data, height = 400, showLegend = true }) => {
   const metrics = [...new Set(data.map(d => d.metric))];
@@ -38,7 +38,7 @@ const LineChart: React.FC<LineChartProps> = ({ data, height = 400, showLegend = 
       smooth: true,
       symbol: 'circle' as const,
       symbolSize: 6,
-      itemStyle: { color: metricColors[metric] || '#1890ff' },
+      itemStyle: { color: metricColors[metric] || '#22C55E' },
       data: timestamps.map(ts => {
         const item = metricData.find(d => d.timestamp === ts);
         return item ? item.avg : null;
@@ -53,6 +53,7 @@ const LineChart: React.FC<LineChartProps> = ({ data, height = 400, showLegend = 
     legend: showLegend ? {
       data: metrics.map(m => metricLabels[m] || m),
       bottom: 0,
+      textStyle: { color: '#6B7280' },
     } : undefined,
     grid: {
       left: '3%',
@@ -65,13 +66,17 @@ const LineChart: React.FC<LineChartProps> = ({ data, height = 400, showLegend = 
       type: 'category' as const,
       boundaryGap: false,
       data: timestamps.map(ts => dayjs(ts).format('MM-DD HH:mm')),
+      axisLine: { lineStyle: { color: '#E5E7EB' } },
       axisLabel: {
         rotate: 45,
         fontSize: 10,
+        color: '#9CA3AF',
       },
     },
     yAxis: {
       type: 'value' as const,
+      splitLine: { lineStyle: { color: '#F3F4F6' } },
+      axisLabel: { color: '#9CA3AF' },
     },
     series,
     dataZoom: [

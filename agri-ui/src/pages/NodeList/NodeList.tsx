@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Table, Card, Button, Space, Input, Modal, Form, Select, message, Popconfirm, Tag, Typography, Row, Col } from 'antd';
+import { Table, Button, Space, Input, Modal, Form, Select, message, Popconfirm, Tag, Typography, Row, Col } from 'antd';
 import { PlusOutlined, SearchOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { nodeApi } from '../../services/api';
 import type { SensorNode } from '../../types';
@@ -118,9 +118,7 @@ const NodeList: React.FC = () => {
         </Space>
       </div>
 
-      <Card>
-        <Table columns={columns} dataSource={filteredNodes} rowKey="id" loading={loading} pagination={{ pageSize: 10 }} />
-      </Card>
+      <Table columns={columns} dataSource={filteredNodes} rowKey="id" loading={loading} pagination={{ pageSize: 10 }} />
 
       <Modal
         title={editingNode ? '编辑节点' : '新增节点'}

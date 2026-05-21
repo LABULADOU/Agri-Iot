@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { Card, Row, Col, Select, DatePicker, Space, Table, Typography, Segmented, Statistic } from 'antd';
+import { Row, Col, Select, DatePicker, Space, Table, Typography, Segmented, Statistic } from 'antd';
 import dayjs from 'dayjs';
 import { dataApi, nodeApi } from '../../services/api';
 import LineChart from '../../components/Charts/LineChart';
@@ -114,7 +114,7 @@ const DataQuery: React.FC = () => {
         <Title level={4}>数据查询</Title>
       </div>
 
-      <Card className={styles.filterCard}>
+      <div className={styles.filterCard}>
         <Row gutter={16} align="middle">
           <Col span={6}>
             <Space direction="vertical" size={4}>
@@ -151,12 +151,12 @@ const DataQuery: React.FC = () => {
             </Space>
           </Col>
         </Row>
-      </Card>
+      </div>
 
       <Row gutter={16} className={styles.statsRow}>
         {statsData.map(stat => stat && (
           <Col span={4} key={stat.metric}>
-            <Card size="small">
+            <div>
               <Statistic
                 title={metricOptions.find(o => o.value === stat.metric)?.label}
                 value={stat.avg}
@@ -166,16 +166,18 @@ const DataQuery: React.FC = () => {
               <Text type="secondary" className={styles.statRange}>
                 最高 {stat.max.toFixed(1)}{stat.unit} / 最低 {stat.min.toFixed(1)}{stat.unit}
               </Text>
-            </Card>
+            </div>
           </Col>
         ))}
       </Row>
 
-      <Card title="数据趋势" className={styles.chartCard}>
+      <div className={styles.chartCard}>
+        <Text strong style={{ display: 'block', marginBottom: 12 }}>数据趋势</Text>
         <LineChart data={filteredData} height={400} showLegend={selectedMetrics.length > 1} />
-      </Card>
+      </div>
 
-      <Card title="数据明细" className={styles.tableCard}>
+      <div className={styles.tableCard}>
+        <Text strong style={{ display: 'block', marginBottom: 12 }}>数据明细</Text>
         <Table
           columns={tableColumns}
           dataSource={filteredData}
@@ -185,7 +187,7 @@ const DataQuery: React.FC = () => {
           pagination={{ pageSize: 20, showSizeChanger: true }}
           scroll={{ x: 700 }}
         />
-      </Card>
+      </div>
     </div>
   );
 };

@@ -1,0 +1,47 @@
+@import './variables.css';
+
+body {
+  margin: 0;
+  font-family: var(--font-display);
+  background: var(--bg-page);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+}
+
+.ant-card {
+  border: none !important;
+  border-radius: 12px;
+  box-shadow: none !important;
+  background: transparent;
+}
+
+.section-divider {
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.metric-row {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  align-items: center;
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--border-color-light);
+  gap: var(--space-4);
+}
+
+.metric-row:last-child {
+  border-bottom: none;
+}
+
+.metric-row.alert {
+  background: var(--bg-alert-bg);
+  margin: 0 calc(-1 * var(--space-3));
+  padding: var(--space-3);
+  border-left: 3px solid var(--color-danger);
+  border-radius: 4px;
+}
+
+.ant-space-item {
+  margin-bottom: 0 !important;
+}

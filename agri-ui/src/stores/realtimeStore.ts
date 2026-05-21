@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { wsService } from '../services/ws';
+import { sseService } from '../services/sse';
 
 interface RealtimeReading {
   nodeId: string;
@@ -25,20 +25,28 @@ export const useRealtimeStore = create<RealtimeStore>((set, get) => ({
   connected: false,
 
   connect: () => {
-    wsService.connect();
+    sseService.connect();
     set({ connected: true });
 
-    const unsubscribe = wsService.subscribe((data) => {
+    const unsubscribe = sseService.subscribe((data) => {
       set(state => {
         const newReadings = new Map(state.readings);
-        const nodeReadings = data.readings.map(r => ({
-          nodeId: data.nodeId,
-          ...r,
-        }));
+        const msg = data as Record<string, unknown>;
+        const nodeId = msg.node_id as string || msg.nodeId as string || '';
+        const readings = (msg.readings as Array<Record<string, unknown>> || [msg])
+          .map(r => ({
+            nodeId: r.node_id as string || nodeId,
+            metric: r.metric as string || '',
+            value: Number(r.value) || 0,
+            unit: r.unit as string || '',
+            timestamp: r.timestamp as string || new Date().toISOString(),
+          }));
 
-        const existing = newReadings.get(data.nodeId) || [];
-        const updated = [...existing, ...nodeReadings].slice(-100);
-        newReadings.set(data.nodeId, updated);
+        if (!readings.length || !readings[0].metric) return state;
+
+        const existing = newReadings.get(nodeId) || [];
+        const updated = [...existing, ...readings].slice(-100);
+        newReadings.set(nodeId, updated);
 
         return {
           readings: newReadings,
@@ -51,7 +59,7 @@ export const useRealtimeStore = create<RealtimeStore>((set, get) => ({
   },
 
   disconnect: () => {
-    wsService.disconnect();
+    sseService.disconnect();
     set({ connected: false, readings: new Map() });
   },
 

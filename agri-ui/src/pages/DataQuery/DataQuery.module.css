@@ -1,17 +1,21 @@
 .container {
-  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3, 12px);
 }
 
 .header {
-  margin-bottom: 16px;
+  margin-bottom: var(--space-1, 4px);
 }
 
 .filterCard {
-  margin-bottom: 16px;
+  background: var(--bg-card, #fff);
+  border-radius: 12px;
+  padding: var(--space-4, 16px);
 }
 
 .statsRow {
-  margin-bottom: 16px;
+  margin-bottom: 0;
 }
 
 .statRange {
@@ -21,9 +25,13 @@
 }
 
 .chartCard {
-  margin-bottom: 16px;
+  background: var(--bg-card, #fff);
+  border-radius: 12px;
+  padding: var(--space-4, 16px);
 }
 
 .tableCard {
-  margin-bottom: 16px;
+  background: var(--bg-card, #fff);
+  border-radius: 12px;
+  padding: var(--space-4, 16px);
 }

@@ -1,0 +1,52 @@
+.container {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4, 16px);
+  padding: var(--space-2, 8px) 0;
+}
+
+.track {
+  flex: 1;
+  height: 48px;
+  background: #E5E7EB;
+  border-radius: 8px;
+  position: relative;
+  overflow: hidden;
+}
+
+.fill {
+  height: 100%;
+  border-radius: 8px;
+  transition: width 0.5s ease, background 0.5s ease;
+}
+
+.targetLine {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: rgba(0, 0, 0, 0.15);
+  z-index: 1;
+}
+
+.info {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1, 4px);
+  min-width: 80px;
+}
+
+.score {
+  font-size: 24px;
+  font-weight: 700;
+  font-family: var(--font-mono, monospace);
+  line-height: 1;
+}
+
+.trend {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 12px;
+  font-weight: 600;
+}

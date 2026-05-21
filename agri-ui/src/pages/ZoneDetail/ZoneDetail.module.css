@@ -1,15 +1,52 @@
 .container {
-  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4, 16px);
 }
 
 .header {
-  margin-bottom: 16px;
+  margin-bottom: var(--space-2, 8px);
 }
 
-.infoRow {
-  margin-bottom: 16px;
+.mainGrid {
+  display: grid;
+  grid-template-columns: 1fr 280px;
+  gap: var(--space-4, 16px);
+  align-items: start;
 }
 
-.accTempCard {
-  margin-top: 16px;
+.metricsCol {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3, 12px);
+}
+
+.metricsCard {
+  background: var(--bg-card, #fff);
+  border-radius: 12px;
+  padding: var(--space-3, 12px) var(--space-4, 16px);
+}
+
+.controlCol {
+  position: sticky;
+  top: 72px;
+}
+
+.controlCard {
+  background: var(--bg-card, #fff);
+  border-radius: 12px;
+  padding: var(--space-4, 16px);
+}
+
+.section {
+  background: var(--bg-card, #fff);
+  border-radius: 12px;
+  padding: var(--space-3, 12px) var(--space-4, 16px);
+}
+
+.sectionTitle {
+  display: block;
+  padding-bottom: var(--space-2, 8px);
+  border-bottom: 1px solid var(--border-color-light, #F3F4F6);
+  margin-bottom: var(--space-2, 8px);
 }

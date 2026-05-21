@@ -1,0 +1,73 @@
+.row {
+  display: grid;
+  grid-template-columns: 40px 1fr 80px 80px 80px 80px 120px;
+  align-items: center;
+  height: 48px;
+  padding: 0 var(--space-3, 12px);
+  border-bottom: 1px solid var(--border-color-light, #F3F4F6);
+  cursor: pointer;
+  transition: background 0.15s;
+  font-size: 14px;
+  gap: var(--space-2, 8px);
+}
+
+.row:hover {
+  background: var(--bg-hover, #F5F5F5);
+}
+
+.row:last-child {
+  border-bottom: none;
+}
+
+.alert {
+  background: var(--bg-alert-bg, #FFF2E8);
+  border-left: 3px solid var(--color-danger, #EF4444);
+  padding-left: calc(var(--space-3, 12px) - 3px);
+}
+
+.offline {
+  background: #F3F4F6;
+}
+
+.offline .name,
+.offline .metric,
+.offline .suggestion {
+  opacity: 0.5;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.name {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.3;
+  overflow: hidden;
+}
+
+.crop {
+  font-size: 11px;
+}
+
+.metric {
+  text-align: right;
+}
+
+.nodes {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1, 4px);
+  justify-content: center;
+}
+
+.suggestion {
+  text-align: right;
+}
+
+.suggestText {
+  font-size: 12px;
+}

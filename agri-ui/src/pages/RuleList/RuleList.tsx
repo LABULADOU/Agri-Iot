@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Table, Card, Button, Space, Input, Modal, Form, Select, message, Popconfirm, Tag, Typography, Switch } from 'antd';
+import { Table, Button, Space, Input, Modal, Form, Select, message, Popconfirm, Tag, Typography, Switch } from 'antd';
 import { PlusOutlined, SearchOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { ruleApi } from '../../services/api';
 import type { Rule } from '../../types';
@@ -107,16 +107,14 @@ const RuleList: React.FC = () => {
   return (
     <div className={styles.container}>
       <div className={styles.header}>
-        <Title level={4}>规则管理</Title>
+        <Title level={4}>自动化规则</Title>
         <Space>
           <Input placeholder="搜索规则" prefix={<SearchOutlined />} value={searchText} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchText(e.target.value)} />
           <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增规则</Button>
         </Space>
       </div>
 
-      <Card>
-        <Table columns={columns} dataSource={filteredRules} rowKey="id" loading={loading} pagination={{ pageSize: 10 }} />
-      </Card>
+      <Table columns={columns} dataSource={filteredRules} rowKey="id" loading={loading} pagination={{ pageSize: 10 }} />
 
       <Modal
         title={editingRule ? '编辑规则' : '新增规则'}
