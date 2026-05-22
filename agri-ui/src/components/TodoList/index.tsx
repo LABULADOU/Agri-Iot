@@ -1,6 +1,6 @@
 import React from 'react';
 import { Typography, Button, Tag } from 'antd';
-import type { TodoItem } from '../../stores/dashboardStore';
+import type { TodoItem } from '../../types';
 import styles from './TodoList.module.css';
 
 const { Text } = Typography;

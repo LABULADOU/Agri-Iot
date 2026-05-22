@@ -10,30 +10,19 @@ const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
 
 const metricOptions = [
-  { value: 'air_temp', label: '空气温度' },
-  { value: 'air_humidity', label: '空气湿度' },
-  { value: 'soil_temp', label: '土壤温度' },
+  { value: 'temperature', label: '空气温度' },
+  { value: 'humidity', label: '空气湿度' },
+  { value: 'soil_temperature', label: '土壤温度' },
   { value: 'soil_moisture', label: '土壤湿度' },
-  { value: 'ec_value', label: 'EC值' },
+  { value: 'ec', label: 'EC值' },
 ];
-
-const MOCK_DATA: AggregatedReading[] = Array.from({ length: 48 }, (_, i) => {
-  const time = dayjs().subtract(2 - Math.floor(i / 24), 'day').hour(i % 24);
-  return [
-    { timestamp: time.toISOString(), metric: 'air_temp', nodeId: 'n1', max: 25 + Math.random() * 5, min: 18 + Math.random() * 3, avg: 22 + Math.random() * 4, count: 60 },
-    { timestamp: time.toISOString(), metric: 'air_humidity', nodeId: 'n1', max: 75 + Math.random() * 10, min: 55 + Math.random() * 10, avg: 65 + Math.random() * 10, count: 60 },
-    { timestamp: time.toISOString(), metric: 'soil_temp', nodeId: 'n1', max: 22 + Math.random() * 3, min: 17 + Math.random() * 2, avg: 20 + Math.random() * 2, count: 60 },
-    { timestamp: time.toISOString(), metric: 'soil_moisture', nodeId: 'n1', max: 70 + Math.random() * 10, min: 45 + Math.random() * 10, avg: 58 + Math.random() * 10, count: 60 },
-    { timestamp: time.toISOString(), metric: 'ec_value', nodeId: 'n1', max: 3.2 + Math.random() * 0.5, min: 1.8 + Math.random() * 0.3, avg: 2.5 + Math.random() * 0.3, count: 60 },
-  ];
-}).flat();
 
 const DataQuery: React.FC = () => {
   const [nodes, setNodes] = useState<SensorNode[]>([]);
   const [data, setData] = useState<AggregatedReading[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedNode, setSelectedNode] = useState<string>('');
-  const [selectedMetrics, setSelectedMetrics] = useState<string[]>(['air_temp', 'air_humidity']);
+  const [selectedMetrics, setSelectedMetrics] = useState<string[]>(['temperature', 'humidity']);
   const [period, setPeriod] = useState<TimePeriod>('day');
   const [dateRange, setDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs]>([
     dayjs().subtract(1, 'day'),
@@ -64,24 +53,24 @@ const DataQuery: React.FC = () => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const params = {
-        nodeId: selectedNode,
-        metric: selectedMetrics.join(','),
+      const params: Record<string, unknown> = {
         period,
         start: dateRange[0].toISOString(),
         end: dateRange[1].toISOString(),
       };
-      const result = await dataApi.query(params);
-      setData(result.length > 0 ? result : MOCK_DATA.filter(d => d.nodeId === selectedNode || selectedNode === 'all'));
+      if (selectedNode && selectedNode !== 'all') params.node_id = selectedNode;
+      if (selectedMetrics.length > 0) params.metric = selectedMetrics.join(',');
+      const result = await dataApi.query(params as unknown as import('../../types').QueryParams);
+      setData(result);
     } catch {
-      setData(MOCK_DATA);
+      setData([]);
     } finally {
       setLoading(false);
     }
   };
 
   const filteredData = useMemo(() => {
-    if (!selectedMetrics.length) return data;
+    if (!selectedMetrics.length) return [];
     return data.filter(d => selectedMetrics.includes(d.metric));
   }, [data, selectedMetrics]);
 
@@ -173,7 +162,7 @@ const DataQuery: React.FC = () => {
 
       <div className={styles.chartCard}>
         <Text strong style={{ display: 'block', marginBottom: 12 }}>数据趋势</Text>
-        <LineChart data={filteredData} height={400} showLegend={selectedMetrics.length > 1} />
+        <LineChart key={selectedMetrics.join(',')} data={filteredData} height={400} showLegend={selectedMetrics.length > 1} />
       </div>
 
       <div className={styles.tableCard}>

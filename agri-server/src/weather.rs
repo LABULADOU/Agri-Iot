@@ -54,6 +54,33 @@ async fn proxy(url: &str) -> axum::response::Response {
     }
 }
 
+/// Like proxy(), but returns 200 with empty data instead of propagating error status.
+/// Used for endpoints (minutely, warning) that may not be available on free QWeather tier.
+async fn safe_proxy(url: &str, empty_body: serde_json::Value) -> axum::response::Response {
+    let key = api_key();
+    if key.is_empty() {
+        return Json(empty_body).into_response();
+    }
+    match reqwest::get(url).await {
+        Ok(resp) => {
+            let status = resp.status();
+            match resp.bytes().await {
+                Ok(body) => {
+                    if !status.is_success() {
+                        return Json(empty_body).into_response();
+                    }
+                    match serde_json::from_slice::<serde_json::Value>(&body) {
+                        Ok(json) => Json(json).into_response(),
+                        Err(_) => Json(empty_body).into_response(),
+                    }
+                }
+                Err(_) => Json(empty_body).into_response(),
+            }
+        }
+        Err(_) => Json(empty_body).into_response(),
+    }
+}
+
 pub async fn get_weather_now(Query(params): Query<WeatherParams>) -> axum::response::Response {
     proxy(&format!("{}/now?location={}&key={}", WEATHER, params.location, api_key())).await
 }
@@ -67,7 +94,33 @@ pub async fn get_forecast_24h(Query(params): Query<WeatherParams>) -> axum::resp
 }
 
 pub async fn get_minutely(Query(params): Query<WeatherParams>) -> axum::response::Response {
-    proxy(&format!("https://ku36x9fh3j.re.qweatherapi.com/v7/minutely/5m?location={}&key={}", params.location, api_key())).await
+    let url = format!("{}/24h?location={}&key={}", WEATHER, params.location, api_key());
+    let empty = serde_json::json!({"summary": "无降水数据", "hourly": []});
+    match safe_proxy(&url, empty.clone()).await {
+        resp => {
+            let (_, body) = resp.into_parts();
+            let body_bytes = axum::body::to_bytes(body, 1024 * 16).await.unwrap_or_default();
+            if let Ok(mut json) = serde_json::from_slice::<serde_json::Value>(&body_bytes) {
+                if let Some(hourly) = json["hourly"].as_array() {
+                    let next = hourly.iter().take(6).map(|h| {
+                        serde_json::json!({
+                            "time": h["fxTime"],
+                            "text": h["text"],
+                            "temp": h["temp"],
+                            "precip": h["precip"],
+                            "pop": h["pop"],
+                        })
+                    }).collect::<Vec<_>>();
+                    let has_rain = next.iter().any(|h| h["pop"].as_str().unwrap_or("0").parse::<f64>().unwrap_or(0.0) > 30.0);
+                    let summary = if has_rain { "未来数小时有降水" } else { "未来数小时无降水" };
+                    json["summary"] = serde_json::json!(summary);
+                    json["hourly"] = serde_json::json!(next);
+                    return Json(json).into_response();
+                }
+            }
+            Json(empty).into_response()
+        }
+    }
 }
 
 pub async fn get_air_now(Query(params): Query<WeatherParams>) -> axum::response::Response {
@@ -80,7 +133,9 @@ pub async fn get_indices(Query(params): Query<IndicesParams>) -> axum::response:
 }
 
 pub async fn get_warning(Query(params): Query<WeatherParams>) -> axum::response::Response {
-    proxy(&format!("{}/now?location={}&key={}", WARNING, params.location, api_key())).await
+    let url = format!("{}/now?location={}&key={}", WARNING, params.location, api_key());
+    let empty = serde_json::json!({"warning": []});
+    safe_proxy(&url, empty).await
 }
 
 pub async fn geo_lookup(Query(params): Query<GeoParams>) -> axum::response::Response {

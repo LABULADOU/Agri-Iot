@@ -14,11 +14,6 @@
 └─────────────────────────────────────────────────────┘
 
 ┌──────────────────────────────────────────────┐
-│  MQTT 模拟器 (本地测试)                        │
-│  └── MQTT → rumqttd Broker → agri-server      │
-└──────────────────────────────────────────────┘
-
-┌──────────────────────────────────────────────┐
 │  ESP32 (串口/USB)                             │
 │  └── USB → serial_bridge.py → HTTP → server   │
 └──────────────────────────────────────────────┘
@@ -38,7 +33,7 @@
 ### 1. 环境要求
 
 - Rust 1.75+
-- Python 3（模拟器/串口桥接）
+- Python 3（串口桥接）
 - SQLite（自动创建）
 - Tailscale（可选，用于远程 Funnel 接入）
 
@@ -64,18 +59,6 @@ nohup ./target/debug/agri-server > /tmp/agri-server.log 2>&1 &
 访问 http://localhost:3001
 
 ### 4. 数据接入
-
-**HTTP 模拟器（推荐）**：
-
-```bash
-python3 scripts/simulate_http.py
-```
-
-**MQTT 模拟器**：
-
-```bash
-python3 scripts/simulate_node.py
-```
 
 **串口桥接（真实 ESP32）**：
 
@@ -175,8 +158,6 @@ esp32-firmware/src/     # ESP32 固件
 └── main.ino            # HTTP+Funnel 模式
 
 scripts/                # 工具脚本
-├── simulate_http.py    # HTTP 模拟器
-├── simulate_node.py    # MQTT 模拟器
 └── serial_bridge.py    # 串口桥接
 
 agri-core/migrations/   # 数据库迁移（单一来源）

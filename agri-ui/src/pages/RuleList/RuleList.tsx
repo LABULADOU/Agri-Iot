@@ -86,9 +86,15 @@ const RuleList: React.FC = () => {
 
   const columns = [
     { title: '规则名称', dataIndex: 'name', key: 'name' },
-    { title: '触发类型', dataIndex: 'triggerType', key: 'triggerType', render: (t: string) => <Tag color={t === 'schedule' ? 'blue' : 'green'}>{t === 'schedule' ? '定时' : '条件'}</Tag> },
+    { title: '触发类型', key: 'triggerType', render: (_: unknown, record: Rule) => {
+      const t = record.triggerType || record.trigger_type;
+      return <Tag color={t === 'schedule' ? 'blue' : 'green'}>{t === 'schedule' ? '定时' : '条件'}</Tag>;
+    }},
     { title: '状态', dataIndex: 'enabled', key: 'enabled', render: (enabled: boolean) => <Tag color={enabled ? 'success' : 'default'}>{enabled ? '启用' : '禁用'}</Tag> },
-    { title: '创建时间', dataIndex: 'createdAt', key: 'createdAt', render: (t: string) => t ? new Date(t).toLocaleString('zh-CN') : '-' },
+    { title: '创建时间', key: 'createdAt', render: (_: unknown, record: Rule) => {
+      const t = record.createdAt || record.created_at;
+      return t ? new Date(t).toLocaleString('zh-CN') : '-';
+    }},
     {
       title: '操作',
       key: 'action',
@@ -127,7 +133,7 @@ const RuleList: React.FC = () => {
           <Form.Item name="name" label="规则名称" rules={[{ required: true }]}>
             <Input />
           </Form.Item>
-          <Form.Item name="triggerType" label="触发类型" rules={[{ required: true }]}>
+          <Form.Item name="trigger_type" label="触发类型" rules={[{ required: true }]}>
             <Select>
               <Select.Option value="schedule">定时触发</Select.Option>
               <Select.Option value="condition">条件触发</Select.Option>

@@ -1,11 +1,12 @@
 import { create } from 'zustand';
-import type { Zone, SensorNode, WeatherData } from '../types';
+import type { Zone, SensorNode, Assessment, ControlCase } from '../types';
 import { zoneApi, nodeApi } from '../services/api';
-import { heweatherApi } from '../services/weather';
 
 interface ZoneStore {
   zones: Zone[];
   currentZone: Zone | null;
+  currentAssessment: Assessment | null;
+  similarCases: ControlCase[];
   nodes: SensorNode[];
   loading: boolean;
   error: string | null;
@@ -15,11 +16,15 @@ interface ZoneStore {
   updateZone: (id: string, data: Partial<Zone>) => Promise<void>;
   deleteZone: (id: string) => Promise<void>;
   fetchNodes: (zoneId?: string) => Promise<void>;
+  fetchAssessment: (areaId: string) => Promise<void>;
+  fetchSimilarCases: (areaId: string) => Promise<void>;
 }
 
 export const useZoneStore = create<ZoneStore>((set) => ({
   zones: [],
   currentZone: null,
+  currentAssessment: null,
+  similarCases: [],
   nodes: [],
   loading: false,
   error: null,
@@ -75,27 +80,28 @@ export const useZoneStore = create<ZoneStore>((set) => ({
       set({ error: '获取节点列表失败', loading: false });
     }
   },
-}));
 
-interface WeatherStore {
-  current: WeatherData | null;
-  loading: boolean;
-  error: string | null;
-  fetchWeather: (location?: string) => Promise<void>;
-}
-
-export const useWeatherStore = create<WeatherStore>((set) => ({
-  current: null,
-  loading: false,
-  error: null,
-
-  fetchWeather: async (location?: string) => {
-    set({ loading: true, error: null });
+  fetchAssessment: async (areaId: string) => {
     try {
-      const weather = await heweatherApi.getWeather(location || '101010100');
-      set({ current: weather, loading: false });
+      const res = await fetch('/api/v1/ai/assess', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ area_id: areaId }),
+      });
+      const data = await res.json() as Assessment;
+      set({ currentAssessment: data });
     } catch {
-      set({ error: '获取天气数据失败', loading: false });
+      set({ currentAssessment: null });
+    }
+  },
+
+  fetchSimilarCases: async (areaId: string) => {
+    try {
+      const res = await fetch(`/api/v1/ai/knowledge/cases?area_id=${areaId}`);
+      const data = await res.json() as ControlCase[];
+      set({ similarCases: data || [] });
+    } catch {
+      set({ similarCases: [] });
     }
   },
 }));

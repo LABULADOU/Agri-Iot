@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Card, Tabs, Table, Button, Space, Modal, Form, Input, InputNumber, message, Typography, Row, Col, Select } from 'antd';
 import { EditOutlined, SettingOutlined } from '@ant-design/icons';
 import { zoneApi } from '../../services/api';
-import type { Zone, ComfortConfig } from '../../types';
+import type { Zone } from '../../types';
 import styles from './Settings.module.css';
 
 const { Title, Text } = Typography;
@@ -32,18 +32,16 @@ const Settings: React.FC = () => {
 
   const handleEdit = (zone: Zone) => {
     setEditingZone(zone);
+    const cc = zone.comfortConfig ?? { airTemp: { min: 18, max: 28 }, airHumidity: { min: 60, max: 80 }, soilTemp: { min: 15, max: 25 }, soilMoisture: { min: 40, max: 70 }, ecValue: { min: 1.5, max: 3.5 } };
     form.setFieldsValue({
       ...zone,
-      'comfortConfig.airTemp.min': zone.comfortConfig.airTemp.min,
-      'comfortConfig.airTemp.max': zone.comfortConfig.airTemp.max,
-      'comfortConfig.airHumidity.min': zone.comfortConfig.airHumidity.min,
-      'comfortConfig.airHumidity.max': zone.comfortConfig.airHumidity.max,
-      'comfortConfig.soilTemp.min': zone.comfortConfig.soilTemp.min,
-      'comfortConfig.soilTemp.max': zone.comfortConfig.soilTemp.max,
-      'comfortConfig.soilMoisture.min': zone.comfortConfig.soilMoisture.min,
-      'comfortConfig.soilMoisture.max': zone.comfortConfig.soilMoisture.max,
-      'comfortConfig.ecValue.min': zone.comfortConfig.ecValue.min,
-      'comfortConfig.ecValue.max': zone.comfortConfig.ecValue.max,
+      comfortConfig: {
+        airTemp: { min: cc.airTemp.min, max: cc.airTemp.max },
+        airHumidity: { min: cc.airHumidity.min, max: cc.airHumidity.max },
+        soilTemp: { min: cc.soilTemp.min, max: cc.soilTemp.max },
+        soilMoisture: { min: cc.soilMoisture.min, max: cc.soilMoisture.max },
+        ecValue: { min: cc.ecValue.min, max: cc.ecValue.max },
+      },
     });
     setModalVisible(true);
   };
@@ -51,14 +49,7 @@ const Settings: React.FC = () => {
   const handleSubmit = async () => {
     try {
       const values = await form.validateFields();
-      const comfortConfig: ComfortConfig = {
-        airTemp: { min: values['comfortConfig.airTemp.min'], max: values['comfortConfig.airTemp.max'] },
-        airHumidity: { min: values['comfortConfig.airHumidity.min'], max: values['comfortConfig.airHumidity.max'] },
-        soilTemp: { min: values['comfortConfig.soilTemp.min'], max: values['comfortConfig.soilTemp.max'] },
-        soilMoisture: { min: values['comfortConfig.soilMoisture.min'], max: values['comfortConfig.soilMoisture.max'] },
-        ecValue: { min: values['comfortConfig.ecValue.min'], max: values['comfortConfig.ecValue.max'] },
-      };
-      await zoneApi.update(editingZone!.id, { ...values, comfortConfig });
+      await zoneApi.update(editingZone!.id, values);
       message.success('保存成功');
       setModalVisible(false);
       fetchZones();
@@ -69,12 +60,12 @@ const Settings: React.FC = () => {
 
   const columns = [
     { title: '区域名称', dataIndex: 'name', key: 'name' },
-    { title: '作物类型', dataIndex: 'cropType', key: 'cropType' },
-    { title: '空气温度', key: 'airTemp', render: (_: unknown, record: Zone) => `${record.comfortConfig.airTemp.min} ~ ${record.comfortConfig.airTemp.max}℃` },
-    { title: '空气湿度', key: 'airHumidity', render: (_: unknown, record: Zone) => `${record.comfortConfig.airHumidity.min} ~ ${record.comfortConfig.airHumidity.max}%` },
-    { title: '土壤温度', key: 'soilTemp', render: (_: unknown, record: Zone) => `${record.comfortConfig.soilTemp.min} ~ ${record.comfortConfig.soilTemp.max}℃` },
-    { title: '土壤湿度', key: 'soilMoisture', render: (_: unknown, record: Zone) => `${record.comfortConfig.soilMoisture.min} ~ ${record.comfortConfig.soilMoisture.max}%` },
-    { title: 'EC值', key: 'ecValue', render: (_: unknown, record: Zone) => `${record.comfortConfig.ecValue.min} ~ ${record.comfortConfig.ecValue.max} dS/m` },
+    { title: '作物类型', key: 'cropType', render: (_: unknown, record: Zone) => record.cropType ?? '--' },
+    { title: '空气温度', key: 'airTemp', render: (_: unknown, record: Zone) => record.comfortConfig ? `${record.comfortConfig.airTemp.min} ~ ${record.comfortConfig.airTemp.max}℃` : '--' },
+    { title: '空气湿度', key: 'airHumidity', render: (_: unknown, record: Zone) => record.comfortConfig ? `${record.comfortConfig.airHumidity.min} ~ ${record.comfortConfig.airHumidity.max}%` : '--' },
+    { title: '土壤温度', key: 'soilTemp', render: (_: unknown, record: Zone) => record.comfortConfig ? `${record.comfortConfig.soilTemp.min} ~ ${record.comfortConfig.soilTemp.max}℃` : '--' },
+    { title: '土壤湿度', key: 'soilMoisture', render: (_: unknown, record: Zone) => record.comfortConfig ? `${record.comfortConfig.soilMoisture.min} ~ ${record.comfortConfig.soilMoisture.max}%` : '--' },
+    { title: 'EC值', key: 'ecValue', render: (_: unknown, record: Zone) => record.comfortConfig ? `${record.comfortConfig.ecValue.min} ~ ${record.comfortConfig.ecValue.max} dS/m` : '--' },
     {
       title: '操作',
       key: 'action',
@@ -87,12 +78,12 @@ const Settings: React.FC = () => {
   const comfortItem = (prefix: string, unit: string) => (
     <Row gutter={8}>
       <Col span={12}>
-        <Form.Item name={[`comfortConfig.${prefix}.min`]} label="最小值" rules={[{ required: true }]}>
+        <Form.Item name={['comfortConfig', prefix, 'min']} label="最小值" rules={[{ required: true }]}>
           <InputNumber style={{ width: '100%' }} addonAfter={unit} />
         </Form.Item>
       </Col>
       <Col span={12}>
-        <Form.Item name={[`comfortConfig.${prefix}.max`]} label="最大值" rules={[{ required: true }]}>
+        <Form.Item name={['comfortConfig', prefix, 'max']} label="最大值" rules={[{ required: true }]}>
           <InputNumber style={{ width: '100%' }} addonAfter={unit} />
         </Form.Item>
       </Col>

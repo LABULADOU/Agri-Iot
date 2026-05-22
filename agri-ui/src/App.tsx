@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ConfigProvider } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import { antdTheme } from './theme/antdConfig';
 import { AppLayout } from './components/Layout';
+import { useRealtimeStore } from './stores/realtimeStore';
 import Dashboard from './pages/Dashboard';
 import ZoneDetail from './pages/ZoneDetail';
 import NodeList from './pages/NodeList';
@@ -13,6 +14,10 @@ import Settings from './pages/Settings';
 import AIDecisions from './pages/AIDecisions';
 
 const App: React.FC = () => {
+  useEffect(() => {
+    useRealtimeStore.getState().connect();
+  }, []);
+
   return (
     <ConfigProvider locale={zhCN} theme={antdTheme}>
       <BrowserRouter>

@@ -54,7 +54,6 @@
 
 ```
 ESP32 真实节点 ───HTTPS──→ Tailscale Funnel ──→ agri-server (公网可达)
-MQTT 模拟器     ───MQTT──→ rumqttd Broker   ──→ agri-server (本地)
 ESP32(串口)     ───串口──→ serial_bridge.py ─HTTP→ agri-server (USB直连)
 ```
 
@@ -184,12 +183,6 @@ cargo build -p agri-server
 
 # 或作为后台进程
 nohup ./target/debug/agri-server > /tmp/agri-server.log 2>&1 &
-
-# 模拟传感器（本地 MQTT）
-python3 scripts/simulate_node.py
-
-# 模拟传感器（HTTP 直连）
-python3 scripts/simulate_http.py
 
 # 真实 ESP32 串口桥接
 python3 scripts/serial_bridge.py /dev/ttyUSB0

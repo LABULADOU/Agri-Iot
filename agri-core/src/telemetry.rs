@@ -60,6 +60,7 @@ pub async fn process_telemetry(
 
     let now = Utc::now().timestamp();
     let mut inserted: i64 = 0;
+    let mut inserted_readings: Vec<(String, f64, String)> = Vec::new();
 
     for (device_id, _) in &devices {
         for (metric, value) in metrics {
@@ -67,8 +68,8 @@ pub async fn process_telemetry(
             let m = metric.as_str();
             let normalized = normalize_metric(m);
             if !is_known_metric(normalized) { continue; }
-            if !validate_value(normalized, val) { continue; }
             val = maybe_convert_ec(normalized, val);
+            if !validate_value(normalized, val) { continue; }
             let unit = metric_unit(normalized);
 
             if let Err(e) = sqlx::query(
@@ -85,6 +86,7 @@ pub async fn process_telemetry(
                 tracing::warn!("Failed to insert reading: {}", e);
             } else {
                 inserted += 1;
+                inserted_readings.push((normalized.to_string(), val, unit.to_string()));
             }
         }
     }
@@ -98,10 +100,14 @@ pub async fn process_telemetry(
             .ok();
 
         if let Some(tx) = event_tx {
+            let readings: Vec<serde_json::Value> = inserted_readings.iter().map(|(m, v, u)| {
+                serde_json::json!({"metric": m, "value": v, "unit": u})
+            }).collect();
             let _ = tx.send(serde_json::json!({
                 "type": "telemetry",
                 "node_id": node_id,
                 "timestamp": now,
+                "readings": readings,
             }).to_string());
         }
     }

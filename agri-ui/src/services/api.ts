@@ -1,7 +1,8 @@
 import axios from 'axios';
 import type {
   Zone, SensorNode, SensorReading, AggregatedReading,
-  AccumulatedTemp, WeatherData, ControlCommand, Device, Rule, QueryParams
+  WeatherData, WeatherForecastDay, WeatherWarning, MinutelyForecast, HourlyPrecip,
+  Device, Rule, QueryParams
 } from '../types';
 
 const api = axios.create({
@@ -9,71 +10,84 @@ const api = axios.create({
   timeout: 10000,
 });
 
-api.interceptors.response.use(
-  res => res.data,
-  err => {
-    console.error('API Error:', err);
-    return Promise.reject(err);
-  }
-);
-
-// Zone APIs
+// Zone APIs → /areas
 export const zoneApi = {
-  list: () => api.get<Zone[]>('/zones').then(res => res.data as Zone[]),
-  get: (id: string) => api.get<Zone>(`/zones/${id}`).then(res => res.data as Zone),
-  create: (data: Partial<Zone>) => api.post<Zone>('/zones', data).then(res => res.data as Zone),
-  update: (id: string, data: Partial<Zone>) => api.put<Zone>(`/zones/${id}`, data).then(res => res.data as Zone),
-  delete: (id: string) => api.delete(`/zones/${id}`),
+  list: () => api.get<Zone[]>('/areas').then(res => res.data),
+  get: (id: string) => api.get<Zone>(`/areas/${id}`).then(res => res.data),
+  create: (data: Partial<Zone>) => api.post<Zone>('/areas', data).then(res => res.data),
+  update: (id: string, data: Partial<Zone>) => api.put<Zone>(`/areas/${id}`, data).then(res => res.data),
+  delete: (id: string) => api.delete(`/areas/${id}`),
 };
 
-// Sensor Node APIs
+// Sensor Node APIs → /devices
 export const nodeApi = {
-  list: (zoneId?: string) => api.get<SensorNode[]>('/nodes', { params: zoneId ? { zone_id: zoneId } : undefined }).then(res => res.data as SensorNode[]),
-  get: (id: string) => api.get<SensorNode>(`/nodes/${id}`).then(res => res.data as SensorNode),
-  create: (data: Partial<SensorNode>) => api.post<SensorNode>('/nodes', data).then(res => res.data as SensorNode),
-  update: (id: string, data: Partial<SensorNode>) => api.put<SensorNode>(`/nodes/${id}`, data).then(res => res.data as SensorNode),
-  delete: (id: string) => api.delete(`/nodes/${id}`),
+  list: (zoneId?: string) => api.get<SensorNode[]>('/devices', { params: zoneId ? { area_id: zoneId } : undefined }).then(res => res.data),
+  get: (id: string) => api.get<SensorNode>(`/devices/${id}`).then(res => res.data),
+  create: (data: Partial<SensorNode>) => api.post<SensorNode>('/devices', data).then(res => res.data),
+  update: (id: string, data: Partial<SensorNode>) => api.put<SensorNode>(`/devices/${id}`, data).then(res => res.data),
+  delete: (id: string) => api.delete(`/devices/${id}`),
   getReadings: (id: string, params: { metric?: string; start?: string; end?: string; limit?: number }) =>
-    api.get<SensorReading[]>(`/nodes/${id}/readings`, { params }).then(res => res.data as SensorReading[]),
+    api.get<SensorReading[]>(`/devices/${id}/readings`, { params }).then(res => res.data),
 };
 
 // Aggregated Data APIs
 export const dataApi = {
-  query: (params: QueryParams) => api.get<AggregatedReading[]>('/readings/aggregated', { params }).then(res => res.data as AggregatedReading[]),
+  query: async (params: QueryParams) => {
+    if (!params.node_id) return [];
+    const queryParams: Record<string, string> = {};
+    if (params.start) queryParams.start = String(Math.floor(new Date(params.start).getTime() / 1000));
+    if (params.end) queryParams.end = String(Math.floor(new Date(params.end).getTime() / 1000));
+    queryParams.limit = '5000';
+    const raw = await api.get<SensorReading[]>(`/devices/${params.node_id}/readings`, { params: queryParams });
+    const readings = raw.data;
+    const result: AggregatedReading[] = readings
+      .filter(r => r.metric && r.value !== null)
+      .map(r => ({
+        timestamp: typeof r.timestamp === 'number'
+          ? new Date((r.timestamp as number) * 1000).toISOString()
+          : r.timestamp,
+        metric: r.metric,
+        max: r.value,
+        min: r.value,
+        avg: r.value,
+        count: 1,
+      }));
+    return result;
+  },
 };
 
-// Accumulated Temperature APIs
-export const accTempApi = {
-  list: (zoneId: string, params?: { start?: string; end?: string }) =>
-    api.get<AccumulatedTemp[]>(`/zones/${zoneId}/accumulated-temp`, { params }).then(res => res.data as AccumulatedTemp[]),
-};
-
-// Weather APIs
+// Weather APIs — returns raw QWeather JSON from backend proxy
 export const weatherApi = {
-  getNow: (location?: string) => api.get<WeatherData>('/weather/now', { params: { location } }).then(res => res.data as WeatherData),
-  getForecast: (days: number = 3) => api.get<WeatherData>('/weather/forecast', { params: { days } }).then(res => res.data as WeatherData),
+  getNow: (location: string = '101010100') =>
+    api.get<{ code: string; now: Record<string, string> }>('/weather/now', { params: { location } }).then(res => res.data),
+  getForecast3d: (location: string = '101010100') =>
+    api.get<{ code: string; daily: Record<string, string>[] }>('/weather/3d', { params: { location } }).then(res => res.data),
+  getMinutely: (location: string = '101010100') =>
+    api.get<{ code: string; summary: string; hourly: HourlyPrecip[] }>('/weather/minutely', { params: { location } }).then(res => res.data),
+  getWarning: (location: string = '101010100') =>
+    api.get<{ code: string; warning?: Array<Record<string, string>> }>('/weather/warning', { params: { location } }).then(res => res.data),
 };
 
-// Control APIs
+// Control APIs → use device command endpoint
 export const controlApi = {
-  sendCommand: (data: ControlCommand) => api.post('/control/command', data),
-  getStatus: (nodeId: string) => api.get(`/nodes/${nodeId}/controls`),
+  sendCommand: (deviceId: string, command: string, params?: Record<string, unknown>) =>
+    api.post(`/devices/${deviceId}/command`, { command, params }),
 };
 
 // Device APIs
 export const deviceApi = {
-  list: () => api.get<Device[]>('/devices').then(res => res.data as Device[]),
-  get: (id: string) => api.get<Device>(`/devices/${id}`).then(res => res.data as Device),
-  sendCommand: (id: string, command: string, payload?: Record<string, unknown>) =>
-    api.post(`/devices/${id}/command`, { command, payload }),
+  list: () => api.get<Device[]>('/devices').then(res => res.data),
+  get: (id: string) => api.get<Device>(`/devices/${id}`).then(res => res.data),
+  sendCommand: (id: string, command: string, params?: Record<string, unknown>) =>
+    api.post(`/devices/${id}/command`, { command, params }),
 };
 
 // Rule APIs
 export const ruleApi = {
-  list: () => api.get<Rule[]>('/rules').then(res => res.data as Rule[]),
-  get: (id: string) => api.get<Rule>(`/rules/${id}`).then(res => res.data as Rule),
-  create: (data: Partial<Rule>) => api.post<Rule>('/rules', data).then(res => res.data as Rule),
-  update: (id: string, data: Partial<Rule>) => api.put<Rule>(`/rules/${id}`, data).then(res => res.data as Rule),
+  list: () => api.get<Rule[]>('/rules').then(res => res.data),
+  get: (id: string) => api.get<Rule>(`/rules/${id}`).then(res => res.data),
+  create: (data: Partial<Rule>) => api.post<Rule>('/rules', data).then(res => res.data),
+  update: (id: string, data: Partial<Rule>) => api.put<Rule>(`/rules/${id}`, data).then(res => res.data),
   delete: (id: string) => api.delete(`/rules/${id}`),
 };
 

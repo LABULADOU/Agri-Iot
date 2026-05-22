@@ -3,7 +3,6 @@ import { Layout, Menu, Tooltip } from 'antd';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   DashboardOutlined,
-  AppstoreOutlined,
   DatabaseOutlined,
   SettingOutlined,
   AlertOutlined,
@@ -21,7 +20,6 @@ interface MenuItem {
 
 const menuItems: MenuItem[] = [
   { key: '/', icon: <DashboardOutlined />, label: '总览' },
-  { key: '/zones', icon: <AppstoreOutlined />, label: '区域' },
   { key: '/query', icon: <DatabaseOutlined />, label: '数据' },
   { key: '/ai', icon: <RobotOutlined />, label: 'AI 决策' },
   { key: '/automation', icon: <AlertOutlined />, label: '自动化' },

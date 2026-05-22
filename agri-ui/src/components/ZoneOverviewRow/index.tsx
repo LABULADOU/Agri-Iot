@@ -14,13 +14,16 @@ const statusColors: Record<string, string> = {
 
 interface ZoneOverviewRowProps {
   zone: Zone;
+  nodeName?: string;
   assessment?: { score: number; status: string };
   onlineCount: number;
   totalCount: number;
   latestReadings?: {
     airTemp?: number;
     humidity?: number;
+    soilTemp?: number;
     soilMoisture?: number;
+    ec?: number;
   };
   status?: string;
   onClick?: () => void;
@@ -28,6 +31,7 @@ interface ZoneOverviewRowProps {
 
 const ZoneOverviewRow: React.FC<ZoneOverviewRowProps> = ({
   zone,
+  nodeName,
   assessment,
   onlineCount,
   totalCount,
@@ -44,9 +48,11 @@ const ZoneOverviewRow: React.FC<ZoneOverviewRowProps> = ({
       onClick={onClick}
     >
       <span className={styles.dot} style={{ background: isOffline ? statusColors.offline : statusColors[status] }} />
-      <span className={styles.name}>
+      <span className={styles.zoneCol}>
         <Text strong>{zone.name}</Text>
-        <Text type="secondary" className={styles.crop}>{zone.cropType}</Text>
+      </span>
+      <span className={styles.nodeCol}>
+        <Text>{nodeName || zone.cropType || '--'}</Text>
       </span>
       <span className={styles.metric}>
         <Text>{latestReadings.airTemp?.toFixed(1) ?? '--'}℃</Text>
@@ -55,7 +61,13 @@ const ZoneOverviewRow: React.FC<ZoneOverviewRowProps> = ({
         <Text>{latestReadings.humidity?.toFixed(0) ?? '--'}%</Text>
       </span>
       <span className={styles.metric}>
+        <Text>{latestReadings.soilTemp?.toFixed(1) ?? '--'}℃</Text>
+      </span>
+      <span className={styles.metric}>
         <Text>{latestReadings.soilMoisture?.toFixed(0) ?? '--'}%</Text>
+      </span>
+      <span className={styles.metric}>
+        <Text>{latestReadings.ec?.toFixed(2) ?? '--'}mS/cm</Text>
       </span>
       <span className={styles.nodes}>
         <Badge status={isOffline ? 'error' : 'success'} />

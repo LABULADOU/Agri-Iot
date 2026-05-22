@@ -34,18 +34,12 @@ const NodeList: React.FC = () => {
   const handleAdd = () => {
     setEditingNode(null);
     form.resetFields();
-    form.setFieldsValue({ ventRange: { min: 0, max: 100 } });
     setModalVisible(true);
   };
 
   const handleEdit = (node: SensorNode) => {
     setEditingNode(node);
-    form.setFieldsValue({
-      ...node,
-      hasIrrigation: node.hasIrrigation || false,
-      hasSideVent: node.hasSideVent || false,
-      hasRoofVent: node.hasRoofVent || false,
-    });
+    form.setFieldsValue({ ...node });
     setModalVisible(true);
   };
 
@@ -84,16 +78,17 @@ const NodeList: React.FC = () => {
     { title: '节点名称', dataIndex: 'name', key: 'name' },
     { title: '节点ID', dataIndex: 'id', key: 'id', width: 200 },
     { title: '状态', dataIndex: 'status', key: 'status', render: (s: string) => <Tag color={s === 'online' ? 'success' : 'default'}>{s === 'online' ? '在线' : '离线'}</Tag> },
-    { title: '控制功能', key: 'controls', render: (_: unknown, record: SensorNode) => (
-      <Space size={4}>
-        {record.hasIrrigation && <Tag color="blue">灌溉</Tag>}
-        {record.hasSideVent && <Tag color="green">侧通风</Tag>}
-        {record.hasRoofVent && <Tag color="orange">顶通风</Tag>}
-        {!record.hasIrrigation && !record.hasSideVent && !record.hasRoofVent && <Tag>无</Tag>}
-      </Space>
-    )},
-    { title: '量程范围', key: 'range', render: (_: unknown, record: SensorNode) => `${record.ventRange.min}% - ${record.ventRange.max}%` },
-    { title: '最后在线', dataIndex: 'lastSeen', key: 'lastSeen', render: (t: string) => t ? new Date(t).toLocaleString('zh-CN') : '-' },
+    { title: '控制功能', key: 'controls', render: (_: unknown, record: SensorNode) => {
+      const caps = record.capabilities ?? [];
+      return (
+        <Space size={4}>
+          {caps.includes('actuator') && <Tag color="blue">执行器</Tag>}
+          {caps.includes('sensor') && <Tag color="green">传感器</Tag>}
+          {caps.length === 0 && <Tag>无</Tag>}
+        </Space>
+      );
+    }},
+    { title: '最后在线', key: 'lastSeen', render: (_: unknown, record: SensorNode) => record.updated_at ? new Date(Number(record.updated_at) * 1000).toLocaleString('zh-CN') : '-' },
     {
       title: '操作',
       key: 'action',
@@ -145,44 +140,12 @@ const NodeList: React.FC = () => {
             </Col>
           </Row>
           <Row gutter={16}>
-            <Col span={8}>
-              <Form.Item name="hasIrrigation" label="灌溉控制" valuePropName="checked">
-                <Select>
-                  <Select.Option value={true}>有</Select.Option>
-                  <Select.Option value={false}>无</Select.Option>
+            <Col span={24}>
+              <Form.Item name="capabilities" label="能力">
+                <Select mode="multiple" placeholder="选择设备能力">
+                  <Select.Option value="sensor">传感器</Select.Option>
+                  <Select.Option value="actuator">执行器</Select.Option>
                 </Select>
-              </Form.Item>
-            </Col>
-            <Col span={8}>
-              <Form.Item name="hasSideVent" label="侧通风控制" valuePropName="checked">
-                <Select>
-                  <Select.Option value={true}>有</Select.Option>
-                  <Select.Option value={false}>无</Select.Option>
-                </Select>
-              </Form.Item>
-            </Col>
-            <Col span={8}>
-              <Form.Item name="hasRoofVent" label="顶部通风控制" valuePropName="checked">
-                <Select>
-                  <Select.Option value={true}>有</Select.Option>
-                  <Select.Option value={false}>无</Select.Option>
-                </Select>
-              </Form.Item>
-            </Col>
-          </Row>
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item label="量程范围" required>
-                <Space>
-                  <Form.Item name={['ventRange', 'min']} noStyle rules={[{ required: true }]}>
-                    <Input type="number" placeholder="最小值" style={{ width: 100 }} />
-                  </Form.Item>
-                  <span>-</span>
-                  <Form.Item name={['ventRange', 'max']} noStyle rules={[{ required: true }]}>
-                    <Input type="number" placeholder="最大值" style={{ width: 100 }} />
-                  </Form.Item>
-                  <span>%</span>
-                </Space>
               </Form.Item>
             </Col>
           </Row>
