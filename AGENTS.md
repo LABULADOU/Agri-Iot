@@ -116,22 +116,51 @@ ESP32 (DHT22 + RS485 土壤三合一)
 - 服务端 `get_pending_commands` 返回 `id` 为整数，ESP32 用 `const char*` 接收时 null → `LoadProhibited` panic
 - 修复：`routes.rs:274` → `"id": r.0.to_string()`
 
-## 前端（2026-05-20）
+## 前端（2026-05-22）
 
 ### React SPA（生产）
 - `agri-ui/` 为 Vite + React + TypeScript + Ant Design + ECharts 项目
 - 预构建产物部署在 `agri-server/static/`
 - 通过 SSE `/api/v1/events` 接收实时数据推送
+- 后端 metric 归一化：ESP32 发送 `temperature`/`humidity`，前端指标名需与 DB 一致
+
+### 实时数据流
+```
+ESP32 → POST /api/v1/telemetry → process_telemetry() → DB写入
+  → broadcast::Sender → SSE → sseService → realtimeStore(Map<node_id, readings>)
+  → Dashboard (nodeReadings SSE patch)
+  → ZoneDetail (useRealtimeStore merge)
+```
+
+### 天气面板
+- TopBar 内嵌双行布局（row1 状态栏 + row2 天气信息）
+- 数据源：和风天气免费套餐（5分钟轮询）
+- 推荐策略：`/weather/now` + `/weather/3d` + `/weather/24h`(代替minutely)
+- `safe_proxy()` 处理免费套餐 403 → 200+空数据（minutely/warning）
+- 天气刷新时间显示在 row1 左侧
 
 ### 完成页面
-- Dashboard (ECharts)
-- 区域列表/详情 (ZoneList, ZoneDetail)
+- Dashboard (SSE实时更新 + 健康评分 + 区域概览)
+- 区域详情 (ZoneDetail, 实时数据流)
 - 节点列表 (NodeList)
 - 规则管理 (RuleList)
-- 数据查询 (DataQuery)
+- 数据查询 (DataQuery, 多指标折线图)
+- AI 决策 (AIDecisions)
 - 系统设置 (Settings)
-- 天气面板 (WeatherPanel)
 - 设备控制面板 (ControlPanel)
+
+### 关键组件
+| 组件 | 路径 | 用途 |
+|------|------|------|
+| `TopBar` | `components/Layout/` | 天气面板+ SSE状态 |
+| `HealthScoreBar` | `components/` | 健康评分进度条 + 趋势 |
+| `EmergencyBanner` | `components/` | 紧急告警横幅 |
+| `MetricRow` | `components/` | 单指标显示条（值/进度/状态） |
+| `ControlPanel` | `components/` | 开关/卷膜器控制（发 `params`） |
+| `LineChart` | `components/Charts/` | ECharts 多指标折线图 |
+| `dashboardStore` | `stores/` | 数据中枢（SSE+fetch+AI评估） |
+| `realtimeStore` | `stores/` | SSE 实时读数缓存 |
+| `echartsTheme` | `theme/` | 指标颜色/标签映射 |
 
 ## 后端 API 端点
 
@@ -201,6 +230,8 @@ Tailscale Funnel: https://zero-1.taile2b316.ts.net
 - LLD 链接器与工具链版本可能不兼容，`cargo clean` 后用 `CARGO_BUILD_JOBS=1` 可缓解内存不足
 - 内存仅 1.8GB，并行 rustc 进程容易 OOM，编译需单线程或低并行度
 - `ObsidianKnowledge::safe_path()` 需要 vault 路径存在才能 canonicalize，否则回退到字符串过滤
+- 前端 metric 名须与 DB 一致（`temperature` vs `air_temp`），`dataApi.query()` 已不传 metric 参数，由前端 `useMemo` 过滤
+- QWeather 免费套餐不支持 `/weather/minutely` 和 `/weather/warning`，后端 `safe_proxy()` 返回 200+空数据
 
 ## 审查修复记录（2026-05-19）
 
@@ -250,4 +281,42 @@ Tailscale Funnel: https://zero-1.taile2b316.ts.net
 删除: agri-frontend/                      # 整个目录
 删除: migrations/                         # 根目录重复迁移
 文档: README.md, AGENTS.md                # 更新结构和测试统计
+```
+
+## 实时遥测与 UI 完善（2026-05-22）
+
+### 核心变更
+| # | 变更 | 说明 |
+|---|------|------|
+| 1 | **SSE 事件携带 readings** | `telemetry.rs` 广播包含 `readings: [{metric,value,unit}]` |
+| 2 | **dashboardStore SSE 订阅** | `fetchAll()` 启动 SSE 监听，`type:"telemetry"` 事件原地 patch `nodeReadings` |
+| 3 | **TopBar 天气面板重写** | 双行布局：row1=时间+SSE状态，row2=实况+3天预报+逐时降水+预警 |
+| 4 | **QWeather 免费套餐兼容** | `safe_proxy()` 返回 200+空数据代替 502；minutely 替换为 24h 接口 |
+| 5 | **ZoneDetail 实时数据** | 订阅 `useRealtimeStore.readings`，SSE 推送时自动合并最新值 |
+| 6 | **DataQuery 指标名修正** | `air_temp→temperature` 等与 DB 对齐，图表不再空白 |
+| 7 | **DataQuery 折线图切换** | `key` + `notMerge: true`，取消勾选时正确隐藏折线 |
+| 8 | **echartsTheme 独立** | 5 种不同颜色映射，metric 标签集中管理 |
+| 9 | **命令 422 修复** | `deviceApi.sendCommand` 发送 `params` 字段（非 `payload`），与后端 `CommandPayload` 对齐 |
+| 10 | **模拟器彻底清除** | `simulate_http.py`/`simulate_node.py` 删除，数据库 ~3万条模拟数据清空 |
+
+### 变更文件清单
+```
+新增: agri-ui/src/theme/echartsTheme.ts     # 指标颜色/标签 ECharts 主题
+新增: API-INTEGRATION-PLAN.md               # 第三方 API 集成评估
+修改: agri-core/src/telemetry.rs            # SSE 广播增加 readings 数组
+修改: agri-server/src/weather.rs            # safe_proxy() 免费套餐容错
+修改: agri-ui/src/stores/dashboardStore.ts  # SSE 订阅 + healthTrend
+修改: agri-ui/src/stores/realtimeStore.ts   # 实时读数缓存 (Map<nodeId, readings>)
+修改: agri-ui/src/components/Layout/TopBar.tsx/.css  # 天气面板完整重写
+修改: agri-ui/src/pages/ZoneDetail/ZoneDetail.tsx    # 实时数据流接入
+修改: agri-ui/src/pages/DataQuery/DataQuery.tsx      # 指标名修复 + 图表切换
+修改: agri-ui/src/components/Charts/LineChart.tsx    # notMerge 模式
+修改: agri-ui/src/components/ControlPanel/ControlPanel.tsx  # params 字段名
+修改: agri-ui/src/services/api.ts             # dataApi.query() 端点修正 + params 字段
+删除: agri-ui/src/services/weather.ts         # 旧版 HeWeather 服务
+删除: agri-ui/src/components/WeatherPanel/    # 废弃天气组件
+删除: agri-ui/src/pages/ZoneList/             # 废弃区域列表页面
+删除: scripts/simulate_http.py                # HTTP 模拟器
+删除: scripts/simulate_node.py                # MQTT 模拟器
+删除: agri-server/static/assets/旧bundle      # 旧构建产物
 ```

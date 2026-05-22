@@ -83,6 +83,7 @@ http://172.20.10.2:3001 (内网)
 | 方法             | 路径                                | 说明              |
 | GET            | `/api/v1/dashboard/summary`       | 仪表盘汇总           |
 | GET            | `/api/v1/dashboard/area-readings` | 分区图表数据          |
+| GET            | `/api/v1/dashboard/node-readings` | 节点实时数据          |
 | GET/POST       | `/api/v1/devices`                 | 设备列表/创建（UPSERT） |
 | GET/PUT/DELETE | `/api/v1/devices/:id`             | 设备详情/更新/删除      |
 | GET            | `/api/v1/devices/:id/readings`    | 传感器历史数据         |
@@ -114,6 +115,9 @@ http://172.20.10.2:3001 (内网)
 | GET            | `/api/v1/weather/indices`         | 生活指数            |
 | GET            | `/api/v1/weather/warning`         | 灾害预警            |
 | GET            | `/api/v1/weather/geo`             | 城市查找            |
+
+> SSE 事件由 `POST /api/v1/telemetry` 触发，通过 `broadcast::Sender` 推送到所有 SSE 客户端。
+> 天气接口为和风天气 API 的反向代理，`safe_proxy()` 对免费套餐不支持的端点返回空数据而非 502。
 
 ## 项目结构
 
