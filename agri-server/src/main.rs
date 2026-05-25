@@ -82,8 +82,21 @@ async fn main() -> Result<()> {
             tracing::error!("Failed to start mosquitto: {}. Is mosquitto installed?", e);
             tracing::info!("Falling back to embedded broker (rumqttd)...");
             std::thread::spawn(move || {
-                if let Err(e2) = agri_mqtt::broker::start_broker(broker_port) {
-                    tracing::error!("Embedded broker also failed: {}", e2);
+                match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    agri_mqtt::broker::start_broker(broker_port)
+                })) {
+                    Ok(Ok(())) => tracing::info!("Embedded broker started successfully"),
+                    Ok(Err(e)) => tracing::error!("Embedded broker failed: {}", e),
+                    Err(panic) => {
+                        let msg = if let Some(s) = panic.downcast_ref::<&str>() {
+                            s.to_string()
+                        } else if let Some(s) = panic.downcast_ref::<String>() {
+                            s.clone()
+                        } else {
+                            "unknown panic".to_string()
+                        };
+                        tracing::error!("Embedded broker thread panicked: {}", msg);
+                    }
                 }
             });
         }
@@ -150,7 +163,7 @@ async fn main() -> Result<()> {
                         Ok::<_, Infallible>(Response::builder()
                             .header("Content-Type", content_type(ext))
                             .body(Body::from(data))
-                            .unwrap())
+                            .expect("valid response builder"))
                     }
                     Err(_) => {
                         let idx = dir.join("index.html");
@@ -158,11 +171,11 @@ async fn main() -> Result<()> {
                             Ok(data) => Ok(Response::builder()
                                 .header("Content-Type", "text/html; charset=utf-8")
                                 .body(Body::from(data))
-                                .unwrap()),
+                                .expect("valid response builder")),
                             Err(_) => Ok(Response::builder()
                                 .status(StatusCode::NOT_FOUND)
                                 .body(Body::from("Not Found"))
-                                .unwrap()),
+                                .expect("valid response builder")),
                         }
                     }
                 }

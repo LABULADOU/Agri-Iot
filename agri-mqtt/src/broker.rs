@@ -4,7 +4,14 @@ use std::collections::HashMap;
 use std::net::SocketAddr;
 use tracing::info;
 
-pub fn create_broker_config(port: u16) -> Config {
+pub fn start_broker(port: u16) -> Result<()> {
+    let mut config = Config::default();
+    config.id = 0;
+    config.router.max_connections = 1000;
+    config.router.max_outgoing_packet_count = 1000;
+    config.router.max_segment_size = 100_000;
+    config.router.max_segment_count = 10;
+
     let mut servers = HashMap::new();
     servers.insert(
         "tcp".to_string(),
@@ -22,20 +29,12 @@ pub fn create_broker_config(port: u16) -> Config {
             },
         },
     );
+    config.v4 = servers;
+    config.console.listen = format!("127.0.0.1:{}", port + 1);
 
-    Config {
-        id: 0,
-        v4: servers,
-        ..Default::default()
-    }
-}
+    info!("MQTT Broker starting on port {} (max_connections={})", port, config.router.max_connections);
 
-pub fn start_broker(port: u16) -> Result<()> {
-    let config = create_broker_config(port);
     let mut broker = Broker::new(config);
-
-    info!("MQTT Broker starting on port {}", port);
-
     broker.start()?;
 
     Ok(())

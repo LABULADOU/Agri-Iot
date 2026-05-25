@@ -224,15 +224,26 @@ async fn send_command(
     State(state): State<AppState>, Path(id): Path<String>,
     Json(cmd): Json<CommandPayload>,
 ) -> impl IntoResponse {
-    let device: Option<(String, Option<String>)> = sqlx::query_as::<_, (String, Option<String>)>(
+    let device: Option<(String, Option<String>)> = match sqlx::query_as::<_, (String, Option<String>)>(
         "SELECT status, capabilities FROM devices WHERE id = ?"
-    ).bind(&id).fetch_optional(&state.pool).await.ok().flatten();
+    ).bind(&id).fetch_optional(&state.pool).await {
+        Ok(d) => d,
+        Err(e) => {
+            tracing::warn!("DB error fetching device {}: {}", id, e);
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": "Database error"}))).into_response();
+        }
+    };
     let (status, capabilities_json) = match device {
         Some(d) => d,
         None => return (StatusCode::NOT_FOUND, Json(serde_json::json!({"error": "Device not found"}))).into_response(),
     };
-    let has_actuator = capabilities_json.as_ref().and_then(|c| serde_json::from_str::<Vec<String>>(c).ok())
-        .map_or(false, |caps| caps.contains(&"actuator".to_string()));
+    let has_actuator = capabilities_json.as_ref().map_or(false, |c| {
+        serde_json::from_str::<Vec<String>>(c).map(|caps| caps.contains(&"actuator".to_string()))
+            .unwrap_or_else(|e| {
+                tracing::warn!("Failed to parse capabilities for device {}: {}", id, e);
+                false
+            })
+    });
     if !has_actuator {
         return (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": "Device does not support actuator commands"}))).into_response();
     }
