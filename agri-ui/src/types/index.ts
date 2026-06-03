@@ -201,6 +201,13 @@ export interface MinutelyForecast {
   hourly: HourlyPrecip[];
 }
 
+export interface CityLocation {
+  name: string;
+  id: string;
+  adm1: string;
+  country: string;
+}
+
 export interface ControlCommand {
   deviceId: string;
   command: 'irrigation' | 'side_vent' | 'roof_vent';

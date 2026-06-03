@@ -16,16 +16,16 @@ pub fn create_router(state: AppState) -> Router {
     Router::new()
         // 区域 API
         .route("/api/v1/areas", get(list_areas).post(create_area))
-        .route("/api/v1/areas/{id}", get(get_area).put(update_area).delete(delete_area))
-        .route("/api/v1/areas/{id}/crop-name", put(update_area_crop_name))
+        .route("/api/v1/areas/:id", get(get_area).put(update_area).delete(delete_area))
+        .route("/api/v1/areas/:id/crop-name", put(update_area_crop_name))
         // 作物 API
         .route("/api/v1/crops", get(list_crops).post(create_crop))
-        .route("/api/v1/crops/{id}", get(get_crop).put(update_crop).delete(delete_crop))
+        .route("/api/v1/crops/:id", get(get_crop).put(update_crop).delete(delete_crop))
         // 茬口 API
         .route("/api/v1/crop-batches", get(list_crop_batches).post(create_crop_batch))
-        .route("/api/v1/crop-batches/{id}", get(get_crop_batch).put(update_crop_batch).delete(delete_crop_batch))
+        .route("/api/v1/crop-batches/:id", get(get_crop_batch).put(update_crop_batch).delete(delete_crop_batch))
         // 查询茬口下的传感器数据
-        .route("/api/v1/crop-batches/{id}/readings", get(get_crop_batch_readings))
+        .route("/api/v1/crop-batches/:id/readings", get(get_crop_batch_readings))
         .with_state(state)
 }
 

@@ -50,3 +50,17 @@
   border-bottom: 1px solid var(--border-color-light, #F3F4F6);
   margin-bottom: var(--space-2, 8px);
 }
+
+.nodeTabs {
+  margin-bottom: var(--space-2, 8px);
+}
+
+.nodeTag {
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.2s;
+}
+
+.nodeTag:hover {
+  opacity: 0.8;
+}

@@ -11,6 +11,7 @@
 #include <ArduinoJson.h>
 #include <DHT.h>
 #include <HardwareSerial.h>
+#include <esp_task_wdt.h>
 
 // ==================== 配置 ====================
 
@@ -50,6 +51,7 @@ HardwareSerial soilSerial(2);  // UART2
 unsigned long lastRead = 0;
 unsigned long lastCommandPoll = 0;
 bool relayState = false;
+unsigned long httpReqCount = 0;
 
 // ==================== Modbus CRC16 ====================
 
@@ -120,6 +122,7 @@ bool readSoilSensor(float& outTemp, float& outMoist, float& outEC) {
                 resp[pos++] = soilSerial.read();
             }
             if (pos >= 11) break;
+            delay(1);
         }
 
         if (pos == 0) {
@@ -181,6 +184,7 @@ bool tryModbusRead(uint32_t baud, uint8_t addr, unsigned long timeout) {
             resp[pos++] = soilSerial.read();
         }
         if (pos >= 11) break;
+        delay(1);
     }
 
     if (pos >= 11 && resp[0] == addr && resp[1] == 0x03 && resp[2] == 6) {
@@ -211,6 +215,7 @@ void scanSoilSensor() {
                 Serial.printf(">> 发现传感器: 波特率 %d, 地址 0x%02X\n", soilBaud, soilAddr);
                 return;
             }
+            delay(1);
         }
     }
 
@@ -221,6 +226,7 @@ void scanSoilSensor() {
             Serial.printf(">> 发现传感器 @4800: 地址 0x%02X\n", soilAddr);
             return;
         }
+        delay(1);
     }
 
     Serial.println(">> 未找到传感器，启动硬件诊断...");
@@ -247,8 +253,13 @@ void diagnoseRS485() {
     delay(50);
 
     if (soilSerial.available()) {
-        String echo = soilSerial.readString();
-        Serial.printf("结果: UART2 回环成功 (收到 \"%s\") ✓\n", echo.c_str());
+        char echo[32];
+        size_t elen = 0;
+        while (soilSerial.available() && elen < sizeof(echo) - 1) {
+            echo[elen++] = soilSerial.read();
+        }
+        echo[elen] = '\0';
+        Serial.printf("结果: UART2 回环成功 (收到 \"%s\") ✓\n", echo);
         Serial.println("      → ESP32 侧正常，问题在 TTL485 模块或传感器");
         Serial.println("解决: 换一个 TTL485 模块试试 (淘宝几块钱)");
     } else {
@@ -292,76 +303,112 @@ void setup() {
 
 void setupWiFi() {
     Serial.printf("连接 WiFi: %s\n", WIFI_SSID);
+    WiFi.mode(WIFI_STA);
     WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
     WiFi.setAutoReconnect(true);
 
-    int timeout = 20;
-    while (WiFi.status() != WL_CONNECTED && timeout > 0) {
-        delay(500);
-        Serial.print(".");
-        timeout--;
+    for (int retry = 0; retry < 3; retry++) {
+        int timeout = 30;
+        while (WiFi.status() != WL_CONNECTED && timeout > 0) {
+            delay(500);
+            Serial.print(".");
+            timeout--;
+        }
+        if (WiFi.status() == WL_CONNECTED) {
+            Serial.printf("\nWiFi 已连接! IP: %s\n", WiFi.localIP().toString().c_str());
+            return;
+        }
+        Serial.printf("\nWiFi 连接重试 %d/3...\n", retry + 1);
     }
 
-    if (WiFi.status() == WL_CONNECTED) {
-        Serial.printf("\nWiFi 已连接! IP: %s\n", WiFi.localIP().toString().c_str());
-    } else {
-        Serial.println("\nWiFi 连接失败，进入深度休眠...");
-        ESP.deepSleep(0);
+    Serial.println("\nWiFi 连接失败，重启重试...");
+    ESP.restart();
+}
+
+// ==================== HTTP 请求工具（无 String 分配） ====================
+
+#define HTTP_RESP_BUF_SIZE 2048
+#define TLS_RECYCLE_INTERVAL 100
+
+// 定期重建 TLS client 防止内存积压
+static void ensureTlsClient() {
+    httpReqCount++;
+    if (httpReqCount >= TLS_RECYCLE_INTERVAL) {
+        client.stop();
+        client = WiFiClientSecure();
+        client.setInsecure();
+        httpReqCount = 0;
     }
 }
 
-// ==================== HTTP 请求工具 ====================
+// 从 HTTPClient 流式读取响应体到固定缓冲区
+static void readHttpBody(HTTPClient& http, char* out, size_t out_size) {
+    WiFiClient* stream = http.getStreamPtr();
+    size_t idx = 0;
+    while (stream->connected() && idx < out_size - 1) {
+        if (stream->available()) {
+            out[idx++] = stream->read();
+        }
+    }
+    out[idx] = '\0';
+}
 
-String httpGet(const char* url) {
+// HTTP GET — 返回 true 表示成功，响应写入 out 缓冲区
+bool httpGet(const char* url, char* out, size_t out_size) {
+    ensureTlsClient();
     HTTPClient http;
     http.begin(client, url);
     http.setTimeout(5000);
     int code = http.GET();
     if (code > 0) {
-        String body = http.getString();
+        readHttpBody(http, out, out_size);
         http.end();
-        return body;
+        return true;
     }
     Serial.printf("HTTP GET 失败: %d\n", code);
     http.end();
-    return "";
+    if (out_size > 0) out[0] = '\0';
+    return false;
 }
 
-String httpPost(const char* url, const char* body) {
+// HTTP POST — 返回 true 表示成功
+bool httpPost(const char* url, const char* body) {
+    ensureTlsClient();
     HTTPClient http;
     http.begin(client, url);
     http.setTimeout(5000);
     http.addHeader("Content-Type", "application/json");
     int code = http.POST(body);
     if (code > 0) {
-        String resp = http.getString();
         http.end();
-        return resp;
+        return true;
     }
     Serial.printf("HTTP POST 失败: %d\n", code);
     http.end();
-    return "";
+    return false;
 }
 
-String httpPut(const char* url, const char* body) {
+// HTTP PUT — 返回 true 表示成功
+bool httpPut(const char* url, const char* body) {
+    ensureTlsClient();
     HTTPClient http;
     http.begin(client, url);
     http.setTimeout(5000);
     http.addHeader("Content-Type", "application/json");
     int code = http.PUT(body);
     if (code > 0) {
-        String resp = http.getString();
         http.end();
-        return resp;
+        return true;
     }
     Serial.printf("HTTP PUT 失败: %d\n", code);
     http.end();
-    return "";
+    return false;
 }
 
 // ==================== 主循环 ====================
 
 void loop() {
+    esp_task_wdt_reset();
     unsigned long now = millis();
 
     // 定期采集并上报遥测
@@ -380,6 +427,8 @@ void loop() {
 // ==================== 数据采集与上报 ====================
 
 void publishTelemetry() {
+    if (WiFi.status() != WL_CONNECTED) return;
+
     StaticJsonDocument<384> doc;
     doc["node_id"] = NODE_ID;
     JsonObject metrics = doc.createNestedObject("metrics");
@@ -412,13 +461,17 @@ void publishTelemetry() {
     metrics["relay_state"] = relayState;
     metrics["rssi"] = WiFi.RSSI();
 
-    char buf[384];
-    serializeJson(doc, buf);
+    char json[384];
+    size_t n = serializeJson(doc, json, sizeof(json));
+    if (n >= sizeof(json)) {
+        Serial.println("JSON 序列化溢出!");
+        return;
+    }
 
     // 通过 HTTP POST 上报遥测
-    String url = String(API_BASE) + "/api/v1/telemetry";
-    String resp = httpPost(url.c_str(), buf);
-    bool ok = resp.length() > 0;
+    char url[128];
+    snprintf(url, sizeof(url), "%s/api/v1/telemetry", API_BASE);
+    bool ok = httpPost(url, json);
 
     Serial.printf(" | HTTP: %s\n", ok ? "成功" : "失败");
 }
@@ -428,12 +481,14 @@ void publishTelemetry() {
 void pollCommands() {
     if (WiFi.status() != WL_CONNECTED) return;
 
-    String url = String(API_BASE) + "/api/v1/commands/node/" + NODE_ID;
-    String resp = httpGet(url.c_str());
-    if (resp.length() == 0) return;
+    char url[256];
+    snprintf(url, sizeof(url), "%s/api/v1/commands/node/%s", API_BASE, NODE_ID);
+
+    char resp[HTTP_RESP_BUF_SIZE];
+    if (!httpGet(url, resp, sizeof(resp))) return;
 
     // 解析命令列表
-    StaticJsonDocument<1024> doc;
+    StaticJsonDocument<2048> doc;
     DeserializationError err = deserializeJson(doc, resp);
     if (err) {
         Serial.printf("命令 JSON 解析失败: %s\n", err.c_str());
@@ -443,6 +498,7 @@ void pollCommands() {
     JsonArray arr = doc.as<JsonArray>();
     for (JsonObject cmd : arr) {
         const char* id = cmd["id"];
+        if (!id) continue;
         const char* command = cmd["command"] | "";
         JsonObject params = cmd["params"];
 
@@ -460,8 +516,9 @@ void pollCommands() {
         }
 
         // 标记命令已执行
-        String statusUrl = String(API_BASE) + "/api/v1/commands/" + id + "/status";
-        httpPut(statusUrl.c_str(), "{\"status\":\"completed\"}");
+        char statusUrl[256];
+        snprintf(statusUrl, sizeof(statusUrl), "%s/api/v1/commands/%s/status", API_BASE, id);
+        httpPut(statusUrl, "{\"status\":\"completed\"}");
         Serial.printf("命令 %s 已确认\n", id);
     }
 }

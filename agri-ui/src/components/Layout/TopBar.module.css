@@ -32,6 +32,18 @@
   flex-shrink: 0;
 }
 
+.currentInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.locationLine {
+  font-size: 11px;
+  line-height: 1.2;
+  color: var(--text-tertiary, #9CA3AF);
+}
+
 .currentIcon {
   font-size: 28px;
   line-height: 1;
@@ -39,8 +51,8 @@
 
 .currentData {
   display: flex;
-  flex-direction: column;
-  gap: 1px;
+  align-items: baseline;
+  gap: 6px;
 }
 
 .currentTemp {

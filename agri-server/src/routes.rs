@@ -196,18 +196,17 @@ async fn list_readings(
     let has_metric = query.metric.is_some();
     let has_start = query.start.is_some();
     let has_end = query.end.is_some();
-    let has_limit = query.limit.is_some();
+    let limit = query.limit.unwrap_or(100).min(5000);
     let mut sql = String::from("SELECT id, device_id, metric, value, unit, timestamp FROM sensor_readings WHERE device_id = ?");
     if has_metric { sql.push_str(" AND metric = ?"); }
     if has_start { sql.push_str(" AND timestamp >= ?"); }
     if has_end { sql.push_str(" AND timestamp <= ?"); }
-    sql.push_str(" ORDER BY timestamp DESC");
-    if has_limit { sql.push_str(" LIMIT ?"); }
+    sql.push_str(" ORDER BY timestamp DESC LIMIT ?");
     let mut q = sqlx::query_as::<_, SensorReading>(&sql).bind(&id);
     if let Some(ref metric) = query.metric { q = q.bind(metric); }
     if let Some(start) = query.start { q = q.bind(start); }
     if let Some(end) = query.end { q = q.bind(end); }
-    if let Some(limit) = query.limit { q = q.bind(limit); }
+    q = q.bind(limit);
     let readings = q.fetch_all(&state.pool).await;
     match readings {
         Ok(rows) => {
@@ -472,7 +471,7 @@ async fn dashboard_area_readings(State(state): State<AppState>) -> Json<serde_js
 
         for (dev_id, dev_name, node_id) in &area_device_list {
             let readings = sqlx::query_as::<_, (String, f64, String, i64)>(
-                "SELECT metric, value, unit, timestamp FROM sensor_readings WHERE device_id = ? AND timestamp >= ? AND timestamp <= ? ORDER BY timestamp ASC"
+                "SELECT metric, value, unit, timestamp FROM sensor_readings WHERE device_id = ? AND timestamp >= ? AND timestamp <= ? ORDER BY timestamp ASC LIMIT 1000"
             )
             .bind(dev_id)
             .bind(time_start)
@@ -518,39 +517,26 @@ async fn dashboard_area_readings(State(state): State<AppState>) -> Json<serde_js
 }
 
 async fn dashboard_node_readings(State(state): State<AppState>) -> impl IntoResponse {
-    let now = chrono::Utc::now().timestamp();
-    let cutoff = now - 86400;
-
-    let readings = sqlx::query_as::<_, (String, String, String, f64, String, i64)>(
+    // 查每个设备的最新一条读数（group-wise max 写法兼容 SQLite）
+    let latest_readings = sqlx::query_as::<_, (String, String, String, f64, String, i64)>(
         "SELECT d.area_id, d.node_id, sr.metric, sr.value, sr.unit, sr.timestamp \
          FROM sensor_readings sr \
          INNER JOIN devices d ON sr.device_id = d.id \
          WHERE d.area_id IS NOT NULL \
-           AND sr.timestamp >= ? \
-         ORDER BY d.area_id, d.node_id, sr.metric, sr.timestamp"
+           AND sr.id IN ( \
+               SELECT MAX(sr2.id) FROM sensor_readings sr2 \
+               WHERE sr2.device_id = sr.device_id AND sr2.metric = sr.metric \
+           )"
     )
-    .bind(cutoff)
     .fetch_all(&state.pool)
     .await
     .unwrap_or_default();
 
-    let mut area_map: std::collections::BTreeMap<String, std::collections::BTreeMap<String, std::collections::BTreeMap<String, Vec<serde_json::Value>>>> = std::collections::BTreeMap::new();
-    let mut latest_map: std::collections::BTreeMap<(String, String, String), (f64, String, i64)> = std::collections::BTreeMap::new();
+    let mut node_latest: std::collections::BTreeMap<(String, String), serde_json::Map<String, serde_json::Value>> = std::collections::BTreeMap::new();
 
-    for (area_id, node_id, metric, value, unit, ts) in &readings {
-        area_map.entry(area_id.clone())
-            .or_default()
-            .entry(node_id.clone())
-            .or_default()
-            .entry(metric.clone())
-            .or_default()
-            .push(serde_json::json!({"value": value, "timestamp": ts}));
-
-        let key = (area_id.clone(), node_id.clone(), metric.clone());
-        let prev = latest_map.get(&key);
-        if prev.is_none() || prev.unwrap().2 < *ts {
-            latest_map.insert(key, (*value, unit.clone(), *ts));
-        }
+    for (area_id, node_id, metric, value, unit, ts) in &latest_readings {
+        let entry = node_latest.entry((area_id.clone(), node_id.clone())).or_default();
+        entry.insert(metric.clone(), serde_json::json!({"value": value, "unit": unit, "timestamp": ts}));
     }
 
     let mut result: Vec<serde_json::Value> = Vec::new();
@@ -563,37 +549,38 @@ async fn dashboard_node_readings(State(state): State<AppState>) -> impl IntoResp
     .unwrap_or_default();
 
     for (area_id, area_name) in &areas {
-        let mut nodes = Vec::new();
+        let mut nodes: Vec<serde_json::Value> = Vec::new();
+        let mut node_number = 0;
 
-        if let Some(node_map) = area_map.get(area_id) {
-            let mut node_ids: Vec<&String> = node_map.keys().collect();
-            node_ids.sort();
+        let known_metrics = ["temperature", "humidity", "soil_moisture", "soil_temperature", "ec", "light"];
 
-            for (node_idx, node_id) in node_ids.iter().enumerate() {
-                let metric_map = &node_map[*node_id];
+        // 收集此区域所有的 node_id
+        let mut area_nodes: Vec<String> = Vec::new();
+        for (key, _) in &node_latest {
+            if key.0 == *area_id {
+                area_nodes.push(key.1.clone());
+            }
+        }
+        area_nodes.sort();
+        area_nodes.dedup();
 
-                let mut latest = serde_json::Map::new();
-                let mut history = serde_json::Map::new();
-
-                let known_metrics = ["temperature", "humidity", "soil_moisture", "soil_temperature", "ec", "light"];
+        for node_id in &area_nodes {
+            node_number += 1;
+            let latest = node_latest.get(&(area_id.clone(), node_id.clone()));
+            let mut latest_obj = serde_json::Map::new();
+            if let Some(map) = latest {
                 for metric in &known_metrics {
-                    let readings_list = metric_map.get(*metric);
-                    if let Some(list) = readings_list {
-                        let key = (area_id.clone(), (*node_id).clone(), metric.to_string());
-                        if let Some((val, unit, ts)) = latest_map.get(&key) {
-                            latest.insert(metric.to_string(), serde_json::json!({"value": val, "unit": unit, "timestamp": ts}));
-                        }
-                        history.insert(metric.to_string(), serde_json::json!(list));
+                    if let Some(v) = map.get(*metric) {
+                        latest_obj.insert(metric.to_string(), v.clone());
                     }
                 }
-
-                nodes.push(serde_json::json!({
-                    "node_id": node_id,
-                    "node_number": node_idx + 1,
-                    "latest": latest,
-                    "history_24h": history,
-                }));
             }
+
+            nodes.push(serde_json::json!({
+                "node_id": node_id,
+                "node_number": node_number,
+                "latest": latest_obj,
+            }));
         }
 
         result.push(serde_json::json!({

@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Typography, Button, Space } from 'antd';
-import { ArrowLeftOutlined } from '@ant-design/icons';
+import { Typography, Button, Space, Spin, Tag, Empty } from 'antd';
+import { ArrowLeftOutlined, ReloadOutlined } from '@ant-design/icons';
 import { zoneApi, nodeApi } from '../../services/api';
 import { useRealtimeStore } from '../../stores/realtimeStore';
 import MetricRow from '../../components/MetricRow';
@@ -18,16 +18,27 @@ interface DisplayReading {
   unit: string;
   min: number;
   max: number;
+  maxScale: number;
 }
 
-const METRIC_CONFIG: Record<string, { label: string; unit: string; min: number; max: number }> = {
-  temperature: { label: '空气温度', unit: '℃', min: 18, max: 28 },
-  humidity: { label: '空气湿度', unit: '%', min: 60, max: 80 },
-  soil_temperature: { label: '土壤温度', unit: '℃', min: 15, max: 25 },
-  soil_moisture: { label: '土壤湿度', unit: '%', min: 40, max: 70 },
-  ec: { label: 'EC值', unit: 'mS/cm', min: 1.5, max: 3.5 },
-  light: { label: '光照', unit: 'lux', min: 0, max: 200000 },
+const METRIC_CONFIG: Record<string, { label: string; unit: string; min: number; max: number; maxScale: number }> = {
+  temperature: { label: '空气温度', unit: '℃', min: 18, max: 28, maxScale: 50 },
+  humidity: { label: '空气湿度', unit: '%', min: 60, max: 80, maxScale: 100 },
+  soil_temperature: { label: '土壤温度', unit: '℃', min: 15, max: 25, maxScale: 50 },
+  soil_moisture: { label: '土壤湿度', unit: '%', min: 40, max: 70, maxScale: 100 },
+  ec: { label: 'EC值', unit: 'mS/cm', min: 1.5, max: 3.5, maxScale: 5 },
+  light: { label: '光照', unit: 'lux', min: 0, max: 200000, maxScale: 200000 },
 };
+
+const METRIC_KEYS = Object.keys(METRIC_CONFIG);
+
+function getStatus(v: number | null, min: number, max: number): 'normal' | 'warning' | 'danger' {
+  if (v === null) return 'danger';
+  const margin = (max - min) * 0.2;
+  if (v < min - margin || v > max + margin) return 'danger';
+  if (v < min || v > max) return 'warning';
+  return 'normal';
+}
 
 const ZoneDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -37,34 +48,23 @@ const ZoneDetail: React.FC = () => {
   const [selectedNode, setSelectedNode] = useState<SensorNode | null>(null);
   const [readings, setReadings] = useState<DisplayReading[]>([]);
   const [loading, setLoading] = useState(true);
+  const [readingsLoading, setReadingsLoading] = useState(false);
   const realtimeReadings = useRealtimeStore(s => s.readings);
 
-  useEffect(() => {
-    if (id) fetchData();
-  }, [id]);
-
-  useEffect(() => {
-    if (!selectedNode) return;
+  const readingsMap = useMemo(() => {
+    if (!selectedNode) return new Map<string, number>();
     const nodeId = selectedNode.node_id;
-    if (!nodeId) return;
+    if (!nodeId) return new Map<string, number>();
     const nodeData = realtimeReadings.get(nodeId);
-    if (!nodeData || nodeData.length === 0) return;
-    const latest = new Map<string, number>();
+    if (!nodeData) return new Map<string, number>();
+    const map = new Map<string, number>();
     for (const r of nodeData) {
-      latest.set(r.metric, r.value);
+      map.set(r.metric, r.value);
     }
-    setReadings(prev => {
-      if (prev.length === 0) return prev;
-      const updated = prev.map(d => {
-        const v = latest.get(d.key);
-        return v !== undefined ? { ...d, value: v } : d;
-      });
-      const changed = updated.some((d, i) => d.value !== prev[i].value);
-      return changed ? updated : prev;
-    });
+    return map;
   }, [realtimeReadings, selectedNode]);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     if (!id) return;
     setLoading(true);
     try {
@@ -75,17 +75,23 @@ const ZoneDetail: React.FC = () => {
       setZone(zoneData);
       setNodes(nodesData);
       if (nodesData.length > 0) {
-        setSelectedNode(nodesData[0]);
-        fetchReadings(nodesData[0].id);
+        setSelectedNode(prev => {
+          const stillExists = prev && nodesData.some(n => n.id === prev.id);
+          return stillExists ? prev : nodesData[0];
+        });
+      } else {
+        setSelectedNode(null);
+        setReadings([]);
       }
-    } catch (err) {
-      console.error(err);
+    } catch {
+      // ignore
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
 
-  const fetchReadings = async (deviceId: string) => {
+  const fetchReadings = useCallback(async (deviceId: string) => {
+    setReadingsLoading(true);
     try {
       const data = await nodeApi.getReadings(deviceId, { limit: 50 });
       const latestByMetric = new Map<string, SensorReading>();
@@ -95,58 +101,101 @@ const ZoneDetail: React.FC = () => {
           latestByMetric.set(r.metric, r);
         }
       }
-      const display: DisplayReading[] = [];
-      for (const [metric, cfg] of Object.entries(METRIC_CONFIG)) {
-        const reading = latestByMetric.get(metric);
-        display.push({
+      const display: DisplayReading[] = METRIC_KEYS.map(key => {
+        const cfg = METRIC_CONFIG[key];
+        const reading = latestByMetric.get(key);
+        return {
           label: cfg.label,
-          key: metric,
+          key,
           value: reading?.value ?? null,
           unit: reading?.unit ?? cfg.unit,
           min: cfg.min,
           max: cfg.max,
-        });
-      }
+          maxScale: cfg.maxScale,
+        };
+      });
       setReadings(display);
     } catch {
       setReadings([]);
+    } finally {
+      setReadingsLoading(false);
     }
-  };
+  }, []);
 
-  const getStatus = (v: number | null, min: number, max: number): 'normal' | 'warning' | 'danger' => {
-    if (v === null) return 'danger';
-    const margin = (max - min) * 0.2;
-    if (v < min - margin || v > max + margin) return 'danger';
-    if (v < min || v > max) return 'warning';
-    return 'normal';
-  };
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  useEffect(() => {
+    if (selectedNode) {
+      fetchReadings(selectedNode.id);
+    }
+  }, [selectedNode, fetchReadings]);
+
+  const mergedReadings = useMemo(() => {
+    if (readings.length === 0) return [];
+    return readings.map(r => {
+      const v = readingsMap.get(r.key);
+      return v !== undefined ? { ...r, value: v } : r;
+    });
+  }, [readings, readingsMap]);
 
   const onlineCount = nodes.filter(n => n.status === 'online').length;
-  const latestTs = readings.length > 0 ? null : null;
+  const hasData = mergedReadings.some(r => r.value !== null);
+
+  if (loading) {
+    return <div style={{ display: 'flex', justifyContent: 'center', padding: 80 }}><Spin size="large" /></div>;
+  }
 
   return (
     <div className={styles.container}>
       <div className={styles.header}>
-        <Space>
+        <Space wrap>
           <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/')}>返回</Button>
           <Title level={4} style={{ margin: 0 }}>{zone?.name || '区域详情'}</Title>
-          <Text type="secondary">在线 {onlineCount}/{nodes.length}</Text>
+          <Tag color={onlineCount > 0 ? 'green' : 'default'}>
+            在线 {onlineCount}/{nodes.length}
+          </Tag>
+          <Button size="small" icon={<ReloadOutlined />} onClick={fetchData}>刷新</Button>
         </Space>
       </div>
+
+      {nodes.length > 0 && (
+        <Space wrap size={[4, 4]} className={styles.nodeTabs}>
+          {nodes.map(n => (
+            <Tag
+              key={n.id}
+              color={selectedNode?.id === n.id ? 'blue' : 'default'}
+              className={styles.nodeTag}
+              onClick={() => setSelectedNode(n)}
+              style={{ cursor: 'pointer' }}
+            >
+              {n.name || n.node_id}
+            </Tag>
+          ))}
+        </Space>
+      )}
 
       <div className={styles.mainGrid}>
         <div className={styles.metricsCol}>
           <div className={styles.metricsCard}>
-            {readings.map(r => (
-              <MetricRow
-                key={r.key}
-                label={r.label}
-                value={r.value ?? 0}
-                unit={r.unit}
-                status={getStatus(r.value, r.min, r.max)}
-                range={{ min: r.min, max: r.max }}
-              />
-            ))}
+            {readingsLoading ? (
+              <div style={{ textAlign: 'center', padding: 24 }}><Spin /></div>
+            ) : !hasData ? (
+              <Empty description="暂无传感器数据" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+            ) : (
+              mergedReadings.map(r => (
+                <MetricRow
+                  key={r.key}
+                  label={r.label}
+                  value={r.value ?? 0}
+                  unit={r.unit}
+                  status={getStatus(r.value, r.min, r.max)}
+                  range={{ min: r.min, max: r.max }}
+                  maxScale={r.maxScale}
+                />
+              ))
+            )}
           </div>
         </div>
 

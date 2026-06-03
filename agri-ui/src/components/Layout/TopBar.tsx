@@ -1,15 +1,25 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { Layout, Space, Typography, Badge, Spin } from 'antd';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { Layout, Space, Typography, Badge, Spin, Select } from 'antd';
 import { WarningOutlined, CloudOutlined } from '@ant-design/icons';
 import { useRealtimeStore } from '../../stores/realtimeStore';
 import { weatherApi } from '../../services/api';
-import type { WeatherData, WeatherForecastDay, WeatherWarning, MinutelyForecast } from '../../types';
+import type { WeatherData, WeatherForecastDay, WeatherWarning, MinutelyForecast, CityLocation } from '../../types';
 import styles from './TopBar.module.css';
 
 const { Text } = Typography;
 const { Header: AntHeader } = Layout;
 
-const LOCATION = '101010100';
+const STORAGE_KEY = 'weather_location_id';
+const DEFAULT_LOCATION = '101010100';
+
+function getSavedLocation(): string {
+  try { return localStorage.getItem(STORAGE_KEY) || DEFAULT_LOCATION; }
+  catch { return DEFAULT_LOCATION; }
+}
+
+function saveLocation(id: string) {
+  try { localStorage.setItem(STORAGE_KEY, id); } catch { /* noop */ }
+}
 
 function normalizeNow(raw: Record<string, string>): WeatherData {
   return {
@@ -77,6 +87,7 @@ const levelColors: Record<string, string> = {
 
 const TopBar: React.FC = () => {
   const { connected, lastUpdate } = useRealtimeStore();
+  const [location, setLocation] = useState(getSavedLocation);
   const [now, setNow] = useState<WeatherData | null>(null);
   const [forecast, setForecast] = useState<WeatherForecastDay[]>([]);
   const [minutely, setMinutely] = useState<MinutelyForecast | null>(null);
@@ -84,13 +95,19 @@ const TopBar: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [weatherLastRefresh, setWeatherLastRefresh] = useState<string | null>(null);
 
-  const fetchAll = useCallback(async () => {
+  const [searchResults, setSearchResults] = useState<CityLocation[]>([]);
+  const [searching, setSearching] = useState(false);
+  const searchTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const [cityLabel, setCityLabel] = useState('');
+
+  const fetchWeather = useCallback(async (loc: string) => {
+    setLoading(true);
     try {
       const [nowRaw, f3d, minRaw, warnRaw] = await Promise.all([
-        weatherApi.getNow(LOCATION),
-        weatherApi.getForecast3d(LOCATION),
-        weatherApi.getMinutely(LOCATION),
-        weatherApi.getWarning(LOCATION),
+        weatherApi.getNow(loc),
+        weatherApi.getForecast3d(loc),
+        weatherApi.getMinutely(loc),
+        weatherApi.getWarning(loc),
       ]);
       if (nowRaw?.now) setNow(normalizeNow(nowRaw.now));
       if (f3d?.daily) setForecast(f3d.daily.map(normalizeDaily));
@@ -105,11 +122,43 @@ const TopBar: React.FC = () => {
     }
   }, []);
 
+  const lookupCity = useCallback(async (loc: string) => {
+    try {
+      const res = await weatherApi.geoLookup(loc);
+      const list = res?.location;
+      if (list && list.length > 0) {
+        setCityLabel(`${list[0].name}, ${list[0].adm1}`);
+      }
+    } catch { /* noop */ }
+  }, []);
+
   useEffect(() => {
-    fetchAll();
-    const timer = setInterval(fetchAll, 300000);
+    fetchWeather(location);
+    lookupCity(location);
+    const timer = setInterval(() => fetchWeather(location), 300000);
     return () => clearInterval(timer);
-  }, [fetchAll]);
+  }, [location, fetchWeather, lookupCity]);
+
+  const handleSearch = useCallback((keyword: string) => {
+    if (!keyword || keyword.trim().length < 2) {
+      setSearchResults([]);
+      return;
+    }
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const res = await weatherApi.geoLookup(keyword.trim());
+        setSearchResults(res?.location || []);
+      } catch { setSearchResults([]); }
+      finally { setSearching(false); }
+    }, 400);
+  }, []);
+
+  const handleLocationChange = useCallback((value: string) => {
+    saveLocation(value);
+    setLocation(value);
+  }, []);
 
   const nowH = new Date().getHours().toString().padStart(2, '0');
   const nowM = new Date().getMinutes().toString().padStart(2, '0');
@@ -118,9 +167,32 @@ const TopBar: React.FC = () => {
     <AntHeader className={styles.topbar}>
       <div className={styles.row1}>
         <Space size="small">
+          <CloudOutlined style={{ fontSize: 14, color: '#3b82f6' }} />
+          <Select
+            showSearch
+            allowClear={false}
+            value={location}
+            placeholder="搜索城市..."
+            notFoundContent={searching ? <Spin size="small" /> : null}
+            filterOption={false}
+            onSearch={handleSearch}
+            onChange={handleLocationChange}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && searchResults.length > 0) {
+                handleLocationChange(searchResults[0].id);
+                (document.activeElement as HTMLElement)?.blur();
+              }
+            }}
+            style={{ width: 160 }}
+            size="small"
+            options={searchResults.map(c => ({
+              label: `${c.name}, ${c.adm1}${c.country !== '中国' ? `, ${c.country}` : ''}`,
+              value: c.id,
+            }))}
+          />
           {weatherLastRefresh && (
             <Text type="secondary" className={styles.updateTime}>
-              天气 {weatherLastRefresh}
+              更新 {weatherLastRefresh}
             </Text>
           )}
         </Space>
@@ -143,27 +215,30 @@ const TopBar: React.FC = () => {
           <Spin size="small" style={{ margin: '0 auto' }} />
         ) : (
           <>
-            {/* Current conditions */}
             <div className={styles.currentBlock}>
               <Text className={styles.currentIcon}>
                 {now ? weatherIcon(now.icon, now.text) : '🌤️'}
               </Text>
-              <div className={styles.currentData}>
-                <Text strong className={styles.currentTemp}>
-                  {now ? `${now.temp}℃` : '--℃'}
-                </Text>
-                <Text className={styles.currentText}>{now?.text || '--'}</Text>
-              </div>
-              <div className={styles.currentMeta}>
-                <Text type="secondary">湿度 {now?.humidity ?? '--'}%</Text>
-                <Text type="secondary" className={styles.metaSep}>|</Text>
-                <Text type="secondary">{now?.windDir ?? '--'} {now?.windScale ?? '--'}级</Text>
+              <div className={styles.currentInfo}>
+                <div className={styles.currentData}>
+                  <Text strong className={styles.currentTemp}>
+                    {now ? `${now.temp}℃` : '--℃'}
+                  </Text>
+                  <Text className={styles.currentText}>{now?.text || '--'}</Text>
+                </div>
+                <div className={styles.currentMeta}>
+                  <Text type="secondary">湿度 {now?.humidity ?? '--'}%</Text>
+                  <Text type="secondary" className={styles.metaSep}>|</Text>
+                  <Text type="secondary">{now?.windDir ?? '--'} {now?.windScale ?? '--'}级</Text>
+                </div>
+                <div className={styles.locationLine}>
+                  <Text type="secondary">{cityLabel || '--'}</Text>
+                </div>
               </div>
             </div>
 
             <div className={styles.vertDivider} />
 
-            {/* 3-day forecast */}
             <div className={styles.forecastBlock}>
               {forecast.slice(0, 3).map(day => (
                 <div key={day.date} className={styles.forecastDay}>
@@ -181,7 +256,6 @@ const TopBar: React.FC = () => {
 
             <div className={styles.vertDivider} />
 
-            {/* Hourly precipitation */}
             <div className={styles.minutelyBlock}>
               <Text className={styles.minutelyIcon}>🌧️</Text>
               <div className={styles.hourlyPrecipCol}>
@@ -206,7 +280,6 @@ const TopBar: React.FC = () => {
               </div>
             </div>
 
-            {/* Warnings */}
             {warnings.length > 0 && (
               <>
                 <div className={styles.vertDivider} />

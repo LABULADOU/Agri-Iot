@@ -83,7 +83,7 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
         fetch('/api/v1/devices'),
       ]);
       const zones = await areaRes.json() as Zone[];
-      const readingsData = await readingsRes.json() as { areas?: Array<{ area_id: string; area_name: string; nodes: Array<{ node_id: string; history_24h: Record<string, Array<{ value: number }>> }> }> };
+      const readingsData = await readingsRes.json() as { areas?: Array<{ area_id: string; area_name: string; nodes: Array<{ node_id: string; latest: Record<string, { value: number }> }> }> };
       const devices = await deviceRes.json() as Array<{ node_id: string; name: string }>;
       const deviceNameMap = new Map(devices.map(d => [d.node_id, d.name]));
 
@@ -91,15 +91,12 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
       for (const area of readingsData.areas || []) {
         for (const node of area.nodes) {
           const readings: LatestReadings = { airTemp: undefined, humidity: undefined, soilTemp: undefined, soilMoisture: undefined, ec: undefined };
-          for (const [metric, values] of Object.entries(node.history_24h || {})) {
-            const last = (values as Array<{ value: number }>).pop();
-            if (!last) continue;
-            if (metric === 'temperature') readings.airTemp = last.value;
-            else if (metric === 'humidity') readings.humidity = last.value;
-            else if (metric === 'soil_temperature') readings.soilTemp = last.value;
-            else if (metric === 'soil_moisture') readings.soilMoisture = last.value;
-            else if (metric === 'ec') readings.ec = last.value;
-          }
+          const latest = node.latest || {};
+          if (latest.temperature?.value !== undefined) readings.airTemp = latest.temperature.value;
+          if (latest.humidity?.value !== undefined) readings.humidity = latest.humidity.value;
+          if (latest.soil_temperature?.value !== undefined) readings.soilTemp = latest.soil_temperature.value;
+          if (latest.soil_moisture?.value !== undefined) readings.soilMoisture = latest.soil_moisture.value;
+          if (latest.ec?.value !== undefined) readings.ec = latest.ec.value;
           nodeReadings.push({
             zoneId: area.area_id,
             zoneName: area.area_name,

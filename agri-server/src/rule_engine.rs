@@ -135,6 +135,20 @@ async fn evaluate_rules(state: &AppState) -> Result<()> {
         }
     }
 
+    // Step 3.5: 设备离线检测 — 超过5分钟无数据标记为 offline
+    {
+        let cutoff = Utc::now().timestamp() - 300;
+        let affected = sqlx::query(
+            "UPDATE devices SET status = 'offline' WHERE status = 'online' AND updated_at < ?"
+        )
+        .bind(cutoff)
+        .execute(&state.pool)
+        .await?;
+        if affected.rows_affected() > 0 {
+            info!("{} device(s) marked offline due to timeout", affected.rows_affected());
+        }
+    }
+
     // Step 4: 正常规则评估
     let rules = state.rules_cache.lock().await.clone();
     for rule in rules {

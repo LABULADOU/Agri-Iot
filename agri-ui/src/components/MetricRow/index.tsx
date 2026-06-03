@@ -10,6 +10,7 @@ interface MetricRowProps {
   unit: string;
   status: 'normal' | 'warning' | 'danger';
   range: { min: number; max: number };
+  maxScale?: number;
   aiRecommendation?: string;
   onExecuteRecommendation?: () => void;
 }
@@ -26,10 +27,12 @@ const MetricRow: React.FC<MetricRowProps> = ({
   unit,
   status,
   range,
+  maxScale,
   aiRecommendation,
   onExecuteRecommendation,
 }) => {
-  const pct = Math.min(Math.max(((value - range.min) / (range.max - range.min)) * 100, 0), 100);
+  const scaleMax = maxScale ?? range.max * 2;
+  const pct = Math.min(Math.max((value / scaleMax) * 100, 0), 100);
   const isAlert = status === 'danger' || status === 'warning';
 
   return (

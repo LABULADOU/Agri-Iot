@@ -1,5 +1,16 @@
 use axum::{extract::Query, http::StatusCode, response::IntoResponse, Json};
 use serde::Deserialize;
+use std::sync::OnceLock;
+
+fn http_client() -> &'static reqwest::Client {
+    static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+    CLIENT.get_or_init(|| {
+        reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(10))
+            .build()
+            .expect("reqwest::Client::new")
+    })
+}
 
 const WEATHER: &str = "https://ku36x9fh3j.re.qweatherapi.com/v7/weather";
 const AIR: &str = "https://ku36x9fh3j.re.qweatherapi.com/v7/air";
@@ -34,7 +45,7 @@ async fn proxy(url: &str) -> axum::response::Response {
     if key.is_empty() {
         return (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": "WEATHER_API_KEY not set"}))).into_response();
     }
-    match reqwest::get(url).await {
+    match http_client().get(url).send().await {
         Ok(resp) => {
             let status = resp.status();
             match resp.bytes().await {
@@ -61,7 +72,7 @@ async fn safe_proxy(url: &str, empty_body: serde_json::Value) -> axum::response:
     if key.is_empty() {
         return Json(empty_body).into_response();
     }
-    match reqwest::get(url).await {
+    match http_client().get(url).send().await {
         Ok(resp) => {
             let status = resp.status();
             match resp.bytes().await {
