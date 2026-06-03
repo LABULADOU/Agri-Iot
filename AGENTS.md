@@ -342,7 +342,7 @@ Tailscale Funnel: https://zero-1.taile2b316.ts.net
 | 3 | **WiFi 失败永久深度休眠** — `ESP.deepSleep(0)` 需硬件复位才唤醒 | 改为 3 次重试 + `ESP.restart()` |
 | 4 | **TLS 内存泄漏** — `WiFiClientSecure` 长期不重建 | 每 100 次 HTTP 重建 client |
 | 5 | **JSON 栈溢出风险** — `serializeJson(doc, buf)` 无边界检查 | 加 `serializeJson(doc, json, sizeof(json))` + 返回值校验 |
-| 6 | **WatchDog 无喂狗** — `loop()` 没有主动喂狗 | `esp_task_wdt_reset()` |
+| 6 | **WatchDog 无喂狗** — `loop()` 没有主动喂狗 | 未修复（见 v2.1.2） |
 | 7 | **命令 `id` 空指针** — 后端返回非字符串 id 时崩溃 | 加 `if (!id) continue` |
 | 8 | **诊断残留 `String`** — `diagnoseRS485()` 用 `readString()` | 改为 `char[]` 手动读取 |
 
@@ -352,7 +352,29 @@ Tailscale Funnel: https://zero-1.taile2b316.ts.net
 修改: agri-server/src/rule_engine.rs      # 离线检测 + WatchDog
 修改: agri-server/src/weather.rs          # OnceLock<Client> 复用
 修改: agri-ui/src/stores/dashboardStore.ts # 适配 latest 字段
-修改: esp32-firmware/src/main.ino         # v2.1.1: 无String + 喂狗 + TLS重建 + 重试
+修改: esp32-firmware/src/main.ino         # v2.1.1: 无String + TLS重建 + 重试
+```
+
+### ESP32 固件 v2.1.2（2026-06-03）
+
+**背景**：v2.1.1 上线后 ESP32 在运行约 4 分钟后 `POWERON_RESET` 复位；尝试 `esp_task_wdt_reset()` 发现 loop task 未注册 TWDT，报 `task not found`。最终定位到 `readHttpBody` 空转不 yield 导致 WatchDog 触发。
+
+| # | 问题 | 修复 | 位置 |
+|---|------|------|------|
+| 1 | **`readHttpBody` 空转不 yield** — 响应读取循环无 `delay()`/`yield()`，TCP 保持连接时 CPU 空转锁死，触发 TWDT 复位 | 加 `delay(1)` + 5s 超时退出 | `main.ino` |
+| 2 | **`tryModbusRead` 缺方向控制** — 扫描函数未调用 `rs485Transmit()` 就写串口，DE 为 LOW 时数据从未到达传感器，扫描结果靠噪声误判 | 添加 `rs485Transmit()`/`rs485Receive()` 收发切换 | `main.ino` |
+| 3 | **`pollCommands` 空响应误报** — 无命令时 GET 返回空 body，`deserializeJson` 报 `EmptyInput`，噪音日志 | `strlen(resp)==0` 时静默跳过 | `main.ino` |
+| 4 | **`esp_task_wdt_reset()` 误用** — Arduino loop task 未注册 TWDT，调用导致 `task not found` 错误日志 | 移除 `esp_task_wdt.h` 和 `esp_task_wdt_reset()` | `main.ino` |
+
+**经验教训**：
+- ESP32 Arduino 的 `loopTask` **不自动注册** TWDT；如需喂狗必须先 `esp_task_wdt_add(NULL)`
+- `POWERON_RESET` 不一定是电源问题，也可能是 TWDT 触发后以 POWERON 形式呈现（视芯片版本而定）
+- 所有阻塞循环（HTTP 读取、串口等待）都必须加 `delay(1)` 让空闲任务运行
+
+### 变更文件清单
+```
+修改: esp32-firmware/src/main.ino         # v2.1.2: readHttpBody 超时+yield + tryModbusRead 方向 + pollCommands 空响应
+文档: AGENTS.md, README.md                # 记录 v2.1.2 修复
 ```
 
 ## 离线缓冲区（2026-06-03）
