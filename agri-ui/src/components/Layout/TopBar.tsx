@@ -1,25 +1,14 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { Layout, Space, Typography, Badge, Spin, Select } from 'antd';
-import { WarningOutlined, CloudOutlined } from '@ant-design/icons';
+import { Layout, Space, Typography, Badge, Spin, AutoComplete, Input } from 'antd';
+import { WarningOutlined, SearchOutlined } from '@ant-design/icons';
 import { useRealtimeStore } from '../../stores/realtimeStore';
+import { useWeatherStore } from '../../stores/weatherStore';
 import { weatherApi } from '../../services/api';
-import type { WeatherData, WeatherForecastDay, WeatherWarning, MinutelyForecast, CityLocation } from '../../types';
+import type { WeatherData, WeatherForecastDay, WeatherWarning, MinutelyForecast, GeoCity } from '../../types';
 import styles from './TopBar.module.css';
 
 const { Text } = Typography;
 const { Header: AntHeader } = Layout;
-
-const STORAGE_KEY = 'weather_location_id';
-const DEFAULT_LOCATION = '101010100';
-
-function getSavedLocation(): string {
-  try { return localStorage.getItem(STORAGE_KEY) || DEFAULT_LOCATION; }
-  catch { return DEFAULT_LOCATION; }
-}
-
-function saveLocation(id: string) {
-  try { localStorage.setItem(STORAGE_KEY, id); } catch { /* noop */ }
-}
 
 function normalizeNow(raw: Record<string, string>): WeatherData {
   return {
@@ -87,27 +76,26 @@ const levelColors: Record<string, string> = {
 
 const TopBar: React.FC = () => {
   const { connected, lastUpdate } = useRealtimeStore();
-  const [location, setLocation] = useState(getSavedLocation);
+  const { location, setLocation } = useWeatherStore();
   const [now, setNow] = useState<WeatherData | null>(null);
   const [forecast, setForecast] = useState<WeatherForecastDay[]>([]);
   const [minutely, setMinutely] = useState<MinutelyForecast | null>(null);
   const [warnings, setWarnings] = useState<WeatherWarning[]>([]);
   const [loading, setLoading] = useState(true);
   const [weatherLastRefresh, setWeatherLastRefresh] = useState<string | null>(null);
-
-  const [searchResults, setSearchResults] = useState<CityLocation[]>([]);
+  const [searchResults, setSearchResults] = useState<GeoCity[]>([]);
+  const [searchValue, setSearchValue] = useState('');
   const [searching, setSearching] = useState(false);
-  const searchTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const [cityLabel, setCityLabel] = useState('');
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const fetchWeather = useCallback(async (loc: string) => {
+  const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
       const [nowRaw, f3d, minRaw, warnRaw] = await Promise.all([
-        weatherApi.getNow(loc),
-        weatherApi.getForecast3d(loc),
-        weatherApi.getMinutely(loc),
-        weatherApi.getWarning(loc),
+        weatherApi.getNow(location.id),
+        weatherApi.getForecast3d(location.id),
+        weatherApi.getMinutely(location.id),
+        weatherApi.getWarning(location.id),
       ]);
       if (nowRaw?.now) setNow(normalizeNow(nowRaw.now));
       if (f3d?.daily) setForecast(f3d.daily.map(normalizeDaily));
@@ -120,79 +108,70 @@ const TopBar: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
-
-  const lookupCity = useCallback(async (loc: string) => {
-    try {
-      const res = await weatherApi.geoLookup(loc);
-      const list = res?.location;
-      if (list && list.length > 0) {
-        setCityLabel(`${list[0].name}, ${list[0].adm1}`);
-      }
-    } catch { /* noop */ }
-  }, []);
+  }, [location.id]);
 
   useEffect(() => {
-    fetchWeather(location);
-    lookupCity(location);
-    const timer = setInterval(() => fetchWeather(location), 300000);
+    fetchAll();
+    const timer = setInterval(fetchAll, 300000);
     return () => clearInterval(timer);
-  }, [location, fetchWeather, lookupCity]);
+  }, [fetchAll]);
 
-  const handleSearch = useCallback((keyword: string) => {
-    if (!keyword || keyword.trim().length < 2) {
+  const handleSearch = useCallback((query: string) => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (!query || query.trim().length < 1) {
       setSearchResults([]);
       return;
     }
-    if (searchTimer.current) clearTimeout(searchTimer.current);
-    searchTimer.current = setTimeout(async () => {
+    debounceRef.current = setTimeout(async () => {
       setSearching(true);
       try {
-        const res = await weatherApi.geoLookup(keyword.trim());
-        setSearchResults(res?.location || []);
-      } catch { setSearchResults([]); }
-      finally { setSearching(false); }
-    }, 400);
+        const res = await weatherApi.geoLookup(query.trim(), 10);
+        setSearchResults(res.location || []);
+      } catch {
+        setSearchResults([]);
+      } finally {
+        setSearching(false);
+      }
+    }, 300);
   }, []);
 
-  const handleLocationChange = useCallback((value: string) => {
-    saveLocation(value);
-    setLocation(value);
-  }, []);
+  const handleSelect = useCallback((value: string) => {
+    const found = searchResults.find(g => g.id === value);
+    if (found) {
+      setLocation({ id: found.id, name: found.name, adm1: found.adm1, adm2: found.adm2 });
+      const display = !found.adm2
+        ? found.name
+        : found.adm2 === found.adm1
+          ? `${found.adm1} / ${found.name}`
+          : `${found.adm1} / ${found.adm2} / ${found.name}`;
+      setSearchValue(display);
+    }
+  }, [searchResults, setLocation]);
+
+  const displayName = !location.adm2
+    ? location.name
+    : location.adm2 === location.adm1
+      ? `${location.adm1} / ${location.name}`
+      : `${location.adm1} / ${location.adm2} / ${location.name}`;
 
   const nowH = new Date().getHours().toString().padStart(2, '0');
   const nowM = new Date().getMinutes().toString().padStart(2, '0');
+
+  const searchOptions = searchResults.map(g => ({
+    value: g.id,
+    label: `${g.adm1} / ${g.adm2 || g.name} / ${g.name}`,
+  }));
 
   return (
     <AntHeader className={styles.topbar}>
       <div className={styles.row1}>
         <Space size="small">
-          <CloudOutlined style={{ fontSize: 14, color: '#3b82f6' }} />
-          <Select
-            showSearch
-            allowClear={false}
-            value={location}
-            placeholder="搜索城市..."
-            notFoundContent={searching ? <Spin size="small" /> : null}
-            filterOption={false}
-            onSearch={handleSearch}
-            onChange={handleLocationChange}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && searchResults.length > 0) {
-                handleLocationChange(searchResults[0].id);
-                (document.activeElement as HTMLElement)?.blur();
-              }
-            }}
-            style={{ width: 160 }}
-            size="small"
-            options={searchResults.map(c => ({
-              label: `${c.name}, ${c.adm1}${c.country !== '中国' ? `, ${c.country}` : ''}`,
-              value: c.id,
-            }))}
-          />
+          <Text type="secondary" className={styles.cityLabel}>
+            📍{displayName}
+          </Text>
           {weatherLastRefresh && (
             <Text type="secondary" className={styles.updateTime}>
-              更新 {weatherLastRefresh}
+              天气 {weatherLastRefresh}
             </Text>
           )}
         </Space>
@@ -211,34 +190,53 @@ const TopBar: React.FC = () => {
       </div>
 
       <div className={styles.row2}>
+        <div className={styles.cityBlock}>
+          <AutoComplete
+            value={searchValue}
+            options={searchOptions}
+            onSearch={handleSearch}
+            onSelect={handleSelect}
+            onChange={setSearchValue}
+            style={{ width: 184 }}
+            notFoundContent={searching ? <Spin size="small" /> : null}
+          >
+            <Input
+              size="small"
+              placeholder="搜索城市..."
+              prefix={<SearchOutlined />}
+              allowClear
+              className={styles.cityInput}
+            />
+          </AutoComplete>
+        </div>
+
+        <div className={styles.vertDivider} />
+
         {loading ? (
           <Spin size="small" style={{ margin: '0 auto' }} />
         ) : (
           <>
+            {/* Current conditions */}
             <div className={styles.currentBlock}>
               <Text className={styles.currentIcon}>
                 {now ? weatherIcon(now.icon, now.text) : '🌤️'}
               </Text>
-              <div className={styles.currentInfo}>
-                <div className={styles.currentData}>
-                  <Text strong className={styles.currentTemp}>
-                    {now ? `${now.temp}℃` : '--℃'}
-                  </Text>
-                  <Text className={styles.currentText}>{now?.text || '--'}</Text>
-                </div>
-                <div className={styles.currentMeta}>
-                  <Text type="secondary">湿度 {now?.humidity ?? '--'}%</Text>
-                  <Text type="secondary" className={styles.metaSep}>|</Text>
-                  <Text type="secondary">{now?.windDir ?? '--'} {now?.windScale ?? '--'}级</Text>
-                </div>
-                <div className={styles.locationLine}>
-                  <Text type="secondary">{cityLabel || '--'}</Text>
-                </div>
+              <div className={styles.currentData}>
+                <Text strong className={styles.currentTemp}>
+                  {now ? `${now.temp}℃` : '--℃'}
+                </Text>
+                <Text className={styles.currentText}>{now?.text || '--'}</Text>
+              </div>
+              <div className={styles.currentMeta}>
+                <Text type="secondary">湿度 {now?.humidity ?? '--'}%</Text>
+                <Text type="secondary" className={styles.metaSep}>|</Text>
+                <Text type="secondary">{now?.windDir ?? '--'} {now?.windScale ?? '--'}级</Text>
               </div>
             </div>
 
             <div className={styles.vertDivider} />
 
+            {/* 3-day forecast */}
             <div className={styles.forecastBlock}>
               {forecast.slice(0, 3).map(day => (
                 <div key={day.date} className={styles.forecastDay}>
@@ -256,6 +254,7 @@ const TopBar: React.FC = () => {
 
             <div className={styles.vertDivider} />
 
+            {/* Hourly precipitation */}
             <div className={styles.minutelyBlock}>
               <Text className={styles.minutelyIcon}>🌧️</Text>
               <div className={styles.hourlyPrecipCol}>
@@ -280,6 +279,7 @@ const TopBar: React.FC = () => {
               </div>
             </div>
 
+            {/* Warnings */}
             {warnings.length > 0 && (
               <>
                 <div className={styles.vertDivider} />

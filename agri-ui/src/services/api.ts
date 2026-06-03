@@ -1,8 +1,8 @@
 import axios from 'axios';
 import type {
   Zone, SensorNode, SensorReading, AggregatedReading,
-  WeatherData, WeatherForecastDay, WeatherWarning, MinutelyForecast, HourlyPrecip,
-  Device, Rule, QueryParams, CityLocation
+  WeatherData, WeatherForecastDay, WeatherWarning, MinutelyForecast, HourlyPrecip, GeoCity,
+  Device, Rule, QueryParams
 } from '../types';
 
 const api = axios.create({
@@ -66,8 +66,8 @@ export const weatherApi = {
     api.get<{ code: string; summary: string; hourly: HourlyPrecip[] }>('/weather/minutely', { params: { location } }).then(res => res.data),
   getWarning: (location: string = '101010100') =>
     api.get<{ code: string; warning?: Array<Record<string, string>> }>('/weather/warning', { params: { location } }).then(res => res.data),
-  geoLookup: (location: string) =>
-    api.get<{ code: string; location: CityLocation[] }>('/weather/geo', { params: { location } }).then(res => res.data),
+  geoLookup: (query: string, number: number = 10) =>
+    api.get<{ location: GeoCity[] }>('/weather/geo', { params: { location: query, number } }).then(res => res.data),
 };
 
 // Control APIs → use device command endpoint

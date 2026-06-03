@@ -75,7 +75,8 @@ const LineChart: React.FC<LineChartProps> = ({ data, height = 400, showLegend = 
     <ReactECharts
       option={option}
       style={{ height }}
-      opts={{ renderer: 'canvas' }} notMerge={true}
+      opts={{ renderer: 'canvas' }}
+      notMerge={true}
     />
   );
 };

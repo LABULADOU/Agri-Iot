@@ -24,6 +24,25 @@
   min-height: 0;
 }
 
+.cityBlock {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.cityInput {
+  height: 24px;
+  font-size: 12px;
+}
+
+.cityLabel {
+  font-size: 12px;
+  color: var(--text-secondary, #6B7280);
+  white-space: nowrap;
+  cursor: default;
+}
+
 /* Current conditions block */
 .currentBlock {
   display: flex;

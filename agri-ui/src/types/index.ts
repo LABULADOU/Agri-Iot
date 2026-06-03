@@ -188,6 +188,13 @@ export interface WeatherWarning {
   pubTime: string;
 }
 
+export interface GeoCity {
+  name: string;
+  id: string;
+  adm1: string;
+  adm2: string;
+}
+
 export interface HourlyPrecip {
   time: string;
   text: string;

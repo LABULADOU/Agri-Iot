@@ -11,7 +11,6 @@
 #include <ArduinoJson.h>
 #include <DHT.h>
 #include <HardwareSerial.h>
-#include <esp_task_wdt.h>
 
 // ==================== 配置 ====================
 
@@ -172,9 +171,11 @@ bool tryModbusRead(uint32_t baud, uint8_t addr, unsigned long timeout) {
     req[6] = crc & 0xFF;
     req[7] = (crc >> 8) & 0xFF;
 
+    rs485Transmit();
     soilSerial.write(req, sizeof(req));
     soilSerial.flush();
     delay(20);
+    rs485Receive();
 
     unsigned long start = millis();
     uint8_t resp[16] = {0};
@@ -345,10 +346,13 @@ static void ensureTlsClient() {
 static void readHttpBody(HTTPClient& http, char* out, size_t out_size) {
     WiFiClient* stream = http.getStreamPtr();
     size_t idx = 0;
+    unsigned long start = millis();
     while (stream->connected() && idx < out_size - 1) {
         if (stream->available()) {
             out[idx++] = stream->read();
         }
+        if (millis() - start > 5000) break;
+        delay(1);
     }
     out[idx] = '\0';
 }
@@ -408,7 +412,6 @@ bool httpPut(const char* url, const char* body) {
 // ==================== 主循环 ====================
 
 void loop() {
-    esp_task_wdt_reset();
     unsigned long now = millis();
 
     // 定期采集并上报遥测
@@ -485,15 +488,12 @@ void pollCommands() {
     snprintf(url, sizeof(url), "%s/api/v1/commands/node/%s", API_BASE, NODE_ID);
 
     char resp[HTTP_RESP_BUF_SIZE];
-    if (!httpGet(url, resp, sizeof(resp))) return;
+    if (!httpGet(url, resp, sizeof(resp)) || strlen(resp) == 0) return;
 
     // 解析命令列表
     StaticJsonDocument<2048> doc;
     DeserializationError err = deserializeJson(doc, resp);
-    if (err) {
-        Serial.printf("命令 JSON 解析失败: %s\n", err.c_str());
-        return;
-    }
+    if (err) return;
 
     JsonArray arr = doc.as<JsonArray>();
     for (JsonObject cmd : arr) {
