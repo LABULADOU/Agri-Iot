@@ -47,9 +47,9 @@ async fn main() -> Result<()> {
     db::run_migrations(&pool).await?;
 
     let server_port: u16 = std::env::var("SERVER_PORT")
-        .unwrap_or_else(|_| "3000".into())
+        .unwrap_or_else(|_| "3001".into())
         .parse()
-        .unwrap_or(3000);
+        .unwrap_or(3001);
 
     let broker_port: u16 = std::env::var("MQTT_BROKER_PORT")
         .unwrap_or_else(|_| "11883".into())

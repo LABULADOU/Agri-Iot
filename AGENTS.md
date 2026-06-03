@@ -93,7 +93,7 @@ ESP32(串口)     ───串口──→ serial_bridge.py ─HTTP→ agri-serv
 ESP32 (DHT22 + RS485 土壤三合一)
   → WiFi ("iPhone")
   → HTTPS → zero-1.taile2b316.ts.net/api/v1/telemetry
-  → Tailscale Funnel (WSL) → 172.20.10.13:3000 → agri-server → DB
+  → Tailscale Funnel (WSL) → 172.20.10.13:3001 → agri-server → DB
 ```
 
 - **引脚定义**
@@ -217,7 +217,7 @@ nohup ./target/debug/agri-server > /tmp/agri-server.log 2>&1 &
 python3 scripts/serial_bridge.py /dev/ttyUSB0
 ```
 
-Dashboard: http://localhost:3000
+Dashboard: http://localhost:3001
 Tailscale Funnel: https://zero-1.taile2b316.ts.net
 
 ## 已知坑点
