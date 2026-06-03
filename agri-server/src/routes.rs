@@ -41,6 +41,7 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/v1/rules/:id", put(update_rule).delete(delete_rule))
         .route("/api/v1/alerts", get(list_alerts))
         .route("/api/v1/telemetry", post(ingest_telemetry))
+        .route("/api/v1/telemetry/batch", post(ingest_telemetry_batch))
         .route("/api/v1/dashboard/summary", get(dashboard_summary))
         .route("/api/v1/dashboard/area-readings", get(dashboard_area_readings))
         .route("/api/v1/dashboard/node-readings", get(dashboard_node_readings))
@@ -731,6 +732,41 @@ async fn ingest_telemetry(
         Ok(inserted) => Json(serde_json::json!({"inserted": inserted, "message": "Telemetry ingested"})).into_response(),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response(),
     }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct BatchTelemetryItem {
+    pub node_id: String,
+    pub metrics: serde_json::Value,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct BatchTelemetryRequest {
+    pub batch: Vec<BatchTelemetryItem>,
+}
+
+async fn ingest_telemetry_batch(
+    State(state): State<AppState>,
+    Json(req): Json<BatchTelemetryRequest>,
+) -> impl IntoResponse {
+    let total = req.batch.len();
+    let mut inserted = 0usize;
+
+    for item in req.batch {
+        let Some(metrics) = item.metrics.as_object() else {
+            continue;
+        };
+        match agri_core::telemetry::process_telemetry(&state.pool, &item.node_id, metrics, Some(&state.event_tx)).await {
+            Ok(_) => inserted += 1,
+            Err(e) => tracing::warn!("batch telemetry error for {}: {}", item.node_id, e),
+        }
+    }
+
+    Json(serde_json::json!({
+        "inserted": inserted,
+        "failed": total - inserted,
+        "total": total,
+    })).into_response()
 }
 
 #[cfg(test)]

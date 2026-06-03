@@ -11,6 +11,7 @@
 #include <ArduinoJson.h>
 #include <DHT.h>
 #include <HardwareSerial.h>
+#include <LittleFS.h>
 
 // ==================== 配置 ====================
 
@@ -40,6 +41,12 @@ uint32_t soilBaud = 4800;          // 传感器波特率
 // 采集间隔 (毫秒)
 const unsigned long READ_INTERVAL = 10000;       // 10秒采集一次
 const unsigned long COMMAND_POLL_INTERVAL = 3000; // 3秒轮询命令
+
+// 离线缓冲区 (LittleFS)
+#define BUFFER_FILE "/buffer.dat"
+#define BUFFER_TMP "/buffer.tmp"
+#define BUFFER_MAX_LINES 2000
+#define BUFFER_FLUSH_BATCH 20
 
 // ==================== 全局变量 ====================
 
@@ -297,6 +304,13 @@ void setup() {
     // 启动后先扫描传感器配置
     scanSoilSensor();
 
+    // 初始化 LittleFS 离线缓冲区
+    if (!LittleFS.begin()) {
+        Serial.println("LittleFS 初始化失败，无法缓冲离线数据");
+    } else {
+        Serial.println("LittleFS 就绪");
+    }
+
     setupWiFi();
 }
 
@@ -409,6 +423,102 @@ bool httpPut(const char* url, const char* body) {
     return false;
 }
 
+// ==================== 离线缓冲区 ====================
+
+// 追加一行 JSON 到缓冲区（服务器不可达时暂存）
+void appendToBuffer(const char* line) {
+    File f = LittleFS.open(BUFFER_FILE, "a");
+    if (!f) {
+        Serial.println("缓冲区写入失败");
+        return;
+    }
+    f.println(line);
+    f.close();
+}
+
+// 保留缓冲区最后 N 行（防止无限膨胀）
+void trimBufferTail() {
+    File rf = LittleFS.open(BUFFER_TMP, "r");
+    if (!rf) return;
+
+    int totalLines = 0;
+    int c;
+    while ((c = rf.read()) >= 0) {
+        if (c == '\n') totalLines++;
+    }
+    if (totalLines <= BUFFER_MAX_LINES) {
+        rf.close();
+        LittleFS.rename(BUFFER_TMP, BUFFER_FILE);
+        return;
+    }
+
+    int skip = totalLines - BUFFER_MAX_LINES;
+    rf.seek(0);
+
+    File wf = LittleFS.open(BUFFER_FILE, "w");
+    if (!wf) { rf.close(); return; }
+
+    char line[384];
+    int lineNo = 0;
+    while (rf.available()) {
+        size_t len = rf.readBytesUntil('\n', line, sizeof(line) - 1);
+        if (len == 0) continue;
+        line[len] = '\0';
+        lineNo++;
+        if (lineNo > skip) {
+            wf.println(line);
+        }
+    }
+
+    rf.close();
+    wf.close();
+    LittleFS.remove(BUFFER_TMP);
+}
+
+// 回放缓冲区：每次成功上报后触发，最多发 BUFFER_FLUSH_BATCH 条
+void flushBuffer() {
+    if (!LittleFS.exists(BUFFER_FILE)) return;
+
+    File rf = LittleFS.open(BUFFER_FILE, "r");
+    if (!rf) return;
+
+    File wf = LittleFS.open(BUFFER_TMP, "w");
+    if (!wf) { rf.close(); return; }
+
+    char url[128];
+    snprintf(url, sizeof(url), "%s/api/v1/telemetry", API_BASE);
+    char line[384];
+    int sent = 0, remaining = 0;
+
+    while (rf.available()) {
+        size_t len = rf.readBytesUntil('\n', line, sizeof(line) - 1);
+        if (len == 0) continue;
+        line[len] = '\0';
+        if (len > 0 && line[len - 1] == '\r') line[--len] = '\0';
+
+        if (sent < BUFFER_FLUSH_BATCH && httpPost(url, line)) {
+            sent++;
+            continue;
+        }
+        wf.println(line);
+        remaining++;
+    }
+
+    rf.close();
+    wf.close();
+    LittleFS.remove(BUFFER_FILE);
+
+    if (remaining > 0) {
+        trimBufferTail();
+    } else {
+        LittleFS.remove(BUFFER_TMP);
+    }
+
+    if (sent > 0) {
+        Serial.printf("缓冲区: %d条已发送, %d条剩余\n", sent, remaining);
+    }
+}
+
 // ==================== 主循环 ====================
 
 void loop() {
@@ -476,7 +586,14 @@ void publishTelemetry() {
     snprintf(url, sizeof(url), "%s/api/v1/telemetry", API_BASE);
     bool ok = httpPost(url, json);
 
-    Serial.printf(" | HTTP: %s\n", ok ? "成功" : "失败");
+    if (ok) {
+        Serial.print(" | HTTP: 成功");
+        flushBuffer();  // 顺带回放缓冲区积压
+    } else {
+        Serial.print(" | HTTP: 失败, 已缓存");
+        appendToBuffer(json);
+    }
+    Serial.println();
 }
 
 // ==================== 命令轮询与处理 ====================

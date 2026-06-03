@@ -354,3 +354,52 @@ Tailscale Funnel: https://zero-1.taile2b316.ts.net
 修改: agri-ui/src/stores/dashboardStore.ts # 适配 latest 字段
 修改: esp32-firmware/src/main.ino         # v2.1.1: 无String + 喂狗 + TLS重建 + 重试
 ```
+
+## 离线缓冲区（2026-06-03）
+
+### LittleFS 环形缓冲区（方案 A，已实施）
+- ESP32 将失败上报的 JSON 追加到 `/buffer.dat`（LittleFS）
+- 间隔 10s 采集，缓冲区 2000 行 ≈ 768KB Flash，覆盖 ~5.5 小时
+- `publishTelemetry` 成功后触发 `flushBuffer()`，每次回放最多 20 条
+- `trimBufferTail()` 在缓冲区超限时截断，保留最新 2000 行
+- 服务器新增 `POST /api/v1/telemetry/batch` 端点，支持批量补录
+- 与兄弟节点推断互补：单节点离线靠推断，服务器故障靠缓存
+
+### 变更文件清单
+```
+修改: esp32-firmware/src/main.ino     # LittleFS 缓冲 + 回放
+修改: agri-server/src/routes.rs       # /telemetry/batch 批量端点
+文档: AGENTS.md                        # MQTT 下一版本规划
+```
+
+## 下一版本计划：MQTT 解耦（v2.0）
+
+### 目标
+将 rumqttd broker 从 agri-server 解耦为独立进程，ESP32 固件从 HTTP 迁移到 MQTT，利用 MQTT QoS 保证消息不丢失。
+
+### 设计
+```
+ESP32 → MQTT (QoS 1) → rumqttd (独立进程) → agri-server (consumer)
+                                                ↓
+                                             SQLite + SSE
+```
+
+| 组件 | 职责 |
+|------|------|
+| rumqttd | 独立 broker 进程，QoS 1 持久化暂存 |
+| agri-mqtt (consumer) | 订阅 `telemetry/+/+`，转发到 `process_telemetry()` |
+| agri-server | 不变，HTTP 和 MQTT 两条入口最终汇聚到 `process_telemetry` |
+
+### 优点
+- MQTT 原生 QoS 保证，broker 挂起不影响 publisher
+- 减少 HTTP 连接开销（每次 TLS 握手）
+- broker 可做消息桥接、离线缓存
+
+### 依赖
+- **ESP32 固件重写**为 MQTT publisher（替换现有 HTTP 逻辑）
+- **rumqttd 配置持久化**：`persistence.clean_session = false`
+- **consumer 幂等**：MQTT 可能重复投递，需 `(node_id, metric, timestamp)` 作为 dedup key
+
+### 优先级
+低 — 当前 HTTP + LittleFS 方案已覆盖服务器故障场景，MQTT 解耦为远期架构优化。
+```
