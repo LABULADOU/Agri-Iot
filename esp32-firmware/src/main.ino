@@ -1,5 +1,5 @@
 /*
- * 农业物联网 ESP32 固件 v2.1
+ * 农业物联网 ESP32 固件 v2.2
  * 功能：传感器数据采集 + HTTP 上报 (via Tailscale Funnel) + 远程控制
  * 传感器：DHT22 空气温湿度 + RS485 土壤传感器（温度/湿度/EC）
  * 控制：继电器开关（水泵/风扇）
@@ -19,7 +19,11 @@
 const char* WIFI_SSID = "iPhone";
 const char* WIFI_PASSWORD = "12345678";
 
-// HTTP API 配置（Tailscale Funnel 公网地址）
+// 局域网直连配置
+#define LAN_HOST "172.20.10.6"
+#define LAN_PORT 3001
+
+// 公网 Funnel 配置（Tailscale Funnel）
 const char* API_BASE = "https://zero-1.taile2b316.ts.net";
 const char* NODE_ID = "esp32-node-001";       // 设备唯一标识
 
@@ -50,7 +54,8 @@ const unsigned long COMMAND_POLL_INTERVAL = 3000; // 3秒轮询命令
 
 // ==================== 全局变量 ====================
 
-WiFiClientSecure client;
+WiFiClientSecure tlsClient;    // HTTPS (公网 Funnel)
+WiFiClient plainClient;        // HTTP (局域网直连)
 DHT dht(DHTPIN, DHTTYPE);
 HardwareSerial soilSerial(2);  // UART2
 
@@ -285,7 +290,7 @@ void diagnoseRS485() {
 
 void setup() {
     Serial.begin(115200);
-    Serial.println("\n=== 农业物联网 ESP32 固件 v2.1 (RS485 土壤传感器) ===");
+    Serial.println("\n=== 农业物联网 ESP32 固件 v2.2 (双通道 HTTP) ===");
 
     // 继电器
     pinMode(RELAY_PIN, OUTPUT);
@@ -299,7 +304,7 @@ void setup() {
     soilSerial.begin(soilBaud, SERIAL_8N1, RS485_RX, RS485_TX);
 
     dht.begin();
-    client.setInsecure();
+    tlsClient.setInsecure();
 
     // 启动后先扫描传感器配置
     scanSoilSensor();
@@ -340,7 +345,7 @@ void setupWiFi() {
     ESP.restart();
 }
 
-// ==================== HTTP 请求工具（无 String 分配） ====================
+// ==================== HTTP 请求工具（双通道：LAN 直连 → 公网 Funnel） ====================
 
 #define HTTP_RESP_BUF_SIZE 2048
 #define TLS_RECYCLE_INTERVAL 100
@@ -349,9 +354,9 @@ void setupWiFi() {
 static void ensureTlsClient() {
     httpReqCount++;
     if (httpReqCount >= TLS_RECYCLE_INTERVAL) {
-        client.stop();
-        client = WiFiClientSecure();
-        client.setInsecure();
+        tlsClient.stop();
+        tlsClient = WiFiClientSecure();
+        tlsClient.setInsecure();
         httpReqCount = 0;
     }
 }
@@ -371,55 +376,104 @@ static void readHttpBody(HTTPClient& http, char* out, size_t out_size) {
     out[idx] = '\0';
 }
 
-// HTTP GET — 返回 true 表示成功，响应写入 out 缓冲区
-bool httpGet(const char* url, char* out, size_t out_size) {
-    ensureTlsClient();
+// ===== 底层请求函数（分别使用 plainClient / tlsClient） =====
+
+static int doPost(const char* url, const char* body, bool useTls) {
     HTTPClient http;
-    http.begin(client, url);
+    if (useTls) {
+        ensureTlsClient();
+        http.begin(tlsClient, url);
+    } else {
+        http.begin(plainClient, url);
+    }
+    http.setTimeout(5000);
+    http.addHeader("Content-Type", "application/json");
+    int code = http.POST(body);
+    http.end();
+    return code;
+}
+
+static int doGet(const char* url, char* out, size_t out_size, bool useTls) {
+    HTTPClient http;
+    if (useTls) {
+        ensureTlsClient();
+        http.begin(tlsClient, url);
+    } else {
+        http.begin(plainClient, url);
+    }
     http.setTimeout(5000);
     int code = http.GET();
     if (code > 0) {
         readHttpBody(http, out, out_size);
-        http.end();
-        return true;
+    } else {
+        if (out_size > 0) out[0] = '\0';
     }
-    Serial.printf("HTTP GET 失败: %d\n", code);
     http.end();
-    if (out_size > 0) out[0] = '\0';
-    return false;
+    return code;
 }
 
-// HTTP POST — 返回 true 表示成功
-bool httpPost(const char* url, const char* body) {
-    ensureTlsClient();
+static int doPut(const char* url, const char* body, bool useTls) {
     HTTPClient http;
-    http.begin(client, url);
-    http.setTimeout(5000);
-    http.addHeader("Content-Type", "application/json");
-    int code = http.POST(body);
-    if (code > 0) {
-        http.end();
-        return true;
+    if (useTls) {
+        ensureTlsClient();
+        http.begin(tlsClient, url);
+    } else {
+        http.begin(plainClient, url);
     }
-    Serial.printf("HTTP POST 失败: %d\n", code);
-    http.end();
-    return false;
-}
-
-// HTTP PUT — 返回 true 表示成功
-bool httpPut(const char* url, const char* body) {
-    ensureTlsClient();
-    HTTPClient http;
-    http.begin(client, url);
     http.setTimeout(5000);
     http.addHeader("Content-Type", "application/json");
     int code = http.PUT(body);
-    if (code > 0) {
-        http.end();
-        return true;
-    }
-    Serial.printf("HTTP PUT 失败: %d\n", code);
     http.end();
+    return code;
+}
+
+// ===== 回退请求：先 LAN (HTTP)，失败后自动切到 Funnel (HTTPS) =====
+
+// POST：尝试 LAN 直连 → 公网 Funnel，body 包含完整 JSON payload
+bool httpPostFallback(const char* body) {
+    char url[256];
+
+    snprintf(url, sizeof(url), "http://%s:%d/api/v1/telemetry", LAN_HOST, LAN_PORT);
+    int code = doPost(url, body, false);
+    if (code > 0) return true;
+
+    snprintf(url, sizeof(url), "%s/api/v1/telemetry", API_BASE);
+    code = doPost(url, body, true);
+    if (code > 0) return true;
+
+    Serial.printf("HTTP POST 失败 (LAN=%d, TLS=%d)\n", code, code);
+    return false;
+}
+
+// GET：尝试 LAN 直连 → 公网 Funnel，用于命令轮询
+bool httpGetFallback(const char* path, char* out, size_t out_size) {
+    char url[256];
+
+    snprintf(url, sizeof(url), "http://%s:%d%s", LAN_HOST, LAN_PORT, path);
+    int code = doGet(url, out, out_size, false);
+    if (code > 0 && strlen(out) > 0) return true;
+
+    snprintf(url, sizeof(url), "%s%s", API_BASE, path);
+    code = doGet(url, out, out_size, true);
+    if (code > 0 && strlen(out) > 0) return true;
+
+    Serial.printf("HTTP GET 失败: path=%s\n", path);
+    return false;
+}
+
+// PUT：尝试 LAN 直连 → 公网 Funnel，用于命令状态确认
+bool httpPutFallback(const char* path, const char* body) {
+    char url[256];
+
+    snprintf(url, sizeof(url), "http://%s:%d%s", LAN_HOST, LAN_PORT, path);
+    int code = doPut(url, body, false);
+    if (code > 0) return true;
+
+    snprintf(url, sizeof(url), "%s%s", API_BASE, path);
+    code = doPut(url, body, true);
+    if (code > 0) return true;
+
+    Serial.printf("HTTP PUT 失败: path=%s\n", path);
     return false;
 }
 
@@ -485,8 +539,6 @@ void flushBuffer() {
     File wf = LittleFS.open(BUFFER_TMP, "w");
     if (!wf) { rf.close(); return; }
 
-    char url[128];
-    snprintf(url, sizeof(url), "%s/api/v1/telemetry", API_BASE);
     char line[384];
     int sent = 0, remaining = 0;
 
@@ -496,7 +548,7 @@ void flushBuffer() {
         line[len] = '\0';
         if (len > 0 && line[len - 1] == '\r') line[--len] = '\0';
 
-        if (sent < BUFFER_FLUSH_BATCH && httpPost(url, line)) {
+        if (sent < BUFFER_FLUSH_BATCH && httpPostFallback(line)) {
             sent++;
             continue;
         }
@@ -581,10 +633,8 @@ void publishTelemetry() {
         return;
     }
 
-    // 通过 HTTP POST 上报遥测
-    char url[128];
-    snprintf(url, sizeof(url), "%s/api/v1/telemetry", API_BASE);
-    bool ok = httpPost(url, json);
+    // 双通道上报：LAN 直连 → 公网 Funnel
+    bool ok = httpPostFallback(json);
 
     if (ok) {
         Serial.print(" | HTTP: 成功");
@@ -601,11 +651,11 @@ void publishTelemetry() {
 void pollCommands() {
     if (WiFi.status() != WL_CONNECTED) return;
 
-    char url[256];
-    snprintf(url, sizeof(url), "%s/api/v1/commands/node/%s", API_BASE, NODE_ID);
+    char path[128];
+    snprintf(path, sizeof(path), "/api/v1/commands/node/%s", NODE_ID);
 
     char resp[HTTP_RESP_BUF_SIZE];
-    if (!httpGet(url, resp, sizeof(resp)) || strlen(resp) == 0) return;
+    if (!httpGetFallback(path, resp, sizeof(resp)) || strlen(resp) == 0) return;
 
     // 解析命令列表
     StaticJsonDocument<2048> doc;
@@ -633,9 +683,9 @@ void pollCommands() {
         }
 
         // 标记命令已执行
-        char statusUrl[256];
-        snprintf(statusUrl, sizeof(statusUrl), "%s/api/v1/commands/%s/status", API_BASE, id);
-        httpPut(statusUrl, "{\"status\":\"completed\"}");
+        char cmdPath[128];
+        snprintf(cmdPath, sizeof(cmdPath), "/api/v1/commands/%s/status", id);
+        httpPutFallback(cmdPath, "{\"status\":\"completed\"}");
         Serial.printf("命令 %s 已确认\n", id);
     }
 }

@@ -369,7 +369,39 @@ Tailscale Funnel: https://zero-1.taile2b316.ts.net
 ```
 修改: esp32-firmware/src/main.ino     # LittleFS 缓冲 + 回放
 修改: agri-server/src/routes.rs       # /telemetry/batch 批量端点
-文档: AGENTS.md                        # MQTT 下一版本规划
+文档: AGENTS.md                        # MQTT 下一版本规划 + 双通道回退
+```
+
+## 双通道 HTTP 回退（2026-06-03，v2.2）
+
+### 设计
+ESP32 固件 v2.2 引入**双通道自动回退**机制，解决局域网和公网不同网络环境下的连接问题：
+
+```
+publishTelemetry()
+  ├── LAN (HTTP, 不依赖蜂窝):  http://172.20.10.6:3001  ← 首次尝试
+  └── Funnel (HTTPS, 依赖公网): https://zero-1.taile2b316.ts.net  ← 回退
+```
+
+### 核心变更
+- `WiFiClientSecure tlsClient` + `WiFiClient plainClient` 双客户端并存
+- `httpPostFallback()` / `httpGetFallback()` / `httpPutFallback()` 三函数实现自动回退逻辑
+- LAN 失败时自动切 Funnel，双通道均失败才进 LittleFS 缓冲区
+- 所有通信统一走回退函数（遥测上报、命令轮询、状态确认）
+
+### 可靠性比较
+| 场景 | LAN | Funnel | 结果 |
+|------|-----|--------|------|
+| iPhone 有蜂窝 | ✓ HTTP 直连 | ✓ | LAN 成功，快速 |
+| iPhone 无蜂窝但 LAN 通 | ✓ HTTP 直连 | ✗ | LAN 成功 |
+| iPhone 蜂窝+LAN 都通 | ✓ | ✓ | LAN 优先（无 TLS 开销） |
+| 双通道均不通 | ✗ | ✗ | LittleFS 缓冲 |
+
+### 变更文件清单
+```
+修改: esp32-firmware/src/main.ino  # v2.2: 双通道 HTTP 回退 (LAN→Funnel)
+文档: AGENTS.md                     # 双通道设计说明
+```
 ```
 
 ## 下一版本计划：MQTT 解耦（v2.0）
