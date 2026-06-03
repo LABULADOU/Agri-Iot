@@ -93,7 +93,7 @@ ESP32(串口)     ───串口──→ serial_bridge.py ─HTTP→ agri-serv
 ESP32 (DHT22 + RS485 土壤三合一)
   → WiFi ("iPhone")
   → HTTPS → zero-1.taile2b316.ts.net/api/v1/telemetry
-  → Tailscale Funnel → http://172.20.10.2:3001 → agri-server → DB
+  → Tailscale Funnel (WSL) → 172.20.10.13:3000 → agri-server → DB
 ```
 
 - **引脚定义**
@@ -217,7 +217,7 @@ nohup ./target/debug/agri-server > /tmp/agri-server.log 2>&1 &
 python3 scripts/serial_bridge.py /dev/ttyUSB0
 ```
 
-Dashboard: http://localhost:3001
+Dashboard: http://localhost:3000
 Tailscale Funnel: https://zero-1.taile2b316.ts.net
 
 ## 已知坑点
@@ -225,13 +225,13 @@ Tailscale Funnel: https://zero-1.taile2b316.ts.net
 - `rumqttc` 0.24 的 `AsyncClient` 和 `EventLoop` 要分开创建
 - SQLite `enabled` 字段是 `INTEGER`，与 `bool` 比较用 `== 1i64`
 - 命令轮询返回的 `id` 必须是字符串（ESP32 `const char*` 接收），否则崩溃
-- 设备状态无超时离线检测（需 telemetry 或 MQTT 消息才更新）
 - `mosquitto` 子进程启动后即退出（不影响 MQTT 功能，但需排查）
 - LLD 链接器与工具链版本可能不兼容，`cargo clean` 后用 `CARGO_BUILD_JOBS=1` 可缓解内存不足
 - 内存仅 1.8GB，并行 rustc 进程容易 OOM，编译需单线程或低并行度
 - `ObsidianKnowledge::safe_path()` 需要 vault 路径存在才能 canonicalize，否则回退到字符串过滤
 - 前端 metric 名须与 DB 一致（`temperature` vs `air_temp`），`dataApi.query()` 已不传 metric 参数，由前端 `useMemo` 过滤
 - QWeather 免费套餐不支持 `/weather/minutely` 和 `/weather/warning`，后端 `safe_proxy()` 返回 200+空数据
+- `dashboard/node-readings` 每次返回24h全量数据会 OOM，已修复为只返回最新值
 
 ## 审查修复记录（2026-05-19）
 
@@ -319,4 +319,38 @@ Tailscale Funnel: https://zero-1.taile2b316.ts.net
 删除: scripts/simulate_http.py                # HTTP 模拟器
 删除: scripts/simulate_node.py                # MQTT 模拟器
 删除: agri-server/static/assets/旧bundle      # 旧构建产物
+```
+
+## 内存泄漏与稳定性修复（2026-06-02）
+
+### 后端内存泄漏
+
+| # | 问题 | 修复 | 文件 |
+|---|------|------|------|
+| 1 | **`dashboard/node-readings` 全量加载 24h 数据** — 单传感器每天 ~5万行，全部加载到内存再序列化，前端只取最后一条 | 改用 `MAX(id)` 子查询只返回每个 metric 最新值 | `routes.rs` |
+| 2 | **`dashboard/area-readings` 无 LIMIT** — 加载 crop batch 全周期 sensor_readings | 加 `LIMIT 1000` | `routes.rs` |
+| 3 | **`devices/:id/readings` 无默认 LIMIT** — 不传 limit 时返回全表 | 默认 `LIMIT 100`，max 5000 | `routes.rs` |
+| 4 | **`reqwest::get()` 每次新建 HTTP Client** — 泄漏连接池 | 全局 `OnceLock<Client>` 复用 | `weather.rs` |
+| 5 | **无设备离线检测** — telemetry 设 `online` 但永不设 `offline` | 规则引擎每 30 秒标记超 5 分钟设备为 offline | `rule_engine.rs` |
+
+### ESP32 固件稳定性（v2.1.1）
+
+| # | 问题 | 修复 |
+|---|------|------|
+| 1 | **`String` 堆碎片** — HTTP 函数每次调用分配多个 `String`（url/resp/body） | 全部改用 `char[]` 栈缓冲区 + `snprintf` + 流式读取 |
+| 2 | **TWDT 复位** — `readSoilSensor` 忙等待循环不 yield，土壤无响应时跑满 1 秒触发 WatchDog | 所有 busy-wait 循环加 `delay(1)` |
+| 3 | **WiFi 失败永久深度休眠** — `ESP.deepSleep(0)` 需硬件复位才唤醒 | 改为 3 次重试 + `ESP.restart()` |
+| 4 | **TLS 内存泄漏** — `WiFiClientSecure` 长期不重建 | 每 100 次 HTTP 重建 client |
+| 5 | **JSON 栈溢出风险** — `serializeJson(doc, buf)` 无边界检查 | 加 `serializeJson(doc, json, sizeof(json))` + 返回值校验 |
+| 6 | **WatchDog 无喂狗** — `loop()` 没有主动喂狗 | `esp_task_wdt_reset()` |
+| 7 | **命令 `id` 空指针** — 后端返回非字符串 id 时崩溃 | 加 `if (!id) continue` |
+| 8 | **诊断残留 `String`** — `diagnoseRS485()` 用 `readString()` | 改为 `char[]` 手动读取 |
+
+### 变更文件清单
+```
+修改: agri-server/src/routes.rs           # 全量历史→最新值, 加 LIMIT
+修改: agri-server/src/rule_engine.rs      # 离线检测 + WatchDog
+修改: agri-server/src/weather.rs          # OnceLock<Client> 复用
+修改: agri-ui/src/stores/dashboardStore.ts # 适配 latest 字段
+修改: esp32-firmware/src/main.ino         # v2.1.1: 无String + 喂狗 + TLS重建 + 重试
 ```
