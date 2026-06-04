@@ -12,17 +12,22 @@ fn main() {
         .init();
 
     let port: u16 = std::env::var("MQTT_BROKER_PORT")
-        .unwrap_or_else(|_| "11883".into())
+        .unwrap_or_else(|_| "1883".into())
         .parse()
-        .unwrap_or(11883);
+        .unwrap_or(1883);
 
     let ws_port: u16 = std::env::var("MQTT_WS_PORT")
-        .unwrap_or_else(|_| "11884".into())
+        .unwrap_or_else(|_| "1884".into())
         .parse()
-        .unwrap_or(11884);
+        .unwrap_or(1884);
 
     let storage_path: String = std::env::var("MQTT_STORAGE_PATH")
         .unwrap_or_else(|_| "./mqtt-data".into());
+
+    let bind_ip: std::net::IpAddr = std::env::var("MQTT_BIND_IP")
+        .unwrap_or_else(|_| "0.0.0.0".into())  // LAN 访问需要 0.0.0.0
+        .parse()
+        .unwrap_or(std::net::IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED));
 
     let mut config = Config::default();
     config.id = 0;
@@ -36,7 +41,7 @@ fn main() {
         "tcp".to_string(),
         ServerSettings {
             name: "tcp".to_string(),
-            listen: SocketAddr::from(([127, 0, 0, 1], port)),
+            listen: SocketAddr::new(bind_ip, port),
             tls: None,
             next_connection_delay_ms: 1,
             connections: ConnectionSettings {
@@ -72,7 +77,8 @@ fn main() {
     config.console.listen = format!("127.0.0.1:{}", port + 1);
 
     tracing::info!(
-        "MQTT Broker starting — TCP :{}, WS :{}, storage: {}",
+        "MQTT Broker starting — TCP {}:{}, WS 127.0.0.1:{}, storage: {}",
+        bind_ip,
         port,
         ws_port,
         storage_path

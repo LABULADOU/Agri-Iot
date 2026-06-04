@@ -15,6 +15,7 @@
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <PubSubClient.h>
+#define WEBSOCKETS_TCP_TIMEOUT 15000
 #include <WebSocketsClient.h>
 #include <ArduinoJson.h>
 #include <DHT.h>
@@ -602,11 +603,11 @@ bool connectWanWsMqtt() {
     
     webSocket.beginSSL(FUNNEL_HOST, FUNNEL_PORT, FUNNEL_PATH);
     webSocket.onEvent(webSocketEvent);
-    webSocket.setReconnectInterval(10000);
+    webSocket.setReconnectInterval(2000);
     
-    // 等待 WebSocket 连接和 MQTT CONNACK（最多 5 秒）
+    // 等待 WebSocket 连接和 MQTT CONNACK（最多 30 秒，TLS 协商可能较慢）
     unsigned long start = millis();
-    while (millis() - start < 5000) {
+    while (millis() - start < 30000) {
         webSocket.loop();
         if (wanMqttConnected) {
             activeTransport = TRANSPORT_WAN_WS;
@@ -827,10 +828,12 @@ void flashFlushBuffer() {
 // ==================== WiFi ====================
 
 void resolveLanHost() {
-    if (MDNS.queryHost("agri-server", LAN_HOST, sizeof(LAN_HOST))) {
+    IPAddress ip = MDNS.queryHost("agri-server");
+    if (ip) {
+        snprintf(LAN_HOST, sizeof(LAN_HOST), "%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
         Serial.printf("mDNS: agri-server.local → %s\n", LAN_HOST);
     } else {
-        strncpy(LAN_HOST, "172.20.10.6", sizeof(LAN_HOST));
+        strncpy(LAN_HOST, "172.20.10.13", sizeof(LAN_HOST));
         LAN_HOST[sizeof(LAN_HOST)-1] = '\0';
         Serial.printf("mDNS: agri-server.local 未找到, 使用 %s\n", LAN_HOST);
     }
