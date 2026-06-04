@@ -30,13 +30,17 @@ mod areas;
 mod weather;
 mod ai_routes;
 mod response;
+mod mqtt_ws;
+mod rate_limiter;
 
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::from_default_env()
-                .add_directive("agri_server=info".parse()?),
+                .add_directive("agri_server=info".parse()?)
+                .add_directive("agri_mqtt=info".parse()?)
+                .add_directive("rumqttc=warn".parse()?),
         )
         .init();
 
@@ -51,78 +55,29 @@ async fn main() -> Result<()> {
         .parse()
         .unwrap_or(3001);
 
-    let broker_port: u16 = std::env::var("MQTT_BROKER_PORT")
-        .unwrap_or_else(|_| "11883".into())
-        .parse()
-        .unwrap_or(11883);
+    let broker_addr: String = std::env::var("MQTT_BROKER_ADDR")
+        .unwrap_or_else(|_| "127.0.0.1:11883".into());
 
-    let local_ips = get_local_ips();
+    info!("Connecting to external MQTT broker at {}", broker_addr);
 
-    // 启动本地 MQTT Broker (mosquitto)
-    info!("Starting MQTT Broker (mosquitto) on port {}", broker_port);
-    let config_path = format!("/tmp/mosquitto-agri-{}.conf", broker_port);
-    let config = format!(
-        "listener {} 0.0.0.0\nallow_anonymous true\n",
-        broker_port
-    );
-    let _ = std::fs::write(&config_path, &config);
-    match std::process::Command::new("mosquitto")
-        .args(["-d", "-c", &config_path])
-        .spawn()
-    {
-        Ok(mut child) => {
-            std::thread::spawn(move || {
-                let status = child.wait();
-                if let Ok(s) = status {
-                    tracing::info!("mosquitto exited with: {}", s);
-                }
-            });
-        }
-        Err(e) => {
-            tracing::error!("Failed to start mosquitto: {}. Is mosquitto installed?", e);
-            tracing::info!("Falling back to embedded broker (rumqttd)...");
-            std::thread::spawn(move || {
-                match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    agri_mqtt::broker::start_broker(broker_port)
-                })) {
-                    Ok(Ok(())) => tracing::info!("Embedded broker started successfully"),
-                    Ok(Err(e)) => tracing::error!("Embedded broker failed: {}", e),
-                    Err(panic) => {
-                        let msg = if let Some(s) = panic.downcast_ref::<&str>() {
-                            s.to_string()
-                        } else if let Some(s) = panic.downcast_ref::<String>() {
-                            s.clone()
-                        } else {
-                            "unknown panic".to_string()
-                        };
-                        tracing::error!("Embedded broker thread panicked: {}", msg);
-                    }
-                }
-            });
-        }
-    }
-
-    // 等待 broker 就绪
-    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-
-    let (mqtt_client, eventloop) = create_mqtt_client(broker_port);
+    let (mqtt_client, eventloop) = create_mqtt_client(&broker_addr);
 
     let app_state = state::AppState::new(pool, mqtt_client);
-
-    info!("========================================================");
-    info!("  ESP32 MQTT 配置:");
-    for ip in &local_ips {
-        info!("    MQTT Broker -> {}:{}", ip, broker_port);
-        info!("    HTTP API   -> http://{}:{}", ip, server_port);
-    }
-    info!("  请将 ESP32 固件中的 MQTT_SERVER 设为以上 IP 地址");
-    info!("========================================================");
 
     // Spawn MQTT event loop listener
     let listener_pool = app_state.pool.clone();
     let listener_tx = app_state.event_tx.clone();
     tokio::spawn(async move {
         agri_mqtt::handler::start_listener(eventloop, listener_pool, Some(listener_tx)).await;
+    });
+
+    // 定期清理限流器过期桶
+    let limiter = app_state.telemetry_limiter.clone();
+    tokio::spawn(async move {
+        loop {
+            tokio::time::sleep(std::time::Duration::from_secs(60)).await;
+            limiter.cleanup();
+        }
     });
 
     let rule_state = app_state.clone();
@@ -146,9 +101,12 @@ async fn main() -> Result<()> {
     let api_router = routes::create_router(app_state.clone())
         .merge(areas::create_router(app_state.clone()))
         .merge(weather_router)
+        .route("/mqtt", axum::routing::get(mqtt_ws::ws_handler))
         .merge(ai_routes::create_router(app_state));
 
-    let static_dir = std::path::PathBuf::from("agri-server/static");
+    let static_dir = std::path::PathBuf::from("agri-server/static")
+        .canonicalize()
+        .unwrap_or_else(|_| std::path::PathBuf::from("agri-server/static"));
     let app = Router::new()
         .merge(api_router)
         .layer(middleware::from_fn(request_logger::log_requests))
@@ -156,72 +114,72 @@ async fn main() -> Result<()> {
             let dir = static_dir.clone();
             async move {
                 let path = req.uri().path().trim_start_matches('/');
-                let file_path = if path.is_empty() { dir.join("index.html") } else { dir.join(path) };
-                match tokio::fs::read(&file_path).await {
-                    Ok(data) => {
-                        let ext = file_path.extension().and_then(|e| e.to_str()).unwrap_or("");
-                        Ok::<_, Infallible>(Response::builder()
-                            .header("Content-Type", content_type(ext))
-                            .body(Body::from(data))
-                            .expect("valid response builder"))
-                    }
-                    Err(_) => {
-                        let idx = dir.join("index.html");
-                        match tokio::fs::read(&idx).await {
-                            Ok(data) => Ok(Response::builder()
-                                .header("Content-Type", "text/html; charset=utf-8")
-                                .body(Body::from(data))
-                                .expect("valid response builder")),
-                            Err(_) => Ok(Response::builder()
-                                .status(StatusCode::NOT_FOUND)
-                                .body(Body::from("Not Found"))
-                                .expect("valid response builder")),
+                let raw = if path.is_empty() { "index.html".to_string() } else { path.to_string() };
+                let file_path = dir.join(&raw);
+                // 路径穿越防护：规范化后验证在 static 目录内
+                match file_path.canonicalize() {
+                    Ok(canon) if canon.starts_with(&dir) => {
+                        match tokio::fs::read(&canon).await {
+                            Ok(data) => {
+                                let ext = canon.extension().and_then(|e| e.to_str()).unwrap_or("");
+                                Ok::<_, Infallible>(Response::builder()
+                                    .header("Content-Type", content_type(ext))
+                                    .body(Body::from(data))
+                                    .expect("valid response builder"))
+                            }
+                            Err(_) => serve_index(&dir).await,
                         }
                     }
+                    _ => serve_index(&dir).await,
                 }
             }
         }));
 
-    let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", server_port)).await?;
     info!("Server listening on 0.0.0.0:{}", server_port);
     info!("Dashboard: http://localhost:{}", server_port);
+    info!("MQTT WebSocket bridge: /mqtt (connect via wss://host/mqtt)");
 
+    let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", server_port)).await?;
     axum::serve(listener, app).await?;
     Ok(())
 }
 
-fn get_local_ips() -> Vec<String> {
-    let mut ips = Vec::new();
-    if let Ok(output) = std::process::Command::new("hostname").arg("-I").output() {
-        if let Ok(stdout) = String::from_utf8(output.stdout) {
-            for ip in stdout.split_whitespace() {
-                let trimmed = ip.trim();
-                if !trimmed.is_empty() && trimmed != "127.0.0.1" && trimmed != "::1" {
-                    ips.push(trimmed.to_string());
-                }
-            }
-        }
+// 路径穿越安全 fallback：返回 index.html 或 404
+async fn serve_index(dir: &std::path::Path) -> Result<Response<Body>, Infallible> {
+    let idx = dir.join("index.html");
+    match tokio::fs::read(&idx).await {
+        Ok(data) => Ok(Response::builder()
+            .header("Content-Type", "text/html; charset=utf-8")
+            .body(Body::from(data))
+            .expect("valid response builder")),
+        Err(_) => Ok(Response::builder()
+            .status(StatusCode::NOT_FOUND)
+            .body(Body::from("Not Found"))
+            .expect("valid response builder")),
     }
-    ips
 }
 
-fn create_mqtt_client(broker_port: u16) -> (rumqttc::AsyncClient, rumqttc::EventLoop) {
+fn create_mqtt_client(broker_addr: &str) -> (rumqttc::AsyncClient, rumqttc::EventLoop) {
     let client_id = format!("agri-server-{}", std::process::id());
-    let mut options = rumqttc::MqttOptions::new(&client_id, "127.0.0.1", broker_port);
-    options.set_keep_alive(std::time::Duration::from_secs(10));
-    options.set_clean_session(false);
-    let (client, eventloop) = rumqttc::AsyncClient::new(options, 10);
+    let (host, port) = broker_addr.split_once(':')
+        .map(|(h, p)| (h.to_string(), p.parse::<u16>().unwrap_or(11883)))
+        .unwrap_or_else(|| (broker_addr.to_string(), 11883));
+    let mut options = rumqttc::MqttOptions::new(&client_id, host, port);
+    options.set_keep_alive(std::time::Duration::from_secs(30));
+    options.set_clean_session(true);
+    options.set_request_channel_capacity(100);
+    let (client, eventloop) = rumqttc::AsyncClient::new(options, 100);
     let sub_client = client.clone();
     tokio::spawn(async move {
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         loop {
-            if let Err(e) = sub_client.subscribe("agri/node/+/telemetry", QoS::AtMostOnce).await {
+            if let Err(e) = sub_client.subscribe("agri/node/+/telemetry", QoS::AtLeastOnce).await {
                 tracing::warn!("MQTT subscribe telemetry failed: {}", e);
             }
-            if let Err(e) = sub_client.subscribe("agri/node/+/status", QoS::AtMostOnce).await {
+            if let Err(e) = sub_client.subscribe("agri/node/+/status", QoS::AtLeastOnce).await {
                 tracing::warn!("MQTT subscribe status failed: {}", e);
             }
-            tokio::time::sleep(std::time::Duration::from_secs(60)).await;
+            tokio::time::sleep(std::time::Duration::from_secs(10)).await;
         }
     });
     (client, eventloop)

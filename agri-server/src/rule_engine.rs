@@ -401,6 +401,7 @@ mod tests {
             emergency_ctx: Arc::new(Mutex::new(
                 agri_core::ai::emergency::EmergencyContext::new()
             )),
+            telemetry_limiter: Arc::new(crate::rate_limiter::RateLimiter::new(1000, 1)),
         }
     }
 

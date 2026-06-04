@@ -46,6 +46,7 @@ pub async fn process_telemetry(
     node_id: &str,
     metrics: &serde_json::Map<String, serde_json::Value>,
     event_tx: Option<&broadcast::Sender<String>>,
+    seq: Option<i64>,
 ) -> Result<i64, Box<dyn std::error::Error + Send + Sync>> {
     let devices = sqlx::query_as::<_, (String, String)>(
         "SELECT id, node_id FROM devices WHERE node_id = ?",
@@ -72,21 +73,41 @@ pub async fn process_telemetry(
             if !validate_value(normalized, val) { continue; }
             let unit = metric_unit(normalized);
 
-            if let Err(e) = sqlx::query(
-                "INSERT INTO sensor_readings (device_id, metric, value, unit, timestamp) VALUES (?, ?, ?, ?, ?)"
-            )
-            .bind(device_id)
-            .bind(normalized)
-            .bind(val)
-            .bind(unit)
-            .bind(now)
-            .execute(pool)
-            .await
-            {
-                tracing::warn!("Failed to insert reading: {}", e);
+            let result = if let Some(s) = seq {
+                sqlx::query(
+                    "INSERT INTO sensor_readings (device_id, metric, value, unit, timestamp, seq) \
+                     VALUES (?, ?, ?, ?, ?, ?) \
+                     ON CONFLICT(device_id, metric, seq) WHERE seq IS NOT NULL DO NOTHING"
+                )
+                .bind(device_id)
+                .bind(normalized)
+                .bind(val)
+                .bind(unit)
+                .bind(now)
+                .bind(s)
+                .execute(pool)
+                .await
             } else {
-                inserted += 1;
-                inserted_readings.push((normalized.to_string(), val, unit.to_string()));
+                sqlx::query(
+                    "INSERT INTO sensor_readings (device_id, metric, value, unit, timestamp) VALUES (?, ?, ?, ?, ?)"
+                )
+                .bind(device_id)
+                .bind(normalized)
+                .bind(val)
+                .bind(unit)
+                .bind(now)
+                .execute(pool)
+                .await
+            };
+
+            match result {
+                Ok(r) => {
+                    if r.rows_affected() > 0 {
+                        inserted += 1;
+                        inserted_readings.push((normalized.to_string(), val, unit.to_string()));
+                    }
+                }
+                Err(e) => tracing::warn!("Failed to insert reading: {}", e),
             }
         }
     }

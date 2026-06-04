@@ -673,6 +673,7 @@ mod tests {
             emergency_ctx: std::sync::Arc::new(tokio::sync::Mutex::new(
                 agri_core::ai::emergency::EmergencyContext::new()
             )),
+            telemetry_limiter: std::sync::Arc::new(crate::rate_limiter::RateLimiter::new(1000, 1)),
         }
     }
 

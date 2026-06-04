@@ -372,36 +372,53 @@ Tailscale Funnel: https://zero-1.taile2b316.ts.net
 文档: AGENTS.md                        # MQTT 下一版本规划 + 双通道回退
 ```
 
-## 双通道 HTTP 回退（2026-06-03，v2.2）
+## 双通道 HTTP 回退 + mDNS 自动发现（2026-06-04，v2.2 → v2.3）
 
-### 设计
-ESP32 固件 v2.2 引入**双通道自动回退**机制，解决局域网和公网不同网络环境下的连接问题：
+### v2.3 设计
+
+LAN 地址从硬编码改为 mDNS 动态解析，LAN—Funnel 双通道完整运行：
 
 ```
 publishTelemetry()
-  ├── LAN (HTTP, 不依赖蜂窝):  http://172.20.10.6:3001  ← 首次尝试
-  └── Funnel (HTTPS, 依赖公网): https://zero-1.taile2b316.ts.net  ← 回退
+  ├── LAN (HTTP, mDNS解析):  http://agri-server.local:3001  ← 首次尝试
+  │                           mDNS失败则 fallback → 默认 IP
+  └── Funnel (HTTPS, 公网): https://zero-1.taile2b316.ts.net  ← 回退
 ```
 
 ### 核心变更
-- `WiFiClientSecure tlsClient` + `WiFiClient plainClient` 双客户端并存
-- `httpPostFallback()` / `httpGetFallback()` / `httpPutFallback()` 三函数实现自动回退逻辑
-- LAN 失败时自动切 Funnel，双通道均失败才进 LittleFS 缓冲区
-- 所有通信统一走回退函数（遥测上报、命令轮询、状态确认）
 
-### 可靠性比较
+#### ESP32 固件（v2.3）
+- `#define LAN_HOST "172.20.10.6"` → `char LAN_HOST[32]` 运行时缓冲区 + `resolveLanHost()`
+- `MDNS.begin("esp32-node-001")` 在 `setupWiFi()` 中初始化
+- `resolveLanHost()`：`MDNS.queryHost("agri-server", LAN_HOST, sizeof(LAN_HOST))` 解析 `agri-server.local`
+- mDNS 解析失败时 fallback 到 `172.20.10.6`（兼容无 mDNS 环境）
+- 每次回退到 Funnel 前重新 `resolveLanHost()` 重试一次（应对 IP 变化）
+- 每 60 秒自动 `refreshLanHost()` 刷新 mDNS 缓存
+
+#### 容器端 mDNS 监听（Python raw mDNS responder）
+- `scripts/mdns_advertise.py`：Python 原始套接字 mDNS 响应器
+- 监听 `224.0.0.251:5353`，应答 `agri-server.local → wlan0 IP :3001`
+- 无需 avahi-daemon、无需 CAP_NET_RAW、无需 ifaddr 枚举接口
+- 双套接字设计：listen socket（IP_ADD_MEMBERSHIP）+ send socket（IP_MULTICAST_IF）
+- 系统服务 `/etc/init.d/agri-mdns` 管理生命周期
+- 日志：`/var/log/agri-mdns.log`
+
+### 可靠性比较（v2.3）
 | 场景 | LAN | Funnel | 结果 |
 |------|-----|--------|------|
-| iPhone 有蜂窝 | ✓ HTTP 直连 | ✓ | LAN 成功，快速 |
-| iPhone 无蜂窝但 LAN 通 | ✓ HTTP 直连 | ✗ | LAN 成功 |
-| iPhone 蜂窝+LAN 都通 | ✓ | ✓ | LAN 优先（无 TLS 开销） |
+| iPhone 有蜂窝 + mDNS 通 | ✓ mDNS→HTTP | ✓ | LAN 成功，快速 |
+| iPhone 无蜂窝 + mDNS 通 | ✓ mDNS→HTTP | ✗ | LAN 成功 |
+| iPhone 蜂窝+LAN 都通 + mDNS 断 | `127.0.0.1` → Funnel | ✓ | Funnel 成功 |
 | 双通道均不通 | ✗ | ✗ | LittleFS 缓冲 |
+| 服务器容器重启（IP 变） | mDNS 重新解析 | ✓ | 自动适应 |
 
 ### 变更文件清单
 ```
-修改: esp32-firmware/src/main.ino  # v2.2: 双通道 HTTP 回退 (LAN→Funnel)
-文档: AGENTS.md                     # 双通道设计说明
-```
+修改: esp32-firmware/src/main.ino         # v2.3: mDNS + 硬编码→运行时 IP
+新增: scripts/mdns_advertise.py           # Python raw mDNS responder
+新增: scripts/start_mdns.sh               # mDNS 启动脚本
+新增: /etc/init.d/agri-mdns               # SysV init 服务
+新增: /etc/systemd/system/agri-mdns.service  # systemd 服务（备选）
 ```
 
 ## 下一版本计划：MQTT 解耦（v2.0）
@@ -433,5 +450,5 @@ ESP32 → MQTT (QoS 1) → rumqttd (独立进程) → agri-server (consumer)
 - **consumer 幂等**：MQTT 可能重复投递，需 `(node_id, metric, timestamp)` 作为 dedup key
 
 ### 优先级
-低 — 当前 HTTP + LittleFS 方案已覆盖服务器故障场景，MQTT 解耦为远期架构优化。
+低 — 当前 HTTP + LittleFS + mDNS 方案已覆盖服务器故障和 IP 变化场景，MQTT 解耦为远期架构优化。
 ```

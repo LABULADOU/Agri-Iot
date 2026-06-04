@@ -1,3 +1,4 @@
+use crate::rate_limiter::RateLimiter;
 use agri_core::ai::emergency::EmergencyContext;
 use agri_core::models::Rule;
 use sqlx::SqlitePool;
@@ -12,6 +13,7 @@ pub struct AppState {
     pub event_tx: broadcast::Sender<String>,
     pub obsidian_vault_path: Option<String>,
     pub emergency_ctx: Arc<Mutex<EmergencyContext>>,
+    pub telemetry_limiter: Arc<RateLimiter>,
 }
 
 impl AppState {
@@ -25,6 +27,7 @@ impl AppState {
             event_tx: tx,
             obsidian_vault_path: vault_path,
             emergency_ctx: Arc::new(Mutex::new(EmergencyContext::new())),
+            telemetry_limiter: Arc::new(RateLimiter::new(60, 1)), // 60 req/s per node
         }
     }
 }

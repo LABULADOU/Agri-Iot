@@ -197,7 +197,7 @@ async fn list_readings(
     let has_metric = query.metric.is_some();
     let has_start = query.start.is_some();
     let has_end = query.end.is_some();
-    let limit = query.limit.unwrap_or(100).min(5000);
+    let limit = query.limit.unwrap_or(100).clamp(1, 5000);
     let mut sql = String::from("SELECT id, device_id, metric, value, unit, timestamp FROM sensor_readings WHERE device_id = ?");
     if has_metric { sql.push_str(" AND metric = ?"); }
     if has_start { sql.push_str(" AND timestamp >= ?"); }
@@ -216,7 +216,7 @@ async fn list_readings(
             }).collect();
             Json(result).into_response()
         }
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+        Err(e) => internal_err(e),
     }
 }
 
@@ -230,12 +230,12 @@ async fn send_command(
         Ok(d) => d,
         Err(e) => {
             tracing::warn!("DB error fetching device {}: {}", id, e);
-            return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": "Database error"}))).into_response();
+            return internal_err(e);
         }
     };
     let (status, capabilities_json) = match device {
         Some(d) => d,
-        None => return (StatusCode::NOT_FOUND, Json(serde_json::json!({"error": "Device not found"}))).into_response(),
+        None => return not_found(Some("Device not found")),
     };
     let has_actuator = capabilities_json.as_ref().map_or(false, |c| {
         serde_json::from_str::<Vec<String>>(c).map(|caps| caps.contains(&"actuator".to_string()))
@@ -245,10 +245,10 @@ async fn send_command(
             })
     });
     if !has_actuator {
-        return (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": "Device does not support actuator commands"}))).into_response();
+        return bad_request("Device does not support actuator commands");
     }
     if status != "online" {
-        return (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": "Device is offline"}))).into_response();
+        return bad_request("Device is offline");
     }
     let now = Utc::now().timestamp();
     let payload_str = serde_json::to_string(&cmd.params).ok();
@@ -257,7 +257,7 @@ async fn send_command(
     ).bind(&id).bind(&cmd.command).bind(payload_str).bind("pending").bind(now).execute(&state.pool).await;
     match result {
         Ok(r) => Json(serde_json::json!({"id": r.last_insert_rowid().to_string(), "message": "Command queued"})).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+        Err(e) => internal_err(e),
     }
 }
 
@@ -288,7 +288,7 @@ async fn get_pending_commands(
             }).collect();
             Json(result).into_response()
         }
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+        Err(e) => internal_err(e),
     }
 }
 
@@ -303,11 +303,11 @@ async fn update_command_status(
     Json(req): Json<UpdateCommandStatusRequest>,
 ) -> impl IntoResponse {
     if req.status != "completed" && req.status != "executed" && req.status != "failed" {
-        return (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": "Status must be 'completed' or 'failed'"}))).into_response();
+        return bad_request("Status must be 'completed' or 'failed'");
     }
     let id: i64 = match id.parse() {
         Ok(v) => v,
-        Err(_) => return (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": "Invalid command id"}))).into_response(),
+        Err(_) => return bad_request("Invalid command id"),
     };
     let db_status = if req.status == "executed" { "completed" } else { &req.status };
     let result = sqlx::query("UPDATE command_log SET status = ? WHERE id = ?")
@@ -319,12 +319,12 @@ async fn update_command_status(
     match result {
         Ok(r) => {
             if r.rows_affected() == 0 {
-                (StatusCode::NOT_FOUND, Json(serde_json::json!({"error": "Command not found"}))).into_response()
+                not_found(Some("Command not found"))
             } else {
                 Json(serde_json::json!({"status": "updated"})).into_response()
             }
         }
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+        Err(e) => internal_err(e),
     }
 }
 
@@ -368,7 +368,7 @@ async fn create_rule(
 
     match result {
         Ok(_) => Json(serde_json::json!({"id": id.to_string(), "message": "Rule created"})).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+        Err(e) => internal_err(e),
     }
 }
 
@@ -388,7 +388,7 @@ async fn list_rules(State(state): State<AppState>) -> impl IntoResponse {
             }).collect();
             Json(result).into_response()
         }
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+        Err(e) => internal_err(e),
     }
 }
 
@@ -411,8 +411,8 @@ async fn update_rule(
 
     match result {
         Ok(r) if r.rows_affected() > 0 => Json(serde_json::json!({"message": "Rule updated"})).into_response(),
-        Ok(_) => (StatusCode::NOT_FOUND, Json(serde_json::json!({"error": "Rule not found"}))).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+        Ok(_) => not_found(Some("Rule not found")),
+        Err(e) => internal_err(e),
     }
 }
 
@@ -420,8 +420,8 @@ async fn delete_rule(State(state): State<AppState>, Path(id): Path<String>) -> i
     let result = sqlx::query("DELETE FROM rules WHERE id = ?").bind(&id).execute(&state.pool).await;
     match result {
         Ok(r) if r.rows_affected() > 0 => Json(serde_json::json!({"message": "Rule deleted"})).into_response(),
-        Ok(_) => (StatusCode::NOT_FOUND, Json(serde_json::json!({"error": "Rule not found"}))).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+        Ok(_) => not_found(Some("Rule not found")),
+        Err(e) => internal_err(e),
     }
 }
 
@@ -618,7 +618,7 @@ async fn list_alerts(State(state): State<AppState>) -> impl IntoResponse {
             }).collect();
             Json(result).into_response()
         }
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+        Err(e) => internal_err(e),
     }
 }
 
@@ -725,12 +725,17 @@ async fn ingest_telemetry(
     Json(req): Json<IngestTelemetryRequest>,
 ) -> impl IntoResponse {
     let Some(metrics) = req.metrics.as_object() else {
-        return (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": "metrics must be an object"}))).into_response();
+        return bad_request("metrics must be an object");
     };
 
-    match agri_core::telemetry::process_telemetry(&state.pool, &req.node_id, metrics, Some(&state.event_tx)).await {
+    // 速率限制：每 node_id 每秒最多 60 条
+    if !state.telemetry_limiter.check(&req.node_id) {
+        return (StatusCode::TOO_MANY_REQUESTS, Json(serde_json::json!({"error": "rate limit exceeded"}))).into_response();
+    }
+
+    match agri_core::telemetry::process_telemetry(&state.pool, &req.node_id, metrics, Some(&state.event_tx), None).await {
         Ok(inserted) => Json(serde_json::json!({"inserted": inserted, "message": "Telemetry ingested"})).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+        Err(e) => internal_err(e),
     }
 }
 
@@ -753,10 +758,14 @@ async fn ingest_telemetry_batch(
     let mut inserted = 0usize;
 
     for item in req.batch {
+        // 速率限制：每 node_id 每秒最多 60 条
+        if !state.telemetry_limiter.check(&item.node_id) {
+            continue;
+        }
         let Some(metrics) = item.metrics.as_object() else {
             continue;
         };
-        match agri_core::telemetry::process_telemetry(&state.pool, &item.node_id, metrics, Some(&state.event_tx)).await {
+        match agri_core::telemetry::process_telemetry(&state.pool, &item.node_id, metrics, Some(&state.event_tx), None).await {
             Ok(_) => inserted += 1,
             Err(e) => tracing::warn!("batch telemetry error for {}: {}", item.node_id, e),
         }

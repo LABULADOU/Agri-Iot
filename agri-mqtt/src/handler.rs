@@ -1,8 +1,14 @@
 use chrono::Utc;
 use sqlx::SqlitePool;
 use rumqttc::{Event, Incoming};
-use tokio::sync::broadcast;
+use tokio::sync::{broadcast, mpsc};
 use tracing::info;
+
+struct MqttMessage {
+    node_id: String,
+    topic_type: String,
+    payload: String,
+}
 
 pub async fn handle_telemetry(
     pool: &SqlitePool,
@@ -12,10 +18,12 @@ pub async fn handle_telemetry(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let data: serde_json::Value = serde_json::from_str(payload)?;
 
+    let seq = data.get("seq").and_then(|s| s.as_i64());
+
     if let Some(metrics) = data.get("metrics").and_then(|m| m.as_object()) {
-        let inserted = agri_core::telemetry::process_telemetry(pool, node_id, metrics, event_tx).await?;
+        let inserted = agri_core::telemetry::process_telemetry(pool, node_id, metrics, event_tx, seq).await?;
         if inserted > 0 {
-            info!("Stored {} readings for node {}", inserted, node_id);
+            info!("Stored {} readings for node {} (seq={:?})", inserted, node_id, seq);
         }
     }
 
@@ -53,31 +61,49 @@ pub async fn start_listener(
     pool: SqlitePool,
     event_tx: Option<broadcast::Sender<String>>,
 ) {
+    // Use a shared Vec of receivers via broadcast-like pattern
+    // Actually, use mpsc with a single worker pool for simplicity
+    let (tx, mut rx) = mpsc::channel::<MqttMessage>(1024);
+
+    // Single worker pool: eventloop just enqueues, worker processes
+    let worker_pool = pool.clone();
+    let worker_tx = event_tx.clone();
+    tokio::spawn(async move {
+        info!("MQTT worker started");
+        while let Some(msg) = rx.recv().await {
+            match msg.topic_type.as_str() {
+                "telemetry" => {
+                    if let Err(e) = handle_telemetry(&worker_pool, &msg.node_id, &msg.payload, worker_tx.as_ref()).await {
+                        tracing::warn!("Worker telemetry error: {}", e);
+                    }
+                }
+                "status" => {
+                    if let Err(e) = handle_status_change(&worker_pool, &msg.node_id, &msg.payload).await {
+                        tracing::warn!("Worker status error: {}", e);
+                    }
+                }
+                _ => {}
+            }
+        }
+    });
+
     info!("MQTT listener started, waiting for messages");
 
     loop {
         match eventloop.poll().await {
             Ok(Event::Incoming(Incoming::Publish(p))) => {
                 let topic = p.topic;
-                let payload = String::from_utf8_lossy(&p.payload);
+                let payload = String::from_utf8_lossy(&p.payload).to_string();
 
                 let parts: Vec<&str> = topic.split('/').collect();
                 if parts.len() >= 4 && parts[0] == "agri" && parts[1] == "node" {
-                    let node_id = parts[2];
-                    let topic_type = parts[3];
+                    let node_id = parts[2].to_string();
+                    let topic_type = parts[3].to_string();
 
-                    match topic_type {
-                        "telemetry" => {
-                            if let Err(e) = handle_telemetry(&pool, node_id, &payload, event_tx.as_ref()).await {
-                                tracing::warn!("Failed to handle telemetry: {}", e);
-                            }
-                        }
-                        "status" => {
-                            if let Err(e) = handle_status_change(&pool, node_id, &payload).await {
-                                tracing::warn!("Failed to handle status change: {}", e);
-                            }
-                        }
-                        _ => {}
+                    let msg = MqttMessage { node_id, topic_type, payload };
+                    if tx.send(msg).await.is_err() {
+                        tracing::warn!("MQTT channel closed, stopping listener");
+                        break;
                     }
                 }
             }

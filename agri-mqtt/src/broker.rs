@@ -17,7 +17,7 @@ pub fn start_broker(port: u16) -> Result<()> {
         "tcp".to_string(),
         ServerSettings {
             name: "tcp".to_string(),
-            listen: SocketAddr::from(([0, 0, 0, 0], port)),
+            listen: SocketAddr::from(([127, 0, 0, 1], port)),
             tls: None,
             next_connection_delay_ms: 1,
             connections: ConnectionSettings {
@@ -30,9 +30,30 @@ pub fn start_broker(port: u16) -> Result<()> {
         },
     );
     config.v4 = servers;
-    config.console.listen = format!("127.0.0.1:{}", port + 1);
 
-    info!("MQTT Broker starting on port {} (max_connections={})", port, config.router.max_connections);
+    let ws_port = port + 1;
+    let mut ws_servers = HashMap::new();
+    ws_servers.insert(
+        "ws".to_string(),
+        ServerSettings {
+            name: "ws".to_string(),
+            listen: SocketAddr::from(([127, 0, 0, 1], ws_port)),
+            tls: None,
+            next_connection_delay_ms: 1,
+            connections: ConnectionSettings {
+                connection_timeout_ms: 10,
+                max_payload_size: 268_435_456,
+                max_inflight_count: 200,
+                auth: None,
+                dynamic_filters: false,
+            },
+        },
+    );
+    config.ws = Some(ws_servers);
+
+    config.console.listen = format!("127.0.0.1:{}", port + 2);
+
+    info!("MQTT Broker starting — TCP:{}, WS:{}", port, ws_port);
 
     let mut broker = Broker::new(config);
     broker.start()?;
