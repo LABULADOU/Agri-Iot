@@ -5,27 +5,32 @@
 ## 架构
 
 ```
-┌─────────────────────────────────────────────────────┐
-│  ESP32 真实节点 (HTTP+Funnel)                        │
-│  DHT22 + RS485 土壤三合一（温度/湿度/EC）+ 继电器     │
-│  └── HTTPS → zero-1.taile2b316.ts.net/api/v1/*       │
-│         ↕ Tailscale Funnel (WSL)                     │
-│         → 172.20.10.13:3001 → agri-server            │
-└─────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│  ESP32 v3.0 (MQTT 双通道)                                │
+│  DHT22 + RS485 土壤三合一（温度/湿度/EC）+ 继电器         │
+│  ├── LAN:  MQTT TCP → agri-server.local:1883            │
+│  └── WAN:  WebSocket MQTT → wss://zero-1.../mqtt        │
+│                     ↓                                    │
+│              agri-server:3001/mqtt                        │
+│              (WebSocket ↔ MQTT TCP 代理)                  │
+│                     ↓                                    │
+│              rumqttd broker (127.0.0.1:11885)             │
+│                     ↓                                    │
+│              agri-mqtt handler (QoS 1)                    │
+│                     ↓                                    │
+│              process_telemetry() → SQLite + SSE           │
+└──────────────────────────────────────────────────────────┘
 
-┌──────────────────────────────────────────────┐
-│  ESP32 (串口/USB)                             │
-│  └── USB → serial_bridge.py → HTTP → server   │
-└──────────────────────────────────────────────┘
+串口模式: ESP32 USB → serial_bridge.py → POST /api/v1/telemetry
 ```
 
 | 组件                 | 技术栈                     | 说明                   |
 | ------------------ | ----------------------- | -------------------- |
 | **agri-core**      | Rust                    | 核心类型、数据库工具、错误定义      |
-| **agri-server**    | Rust + Axum + SQLx      | HTTP API 服务、规则引擎     |
-| **agri-mqtt**      | Rust + rumqttd/rumqttc  | MQTT Broker 和客户端     |
+| **agri-server**    | Rust + Axum + SQLx      | HTTP API 服务、规则引擎、WebSocket 桥接 |
+| **agri-mqtt**      | Rust + rumqttd/rumqttc  | MQTT Broker（独立进程）和客户端     |
 | **agri-ui**        | React + TypeScript + Ant Design + ECharts | 前端 SPA（预构建到 static/） |
-| **esp32-firmware** | Arduino + ESP32         | 传感器采集 + HTTP 直连      |
+| **esp32-firmware** | Arduino + ESP32         | 传感器采集 + 纯 MQTT（v3.0）      |
 | **serial_bridge**  | Python                  | ESP32 串口数据 → HTTP 桥接 |
 
 ## 快速启动
@@ -41,6 +46,7 @@
 
 ```bash
 cp .env.example .env
+# 编辑 .env，配置 WEATHER_API_KEY（和风天气）
 ```
 
 ### 3. 构建并启动
@@ -58,12 +64,19 @@ nohup ./target/debug/agri-server > /tmp/agri-server.log 2>&1 &
 
 访问 http://localhost:3001
 
-### 4. 数据接入
+### 4. 启动 MQTT Broker（独立进程）
+
+```bash
+# 启动独立 rumqttd broker（TCP:11885, WS:11886）
+cargo run --bin agri-mqtt-broker
+```
+
+### 5. 数据接入
 
 **串口桥接（真实 ESP32）**：
 
 ```bash
-python3 scripts/serial_bridge.py /dev/ttyUSB0
+sudo python3 scripts/serial_bridge.py /dev/ttyUSB0
 ```
 
 ## Tailscale Funnel 远程接入
@@ -141,16 +154,20 @@ agri-server/src/        # 后端服务
 ├── routes.rs           # API 路由
 ├── response.rs         # 响应辅助函数（ok_json/err_json/internal_err）
 ├── areas.rs            # 区域/作物/茬口管理
-├── state.rs            # AppState
+├── state.rs            # AppState（含 telemetry_limiter）
 ├── rule_engine.rs      # 规则引擎
 ├── weather.rs          # 天气 API 代理 (和风天气)
 ├── ai_routes.rs        # AI 决策 API 路由
+├── mqtt_ws.rs          # WebSocket ↔ MQTT TCP 桥接
+├── rate_limiter.rs     # 遥测速率限制
 └── request_logger.rs   # 请求日志
 
 agri-mqtt/src/          # MQTT 通信
-├── broker.rs           # 嵌入式 MQTT Broker
+├── bin/
+│   └── broker.rs       # 独立 rumqttd broker 二进制
+├── broker.rs           # 嵌入式 MQTT Broker（备用）
 ├── client.rs           # MQTT 客户端
-└── handler.rs          # 遥测/状态处理
+└── handler.rs          # 遥测/状态处理（QoS 1 + 通道解耦 + seq 去重）
 
 agri-ui/                # React SPA (TypeScript + Ant Design + ECharts)
 ├── src/pages/          # 页面组件
@@ -159,14 +176,19 @@ agri-ui/                # React SPA (TypeScript + Ant Design + ECharts)
 └── build → agri-server/static/
 
 esp32-firmware/src/     # ESP32 固件
-└── main.ino            # HTTP+Funnel 模式
+└── main.ino            # v3.0: 纯 MQTT（PubSubClient + WebSocket MQTT）
 
 scripts/                # 工具脚本
-└── serial_bridge.py    # 串口桥接
+├── serial_bridge.py    # 串口桥接
+├── mdns_advertise.py   # Python raw mDNS responder
+├── start_mdns.sh       # mDNS 启动脚本
+├── stress_test.py      # MQTT 压力测试
+└── run_bridge.sh       # 串口桥接启动脚本
 
 agri-core/migrations/   # 数据库迁移（单一来源）
 ├── 001_init.sql        # 基础表（devices, sensor_readings 等）
-└── 002_ai_knowledge.sql # AI 知识库 + 气象 + 评估表
+├── 002_ai_knowledge.sql # AI 知识库 + 气象 + 评估表
+└── 003_dedup.sql       # seq 列 + 部分唯一索引（MQTT 去重）
 ```
 
 ## 设备模型

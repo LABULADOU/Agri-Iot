@@ -421,34 +421,86 @@ publishTelemetry()
 新增: /etc/systemd/system/agri-mdns.service  # systemd 服务（备选）
 ```
 
-## 下一版本计划：MQTT 解耦（v2.0）
+## MQTT 重构 v3.0 + 安全审计（2026-06-04）
 
-### 目标
-将 rumqttd broker 从 agri-server 解耦为独立进程，ESP32 固件从 HTTP 迁移到 MQTT，利用 MQTT QoS 保证消息不丢失。
+### 架构变更：HTTP → 纯 MQTT
 
-### 设计
+ESP32 固件从 HTTP 直连（v2.3）迁移到纯 MQTT（v3.0）：
+
 ```
-ESP32 → MQTT (QoS 1) → rumqttd (独立进程) → agri-server (consumer)
-                                                ↓
-                                             SQLite + SSE
+┌──────────────────────────────────────────────────────────┐
+│ ESP32 v3.0 (PubSubClient + WebSocket MQTT 双通道)         │
+│  ├── LAN:  MQTT TCP → agri-server.local:1883             │
+│  └── WAN:  WebSocket MQTT → wss://zero-1.../mqtt        │
+│                     ↓                                    │
+│              agri-server:3001/mqtt                        │
+│              (mqtt_ws.rs WebSocket ↔ MQTT TCP 桥接)       │
+│                     ↓                                    │
+│              rumqttd broker (独立进程, 127.0.0.1:11885)    │
+│                     ↓                                    │
+│              agri-mqtt handler (QoS 1 订阅)                │
+│                     ↓                                    │
+│              process_telemetry() → SQLite + SSE           │
+└──────────────────────────────────────────────────────────┘
 ```
 
-| 组件 | 职责 |
-|------|------|
-| rumqttd | 独立 broker 进程，QoS 1 持久化暂存 |
-| agri-mqtt (consumer) | 订阅 `telemetry/+/+`，转发到 `process_telemetry()` |
-| agri-server | 不变，HTTP 和 MQTT 两条入口最终汇聚到 `process_telemetry` |
+### 核心变更
 
-### 优点
-- MQTT 原生 QoS 保证，broker 挂起不影响 publisher
-- 减少 HTTP 连接开销（每次 TLS 握手）
-- broker 可做消息桥接、离线缓存
+| 组件 | 变更 | 关键文件 |
+|------|------|----------|
+| **独立 broker** | `agri-mqtt/src/bin/broker.rs` — 独立二进制，TCP:11885, WS:11886 | `broker.rs` |
+| **WebSocket 桥接** | Axum WebSocket → MQTT TCP 代理，Funnel WSS 直达 | `mqtt_ws.rs` |
+| **ESP32 v3.0** | HTTP 全移除，PubSubClient(LAN) + WebSocket MQTT(WAN) | `main.ino` |
+| **去重** | `seq` 字段 + 部分唯一索引 `(device_id, metric, seq)` | `003_dedup.sql`, `telemetry.rs` |
+| **broker 可靠性** | `connection_timeout_ms: 10→60000`（修复断连），`clean_session: false` | `broker.rs` |
+| **QoS** | 订阅升级到 `AtLeastOnce`，去重计数用 `rows_affected()>0` | `handler.rs` |
+| **通道解耦** | eventloop → mpsc channel → worker，保持 eventloop 快速轮询 | `handler.rs` |
+| **通道容量** | `max_inflight_count=5000`, `max_segment_count=1000` | `broker.rs` |
 
-### 依赖
-- **ESP32 固件重写**为 MQTT publisher（替换现有 HTTP 逻辑）
-- **rumqttd 配置持久化**：`persistence.clean_session = false`
-- **consumer 幂等**：MQTT 可能重复投递，需 `(node_id, metric, timestamp)` 作为 dedup key
+### 压力测试
+- 2500 条消息（5 burst × 500），480 msg/s，5 metrics/msg
+- ~13% 送达率 — 瓶颈在 rumqttc eventloop 单线程处理
+- 去重验证通过：重复 seq 正确跳过
 
-### 优先级
-低 — 当前 HTTP + LittleFS + mDNS 方案已覆盖服务器故障和 IP 变化场景，MQTT 解耦为远期架构优化。
+### 安全审计（2026-06-04）
+
+| 严重性 | 问题 | 修复 |
+|--------|------|------|
+| 高危 | 静态文件路径遍历 — `GET /../../../etc/passwd` | canonicalize + 前缀验证 |
+| 高危 | `.env` 包含明文 API Key | .gitignore 保护，仅本地保留 |
+| 高危 | `run_bridge.sh` 硬编码 sudo 密码 | 改为配置式 sudoers 提示 |
+| 高危 | 10 处 `e.to_string()` 泄露内部错误 | 统一 `internal_err()` 返回通用消息 |
+| 中危 | MQTT broker 绑定 `0.0.0.0` | 改为 `127.0.0.1` |
+| 中危 | 遥测端点无速率限制 | `RateLimiter` 60 req/s per node，超限 429 |
+| 低危 | `devices/:id/readings` 负值 LIMIT 可 panic | `clamp(1, 5000)` |
+| 低危 | 旧库版本 broker 也绑定 `0.0.0.0` | 同步改为 `127.0.0.1` |
+
+已核查无需修复的项目：CORS（同源部署）、认证（Funnel 后威胁模型明确）、CSRF（无 cookie）、SQL 注入（参数化查询）、XSS（API 返回 JSON）、SSRF（`safe_proxy` 仅代理已知域名）。
+
+### MQTT 主题
+
+| 方向 | Topic | QoS | 说明 |
+|------|-------|------|------|
+| ESP32 → | `agri/node/{node_id}/telemetry` | 1 | 遥测数据（含 seq） |
+| ESP32 → | `agri/node/{node_id}/status` | 1 | 在线/离线状态 |
+| ← ESP32 | `agri/node/{node_id}/command/#` | 1 | 命令订阅 |
+
+### 变更文件清单
+```
+新增: agri-mqtt/src/bin/broker.rs      # 独立 rumqttd broker 二进制
+新增: agri-server/src/mqtt_ws.rs       # WebSocket ↔ MQTT TCP 桥接
+新增: agri-server/src/rate_limiter.rs  # 遥测速率限制
+新增: agri-core/migrations/003_dedup.sql # seq + 部分唯一索引
+新增: scripts/stress_test.py           # MQTT 压力测试
+修改: agri-mqtt/src/broker.rs          # 0.0.0.0 → 127.0.0.1
+修改: agri-mqtt/src/handler.rs         # QoS 1 + 通道解耦 + seq 提取
+修改: agri-core/src/telemetry.rs       # 去重 + rows_affected 计数
+修改: agri-server/src/main.rs          # 移除 mosquitto/rumqttd 进程
+修改: agri-server/src/routes.rs        # 安全修复 + 速率限制
+修改: agri-server/src/response.rs      # internal_err 不泄露细节
+修改: agri-server/src/state.rs         # telemetry_limiter 字段
+修改: esp32-firmware/src/main.ino      # v3.0: HTTP→纯 MQTT
+修改: scripts/run_bridge.sh            # 移除硬编码密码
+修改: .env                              # API Key → .gitignore 保护
+```
 ```
