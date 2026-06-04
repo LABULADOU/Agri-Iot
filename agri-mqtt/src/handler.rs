@@ -18,6 +18,33 @@ pub async fn handle_telemetry(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let data: serde_json::Value = serde_json::from_str(payload)?;
 
+    // Auto-register device if it doesn't exist
+    let exists: bool = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*) FROM devices WHERE node_id = ?",
+    )
+    .bind(node_id)
+    .fetch_one(pool)
+    .await
+    .map(|c| c > 0)
+    .unwrap_or(false);
+
+    if !exists {
+        let id = uuid::Uuid::new_v4();
+        let now = Utc::now().timestamp();
+        sqlx::query(
+            "INSERT INTO devices (id, name, node_id, device_type, status, capabilities, created_at, updated_at) \
+             VALUES (?, ?, ?, 'sensor', 'online', '[\"sensor\"]', ?, ?)",
+        )
+        .bind(id.to_string())
+        .bind(node_id)
+        .bind(node_id)
+        .bind(now)
+        .bind(now)
+        .execute(pool)
+        .await?;
+        info!("Auto-registered device {} ({})", node_id, id);
+    }
+
     let seq = data.get("seq").and_then(|s| s.as_i64());
 
     if let Some(metrics) = data.get("metrics").and_then(|m| m.as_object()) {
