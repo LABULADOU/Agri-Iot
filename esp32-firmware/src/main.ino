@@ -374,8 +374,7 @@ static bool wsSendMqttPublish(const char* topic, const uint8_t* payload, size_t 
     // Payload
     memcpy(packet + pos, payload, payloadLen); pos += payloadLen;
     
-    webSocket.sendBIN(packet, pos);
-    return true;
+    return webSocket.sendBIN(packet, pos);
 }
 
 // 构建并发送 MQTT SUBSCRIBE 包
@@ -701,11 +700,10 @@ void publishMqttTelemetry(const char* jsonPayload) {
 void publishTelemetry() {
     if (WiFi.status() != WL_CONNECTED) return;
     ensureMqttConnected();
-    if (activeTransport == TRANSPORT_NONE) return;
     
     StaticJsonDocument<384> doc;
     doc["node_id"] = NODE_ID;
-    doc["seq"] = mqttSeq + 1;  // include seq for dedup
+    doc["seq"] = mqttSeq + 1;
     JsonObject metrics = doc.createNestedObject("metrics");
     
     float airTemp = dht.readTemperature();
