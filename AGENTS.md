@@ -527,4 +527,28 @@ ESP32 固件从 HTTP 直连（v2.3）迁移到纯 MQTT（v3.0）：
 修改: agri-server/src/routes.rs       # node-readings 包含未分配设备
 修改: esp32-firmware/src/main.ino     # WS 超时 30s + mDNS 修复 + 重连 2s
 ```
+
+## clean_session 持久化修复（2026-06-05）
+
+### 问题
+agri-server 被 kill 时，MQTT handler（rumqttc）一并死亡。ESP32 继续发布 QoS 1 消息到 broker（持久化已启用），但 handler 重连时 `clean_session=true` 导致 broker 丢弃所有缓存的离线消息。从 server 死亡到 ESP32 感知断线切换到 LittleFS 之间的窗口期数据丢失。
+
+### 修复
+
+| 问题 | 修复 | 文件 |
+|------|------|------|
+| handler 重连不回放离线消息 | `set_clean_session(true)` → `false`，broker 保持会话状态，重连后自动回放未确认的 QoS 1 消息 | `client.rs` |
+
+### 变更后容错行为
+
+| 场景 | 数据保护 |
+|------|---------|
+| agri-server 挂（broker 活） | broker 缓存 QoS 1 消息，handler 重连后回放 ✓ |
+| agri-server 挂 + broker 挂 | ESP32 LittleFS 缓冲，重连后 flush ✓ |
+| 双通道全断 | LittleFS 缓冲 ~5.5 小时 ✓ |
+
+### 变更文件清单
+```
+修改: agri-mqtt/src/client.rs          # clean_session false
+```
 ```

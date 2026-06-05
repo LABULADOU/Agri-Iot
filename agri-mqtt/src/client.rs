@@ -9,7 +9,7 @@ pub fn create_client(
 ) -> Result<(AsyncClient, EventLoop)> {
     let mut mqtt_options = MqttOptions::new(client_id, broker_addr, port);
     mqtt_options.set_keep_alive(std::time::Duration::from_secs(5));
-    mqtt_options.set_clean_session(true);
+    mqtt_options.set_clean_session(false);
 
     let (client, eventloop) = AsyncClient::new(mqtt_options, 10);
 

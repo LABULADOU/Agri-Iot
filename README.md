@@ -208,6 +208,7 @@ agri-core/migrations/   # 数据库迁移（单一来源）
 > **自动注册**：MQTT handler 在收到第一条遥测时自动创建设备记录（`devices` 表），无需手动注册。
 > ESP32 WAN WebSocket 超时已从 5s 调整为 30s，补偿 TLS handshake 延迟。
 > 仪表盘同时显示已分配和未分配区域的设备。
+> **断线容错**：handler 使用 `clean_session=false`，agri-server 重启后 broker 自动回放离线期间的 QoS 1 消息（含 LittleFS 本地缓存双重保障）。
 
 ## 开发
 
