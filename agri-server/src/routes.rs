@@ -519,24 +519,27 @@ async fn dashboard_area_readings(State(state): State<AppState>) -> Json<serde_js
 
 async fn dashboard_node_readings(State(state): State<AppState>) -> impl IntoResponse {
     // 查每个设备的最新一条读数（group-wise max 写法兼容 SQLite）
-    let latest_readings = sqlx::query_as::<_, (String, String, String, f64, String, i64)>(
+    // 同时包含未分配区域的设备（area_id 为 NULL 时用空字符串占位，后续归入"未分配"区域）
+    let latest_readings = sqlx::query_as::<_, (Option<String>, String, String, f64, String, i64)>(
         "SELECT d.area_id, d.node_id, sr.metric, sr.value, sr.unit, sr.timestamp \
          FROM sensor_readings sr \
          INNER JOIN devices d ON sr.device_id = d.id \
-         WHERE d.area_id IS NOT NULL \
-           AND sr.id IN ( \
+         WHERE sr.id IN ( \
                SELECT MAX(sr2.id) FROM sensor_readings sr2 \
                WHERE sr2.device_id = sr.device_id AND sr2.metric = sr.metric \
-           )"
+         )"
     )
     .fetch_all(&state.pool)
     .await
     .unwrap_or_default();
 
     let mut node_latest: std::collections::BTreeMap<(String, String), serde_json::Map<String, serde_json::Value>> = std::collections::BTreeMap::new();
+    let known_metrics = ["temperature", "humidity", "soil_moisture", "soil_temperature", "ec", "light"];
+    let unassigned_key = "__unassigned__".to_string();
 
     for (area_id, node_id, metric, value, unit, ts) in &latest_readings {
-        let entry = node_latest.entry((area_id.clone(), node_id.clone())).or_default();
+        let aid = area_id.clone().unwrap_or_else(|| unassigned_key.clone());
+        let entry = node_latest.entry((aid, node_id.clone())).or_default();
         entry.insert(metric.clone(), serde_json::json!({"value": value, "unit": unit, "timestamp": ts}));
     }
 
@@ -553,9 +556,6 @@ async fn dashboard_node_readings(State(state): State<AppState>) -> impl IntoResp
         let mut nodes: Vec<serde_json::Value> = Vec::new();
         let mut node_number = 0;
 
-        let known_metrics = ["temperature", "humidity", "soil_moisture", "soil_temperature", "ec", "light"];
-
-        // 收集此区域所有的 node_id
         let mut area_nodes: Vec<String> = Vec::new();
         for (key, _) in &node_latest {
             if key.0 == *area_id {
@@ -587,6 +587,34 @@ async fn dashboard_node_readings(State(state): State<AppState>) -> impl IntoResp
         result.push(serde_json::json!({
             "area_id": area_id,
             "area_name": area_name,
+            "nodes": nodes,
+        }));
+    }
+
+    // 处理未分配区域的设备
+    let unassigned_nodes: Vec<(String, serde_json::Map<String, serde_json::Value>)> = node_latest.iter()
+        .filter(|((aid, _), _)| aid == &unassigned_key)
+        .map(|((_, nid), map)| (nid.clone(), map.clone()))
+        .collect();
+
+    if !unassigned_nodes.is_empty() {
+        let nodes: Vec<serde_json::Value> = unassigned_nodes.into_iter().enumerate().map(|(i, (node_id, map))| {
+            let mut latest_obj = serde_json::Map::new();
+            for metric in &known_metrics {
+                if let Some(v) = map.get(*metric) {
+                    latest_obj.insert(metric.to_string(), v.clone());
+                }
+            }
+            serde_json::json!({
+                "node_id": node_id,
+                "node_number": i + 1,
+                "latest": latest_obj,
+            })
+        }).collect();
+
+        result.push(serde_json::json!({
+            "area_id": null,
+            "area_name": "未分配",
             "nodes": nodes,
         }));
     }

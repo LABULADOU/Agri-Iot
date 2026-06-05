@@ -503,4 +503,28 @@ ESP32 固件从 HTTP 直连（v2.3）迁移到纯 MQTT（v3.0）：
 修改: scripts/run_bridge.sh            # 移除硬编码密码
 修改: .env                              # API Key → .gitignore 保护
 ```
+
+## 自动注册 + 前端数据修复（2026-06-04）
+
+### 问题
+1. **MQTT handler 静默丢数据** — `process_telemetry()` 在 `devices` 表找不到节点时返回 `Ok(0)` 不报错，ESP32 首次连接时设备不存在，所有遥测被丢弃。
+2. **前端仪表盘空白** — `dashboard/node-readings` 的 SQL 查询 `WHERE d.area_id IS NOT NULL` 过滤掉了未分配区域的设备（新注册设备 `area_id = NULL`）。
+
+### 修复
+
+| # | 问题 | 修复 | 文件 |
+|---|------|------|------|
+| 1 | **MQTT 自动注册设备** | `handle_telemetry()` 收到第一条遥测时检测设备是否存在，不存在则 `INSERT INTO devices (sensor, online, ["sensor"])` | `handler.rs` |
+| 2 | **WAN WS 超时太短** | `connectWanWsMqtti()` 等待时间 5s→30s（ESP32 TLS ECDHE-ECDSA x25519 握手需 3-8s）；`WEBSOCKETS_TCP_TIMEOUT` 15000ms；`setReconnectInterval()` 10s→2s | `main.ino` |
+| 3 | **mDNS API 误用** | `MDNS.queryHost()` 返回 `IPAddress` 非 `bool`，改为 `IPAddress ip = MDNS.queryHost(...)` + `operator bool()` | `main.ino` |
+| 4 | **仪表盘未分配设备不显示** | 去掉 `WHERE area_id IS NOT NULL`，`area_id` 改为 `Option<String>`，`None` 归入虚拟"未分配"区域 | `routes.rs` |
+| 5 | **区域详情无数据** | 创建真实区域"主大棚"，设备 `area_id = NULL` → 实际区域 UUID | |
+
+### 变更文件清单
+```
+修改: agri-mqtt/src/handler.rs        # 自动注册设备（uuid 依赖）
+修改: agri-mqtt/Cargo.toml            # 添加 uuid.workspace = true
+修改: agri-server/src/routes.rs       # node-readings 包含未分配设备
+修改: esp32-firmware/src/main.ino     # WS 超时 30s + mDNS 修复 + 重连 2s
+```
 ```

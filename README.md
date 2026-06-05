@@ -14,7 +14,7 @@
 │              agri-server:3001/mqtt                        │
 │              (WebSocket ↔ MQTT TCP 代理)                  │
 │                     ↓                                    │
-│              rumqttd broker (127.0.0.1:11885)             │
+│              rumqttd broker (127.0.0.1:1883)              │
 │                     ↓                                    │
 │              agri-mqtt handler (QoS 1)                    │
 │                     ↓                                    │
@@ -67,7 +67,7 @@ nohup ./target/debug/agri-server > /tmp/agri-server.log 2>&1 &
 ### 4. 启动 MQTT Broker（独立进程）
 
 ```bash
-# 启动独立 rumqttd broker（TCP:11885, WS:11886）
+# 启动独立 rumqttd broker（环境变量：MQTT_BROKER_PORT=1883, MQTT_WS_PORT=11884）
 cargo run --bin agri-mqtt-broker
 ```
 
@@ -205,13 +205,17 @@ agri-core/migrations/   # 数据库迁移（单一来源）
 }
 ```
 
+> **自动注册**：MQTT handler 在收到第一条遥测时自动创建设备记录（`devices` 表），无需手动注册。
+> ESP32 WAN WebSocket 超时已从 5s 调整为 30s，补偿 TLS handshake 延迟。
+> 仪表盘同时显示已分配和未分配区域的设备。
+
 ## 开发
 
 ```bash
 # 编译检查
 cargo check -p agri-server -p agri-mqtt -p agri-core
 
-# 运行全部测试（146 个）
+# 运行全部测试
 cargo test -p agri-core   # 92 测试
 cargo test -p agri-server # 32 测试
 cargo test -p agri-mqtt   # 22 测试
