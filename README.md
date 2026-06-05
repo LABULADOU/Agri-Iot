@@ -53,22 +53,28 @@ cp .env.example .env
 
 ```bash
 # 构建
-cargo build -p agri-server
+cargo build -p agri-server -p agri-mqtt --bin broker
 
-# 启动服务
-./target/debug/agri-server
+# 启动服务（进程管理器同时托管 broker + server）
+./scripts/init.sh
 
 # 或后台运行
-nohup ./target/debug/agri-server > /tmp/agri-server.log 2>&1 &
+nohup ./scripts/init.sh &
+
+# 或指定构建类型
+BUILD_TYPE=release nohup ./scripts/init.sh &
 ```
 
 访问 http://localhost:3001
 
-### 4. 启动 MQTT Broker（独立进程）
+### 4. 手动启动（不通过进程管理器）
 
 ```bash
-# 启动独立 rumqttd broker（环境变量：MQTT_BROKER_PORT=1883, MQTT_WS_PORT=11884）
-cargo run --bin agri-mqtt-broker
+# 终端 1: 启动独立 broker
+./target/debug/broker
+
+# 终端 2: 启动 server
+MQTT_BROKER_ADDR=127.0.0.1:1883 ./target/debug/agri-server
 ```
 
 ### 5. 数据接入
@@ -179,6 +185,7 @@ esp32-firmware/src/     # ESP32 固件
 └── main.ino            # v3.0: 纯 MQTT（PubSubClient + WebSocket MQTT）
 
 scripts/                # 工具脚本
+├── init.sh             # 进程管理器（托管 broker + server）
 ├── serial_bridge.py    # 串口桥接
 ├── mdns_advertise.py   # Python raw mDNS responder
 ├── start_mdns.sh       # mDNS 启动脚本
