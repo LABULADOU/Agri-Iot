@@ -74,7 +74,9 @@ fn main() {
     );
     config.ws = Some(ws_listeners);
 
-    config.console.listen = format!("127.0.0.1:{}", port + 1);
+    // Use port 0 for console to avoid port collision panics
+    // The console HTTP server will pick a random ephemeral port
+    config.console.listen = "0.0.0.0:0".to_string();
 
     tracing::info!(
         "MQTT Broker starting — TCP {}:{}, WS 127.0.0.1:{}, storage: {}",

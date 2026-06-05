@@ -47,6 +47,7 @@ pub async fn process_telemetry(
     metrics: &serde_json::Map<String, serde_json::Value>,
     event_tx: Option<&broadcast::Sender<String>>,
     seq: Option<i64>,
+    boot_id: Option<&str>,
 ) -> Result<i64, Box<dyn std::error::Error + Send + Sync>> {
     let devices = sqlx::query_as::<_, (String, String)>(
         "SELECT id, node_id FROM devices WHERE node_id = ?",
@@ -73,11 +74,25 @@ pub async fn process_telemetry(
             if !validate_value(normalized, val) { continue; }
             let unit = metric_unit(normalized);
 
-            let result = if let Some(s) = seq {
+            let result = if let (Some(s), Some(b)) = (seq, boot_id) {
+                sqlx::query(
+                    "INSERT INTO sensor_readings (device_id, metric, value, unit, timestamp, seq, boot_id) \
+                     VALUES (?, ?, ?, ?, ?, ?, ?) \
+                     ON CONFLICT(device_id, metric, seq, boot_id) WHERE seq IS NOT NULL AND boot_id IS NOT NULL DO NOTHING"
+                )
+                .bind(device_id)
+                .bind(normalized)
+                .bind(val)
+                .bind(unit)
+                .bind(now)
+                .bind(s)
+                .bind(b)
+                .execute(pool)
+                .await
+            } else if let Some(s) = seq {
                 sqlx::query(
                     "INSERT INTO sensor_readings (device_id, metric, value, unit, timestamp, seq) \
-                     VALUES (?, ?, ?, ?, ?, ?) \
-                     ON CONFLICT(device_id, metric, seq) WHERE seq IS NOT NULL DO NOTHING"
+                     VALUES (?, ?, ?, ?, ?, ?)"
                 )
                 .bind(device_id)
                 .bind(normalized)

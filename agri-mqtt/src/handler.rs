@@ -46,9 +46,10 @@ pub async fn handle_telemetry(
     }
 
     let seq = data.get("seq").and_then(|s| s.as_i64());
+    let boot_id = data.get("boot_id").and_then(|s| s.as_str());
 
     if let Some(metrics) = data.get("metrics").and_then(|m| m.as_object()) {
-        let inserted = agri_core::telemetry::process_telemetry(pool, node_id, metrics, event_tx, seq).await?;
+        let inserted = agri_core::telemetry::process_telemetry(pool, node_id, metrics, event_tx, seq, boot_id).await?;
         if inserted > 0 {
             info!("Stored {} readings for node {} (seq={:?})", inserted, node_id, seq);
         }
@@ -112,6 +113,7 @@ pub async fn start_listener(
                 _ => {}
             }
         }
+        tracing::warn!("MQTT worker channel closed");
     });
 
     info!("MQTT listener started, waiting for messages");

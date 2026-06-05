@@ -761,7 +761,7 @@ async fn ingest_telemetry(
         return (StatusCode::TOO_MANY_REQUESTS, Json(serde_json::json!({"error": "rate limit exceeded"}))).into_response();
     }
 
-    match agri_core::telemetry::process_telemetry(&state.pool, &req.node_id, metrics, Some(&state.event_tx), None).await {
+    match agri_core::telemetry::process_telemetry(&state.pool, &req.node_id, metrics, Some(&state.event_tx), None, None).await {
         Ok(inserted) => Json(serde_json::json!({"inserted": inserted, "message": "Telemetry ingested"})).into_response(),
         Err(e) => internal_err(e),
     }
@@ -793,7 +793,7 @@ async fn ingest_telemetry_batch(
         let Some(metrics) = item.metrics.as_object() else {
             continue;
         };
-        match agri_core::telemetry::process_telemetry(&state.pool, &item.node_id, metrics, Some(&state.event_tx), None).await {
+        match agri_core::telemetry::process_telemetry(&state.pool, &item.node_id, metrics, Some(&state.event_tx), None, None).await {
             Ok(_) => inserted += 1,
             Err(e) => tracing::warn!("batch telemetry error for {}: {}", item.node_id, e),
         }
