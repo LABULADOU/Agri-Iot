@@ -699,7 +699,10 @@ void publishMqttTelemetry(const char* jsonPayload) {
 
 void publishTelemetry() {
     if (WiFi.status() != WL_CONNECTED) return;
-    ensureMqttConnected();
+    
+    // Do NOT call ensureMqttConnected() here — TLS handshake on the 10s
+    // sensor-read path blows the loopTask stack (4KB default).
+    // Connection is maintained by loop() every 5s.
     
     StaticJsonDocument<384> doc;
     doc["node_id"] = NODE_ID;
@@ -736,6 +739,14 @@ void publishTelemetry() {
     size_t n = serializeJson(doc, json, sizeof(json));
     if (n >= sizeof(json)) {
         Serial.println("JSON 溢出!");
+        return;
+    }
+    
+    if (activeTransport == TRANSPORT_NONE) {
+        // No active transport — buffer for later replay
+        // (connection attempt from loop() will flush)
+        appendToBuffer(json);
+        Serial.println(" | 离线缓存");
         return;
     }
     
