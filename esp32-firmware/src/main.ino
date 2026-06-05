@@ -86,6 +86,7 @@ HardwareSerial soilSerial(2);
 
 unsigned long lastRead = 0;
 unsigned long lastMqttReconnect = 0;
+char bootId[12] = {0};
 bool relayState = false;
 unsigned long mqttSeq = 0;
 
@@ -706,6 +707,7 @@ void publishTelemetry() {
     
     StaticJsonDocument<384> doc;
     doc["node_id"] = NODE_ID;
+    doc["boot_id"] = bootId;
     doc["seq"] = mqttSeq + 1;
     JsonObject metrics = doc.createNestedObject("metrics");
     
@@ -896,6 +898,14 @@ void setup() {
         Serial.println("LittleFS 就绪");
     }
     
+    // 生成本次启动的唯一标识（每次上电不同，用于服务器端去重）
+    uint32_t r = esp_random();
+    snprintf(bootId, sizeof(bootId), "%08lx", (unsigned long)r);
+    Serial.printf("Boot ID: %s\n", bootId);
+
+    // 清理旧缓冲区（格式已变更，包含 boot_id）
+    LittleFS.remove(BUFFER_FILE);
+
     setupWiFi();
 }
 
