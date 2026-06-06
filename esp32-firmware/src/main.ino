@@ -22,6 +22,20 @@
 #include <HardwareSerial.h>
 #include <LittleFS.h>
 #include <ESPmDNS.h>
+#include <esp_now.h>
+
+// ESP-NOW 子节点数据格式
+typedef struct {
+  char  node_id[16];
+  char  boot_id[12];
+  uint32_t seq;
+  float temperature;
+  float humidity;
+  float soil_temp;
+  float soil_moist;
+  float ec;
+  int16_t rssi;
+} SubNodeTelemetry;
 
 // ==================== 配置 ====================
 
@@ -40,9 +54,13 @@ const char* FUNNEL_HOST = "zero-1.taile2b316.ts.net";
 const int FUNNEL_PORT = 443;
 const char* FUNNEL_PATH = "/mqtt";
 
-// 节点标识
+// 节点标识（子节点使用不同 ID）
+#ifdef SUB_NODE
+const char* NODE_ID = "esp32-node-002";
+#else
 const char* NODE_ID = "esp32-node-001";
-const char* MQTT_CLIENT_ID = "esp32-node-001";
+#endif
+const char* MQTT_CLIENT_ID = NODE_ID;
 const char* MQTT_USER = "";
 const char* MQTT_PASS = "";
 
@@ -874,7 +892,154 @@ void setupWiFi() {
     ESP.restart();
 }
 
+// ==================== ESP-NOW 接收回调 ====================
+
+#ifndef SUB_NODE
+void onEspNowRecv(const uint8_t *mac, const uint8_t *data, int len) {
+  if (len != sizeof(SubNodeTelemetry)) return;
+
+  SubNodeTelemetry sub;
+  memcpy(&sub, data, sizeof(sub));
+  sub.node_id[15] = '\0';
+  sub.boot_id[11] = '\0';
+
+  Serial.printf("ESP-NOW: 收到子节点 %s seq=%u\n", sub.node_id, sub.seq);
+
+  // 构建 JSON 并通过 MQTT 发布到子节点自己的 topic
+  StaticJsonDocument<384> doc;
+  doc["node_id"] = sub.node_id;
+  doc["boot_id"] = sub.boot_id;
+  doc["seq"] = sub.seq;
+  JsonObject metrics = doc.createNestedObject("metrics");
+  metrics["temperature"] = sub.temperature;
+  metrics["humidity"] = sub.humidity;
+  metrics["soil_temperature"] = sub.soil_temp;
+  metrics["soil_moisture"] = sub.soil_moist;
+  metrics["ec"] = sub.ec;
+  metrics["rssi"] = sub.rssi;
+
+  char json[384];
+  size_t n = serializeJson(doc, json, sizeof(json));
+  if (n >= sizeof(json)) {
+    Serial.println("ESP-NOW: JSON 溢出");
+    return;
+  }
+
+  char topic[64];
+  snprintf(topic, sizeof(topic), "agri/node/%s/telemetry", sub.node_id);
+
+  if (activeTransport == TRANSPORT_LAN_TCP) {
+    mqtt.publish(topic, json);
+  } else if (activeTransport == TRANSPORT_WAN_WS) {
+    wsSendMqttPublish(topic, (uint8_t*)json, strlen(json), (uint16_t)(++mqttSeq));
+    webSocket.loop();
+  }
+
+  Serial.printf("ESP-NOW: %s 已中继\n", sub.node_id);
+}
+#endif
+
 // ==================== 初始化 ====================
+
+#ifdef SUB_NODE
+// ====== 子节点固件 (ESP-NOW 发送, 无 WiFi/MQTT) ======
+
+static uint32_t subSeq = 0;
+DHT subDht(DHTPIN, DHTTYPE);
+HardwareSerial subSoilSerial(2);
+
+// 主节点 MAC 地址 — 请先用主节点固件查看串口输出获取
+// 烧录子节点前更新为实际值
+uint8_t mainNodeMac[] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+
+void subSetupEspNow() {
+  WiFi.mode(WIFI_STA);
+  WiFi.disconnect();
+  if (esp_now_init() != ESP_OK) {
+    Serial.println("ESP-NOW 初始化失败");
+    ESP.restart();
+  }
+  esp_now_peer_info_t peer = {};
+  memcpy(peer.peer_addr, mainNodeMac, 6);
+  peer.channel = 0;
+  peer.encrypt = false;
+  if (esp_now_add_peer(&peer) != ESP_OK) {
+    Serial.println("ESP-NOW 添加主节点失败");
+  } else {
+    Serial.printf("ESP-NOW: 已添加主节点 %02X:%02X:%02X:%02X:%02X:%02X\n",
+      mainNodeMac[0], mainNodeMac[1], mainNodeMac[2],
+      mainNodeMac[3], mainNodeMac[4], mainNodeMac[5]);
+  }
+}
+
+void subSendTelemetry() {
+  SubNodeTelemetry data;
+  memset(&data, 0, sizeof(data));
+  strncpy(data.node_id, NODE_ID, sizeof(data.node_id) - 1);
+  strncpy(data.boot_id, bootId, sizeof(data.boot_id) - 1);
+  data.seq = ++subSeq;
+
+  float airTemp = subDht.readTemperature();
+  float airHum  = subDht.readHumidity();
+
+  if (!isnan(airTemp)) {
+    data.temperature = roundf(airTemp * 100.0f) / 100.0f;
+    Serial.printf("气温: %.1f℃ | ", airTemp);
+  }
+  if (!isnan(airHum)) {
+    data.humidity = roundf(airHum * 100.0f) / 100.0f;
+    Serial.printf("气湿: %.1f%% | ", airHum);
+  }
+
+  float soilTemp, soilMoist, soilEC;
+  bool soilOk = readSoilSensor(soilTemp, soilMoist, soilEC);
+  Serial.print(" | ");
+  if (soilOk) {
+    data.soil_temp  = roundf(soilTemp * 100.0f) / 100.0f;
+    data.soil_moist = roundf(soilMoist * 100.0f) / 100.0f;
+    data.ec         = roundf(soilEC * 100.0f) / 100.0f;
+  } else {
+    Serial.print("土壤传感器异常");
+  }
+
+  data.rssi = WiFi.RSSI();
+
+  esp_err_t result = esp_now_send(mainNodeMac, (uint8_t*)&data, sizeof(data));
+  Serial.printf(" | ESP-NOW: %s (seq=%u)\n",
+    result == ESP_OK ? "发送成功" : "发送失败", data.seq);
+}
+
+void setup() {
+  Serial.begin(115200);
+  Serial.println("\n=== 农业物联网 ESP32 子节点固件 v1.0 (ESP-NOW) ===");
+  Serial.printf("子节点 ID: %s\n", NODE_ID);
+
+  pinMode(RS485_DIR, OUTPUT);
+  digitalWrite(RS485_DIR, LOW);
+  subSoilSerial.begin(soilBaud, SERIAL_8N1, RS485_RX, RS485_TX);
+  subDht.begin();
+
+  scanSoilSensor();
+
+  uint32_t r = esp_random();
+  snprintf(bootId, sizeof(bootId), "%08lx", (unsigned long)r);
+  Serial.printf("Boot ID: %s\n", bootId);
+  Serial.printf("子节点 MAC: %s\n", WiFi.macAddress().c_str());
+
+  subSetupEspNow();
+}
+
+void loop() {
+  static unsigned long lastRead = 0;
+  unsigned long now = millis();
+  if (now - lastRead >= READ_INTERVAL) {
+    lastRead = now;
+    subSendTelemetry();
+  }
+}
+
+#else
+// ====== 主节点固件 (现有代码 + ESP-NOW 接收中继) ======
 
 void setup() {
     Serial.begin(115200);
@@ -898,15 +1063,26 @@ void setup() {
         Serial.println("LittleFS 就绪");
     }
     
-    // 生成本次启动的唯一标识（每次上电不同，用于服务器端去重）
+    // 生成本次启动的唯一标识
     uint32_t r = esp_random();
     snprintf(bootId, sizeof(bootId), "%08lx", (unsigned long)r);
     Serial.printf("Boot ID: %s\n", bootId);
 
-    // 清理旧缓冲区（格式已变更，包含 boot_id）
+    // 清理旧缓冲区
     LittleFS.remove(BUFFER_FILE);
 
     setupWiFi();
+
+    // 打印 MAC 地址（供子节点固件配置）
+    Serial.printf("主节点 MAC: %s\n", WiFi.macAddress().c_str());
+
+    // 初始化 ESP-NOW 接收
+    if (esp_now_init() != ESP_OK) {
+        Serial.println("ESP-NOW 初始化失败");
+    } else {
+        esp_now_register_recv_cb(onEspNowRecv);
+        Serial.println("ESP-NOW 接收就绪");
+    }
 }
 
 // ==================== 主循环 ====================
@@ -921,15 +1097,15 @@ void loop() {
         } else if (activeTransport == TRANSPORT_WAN_WS) {
             webSocket.loop();
         }
-        // 每 5 秒尝试重连
         if (now - lastMqttReconnect >= MQTT_RECONNECT_INTERVAL) {
             ensureMqttConnected();
         }
     }
     
-    // 定期采集并上报遥测
     if (now - lastRead >= READ_INTERVAL) {
         lastRead = now;
         publishTelemetry();
     }
 }
+
+#endif // SUB_NODE
