@@ -1,4 +1,7 @@
-# Agri-lot — 农业物联网监控系统
+# Agri-Iot — 农业物联网监控系统
+
+> 项目已从 **Agri-lot** 重命名为 **Agri-Iot**（2026-06-08）。
+> 远程仓库：`https://github.com/LABULADOU/Agri-Iot.git`
 
 基于 Rust 的农业物联网监控系统，支持传感器数据采集、规则引擎、实时监控和 Tailscale Funnel 远程接入。
 

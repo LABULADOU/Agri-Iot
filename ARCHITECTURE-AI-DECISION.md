@@ -1,4 +1,4 @@
-# Agri-lot AI 决策系统重构方案
+# Agri-Iot AI 决策系统重构方案
 
 > 版本: v1.0  
 > 日期: 2026-05-18  
@@ -141,7 +141,7 @@ impl ObsidianKnowledge {
 
 **Obsidian Vault 结构:**
 ```
-Agri-lot Knowledge/
+Agri-Iot Knowledge/
 ├── 00-Crops/              # 作物知识库
 │   ├── 番茄.md
 │   ├── 黄瓜.md
