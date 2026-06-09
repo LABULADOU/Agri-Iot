@@ -33,7 +33,7 @@
 | **agri-server**    | Rust + Axum + SQLx      | HTTP API 服务、规则引擎、WebSocket 桥接 |
 | **agri-mqtt**      | Rust + rumqttd/rumqttc  | MQTT Broker（独立进程）和客户端     |
 | **agri-ui**        | React + TypeScript + Ant Design + ECharts | 前端 SPA（预构建到 static/） |
-| **esp32-firmware** | Arduino + ESP32         | 传感器采集 + 纯 MQTT（v3.0）      |
+| **esp32-firmware** | Arduino + ESP32         | 传感器采集 + 纯 MQTT（v4.0，C++）      |
 | **serial_bridge**  | Python                  | ESP32 串口数据 → HTTP 桥接 |
 
 ## 快速启动
@@ -76,8 +76,8 @@ BUILD_TYPE=release nohup ./scripts/init.sh &
 # 终端 1: 启动独立 broker
 ./target/debug/broker
 
-# 终端 2: 启动 server
-MQTT_BROKER_ADDR=127.0.0.1:1883 ./target/debug/agri-server
+# 终端 2: 启动 server（默认 broker 地址 127.0.0.1:1883）
+./target/debug/agri-server
 ```
 
 ### 5. 数据接入
@@ -185,7 +185,10 @@ agri-ui/                # React SPA (TypeScript + Ant Design + ECharts)
 └── build → agri-server/static/
 
 esp32-firmware/src/     # ESP32 固件
-└── main.ino            # v3.0: 纯 MQTT（PubSubClient + WebSocket MQTT）
+├── main.cpp            # v4.0: 纯 MQTT（PubSubClient + WebSocket MQTT）
+├── ota_public.h        # OTA 验证公钥
+keys/                   # OTA 签名密钥
+partitions/             # OTA 分区表
 
 scripts/                # 工具脚本
 ├── init.sh             # 进程管理器（托管 broker + server）
@@ -193,7 +196,10 @@ scripts/                # 工具脚本
 ├── mdns_advertise.py   # Python raw mDNS responder
 ├── start_mdns.sh       # mDNS 启动脚本
 ├── stress_test.py      # MQTT 压力测试
-└── run_bridge.sh       # 串口桥接启动脚本
+├── run_bridge.sh       # 串口桥接启动脚本
+├── setup_ssh.sh        # SSH 配置
+├── ota_deploy.sh       # OTA 部署
+└── build.sh            # 构建脚本
 
 agri-core/migrations/   # 数据库迁移（单一来源）
 ├── 001_init.sql        # 基础表（devices, sensor_readings 等）

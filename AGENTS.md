@@ -639,4 +639,49 @@ kill $(cat /tmp/agri-init.pid)
 修改: AGENTS.md                       # 记录 init.sh 方案
 修改: README.md                       # 更新启动方式
 ```
+
+## 布尔值遥测修复 + Status JSON 解析 + Broker 默认端口（2026-06-09）
+
+### 问题
+
+| # | 问题 | 影响 |
+|---|------|------|
+| 1 | **`relay_state: false` 被静默丢弃** — `process_telemetry()` 用 `value.as_f64()` 取值，JSON 布尔值 `false` 返回 `None` → `continue` | node-002（无传感器，仅上报 rssi + relay_state）始终存储 0 条/次，设备保持 offline |
+| 2 | **`handle_status_change` 不解析 JSON** — 将整个 payload 字符串与 `"online"` 直接比较，但 ESP32 发送 `{"status":"online","seq":XX}` | handler 收到合法在线状态却始终标记 offline |
+| 3 | **Broker 默认端口不一致** — `main.rs` 和 `mqtt_ws.rs` 默认 `11883`，而实际 broker 监听 `1883` | 无 `MQTT_BROKER_ADDR` 环境变量时 WS 桥接静默失败 |
+
+### 修复
+
+| # | 修复 | 文件 |
+|---|------|------|
+| 1 | `process_telemetry` 改用 `match value { Number → as_f64, Bool → 1.0/0.0, String → parse, _ → continue }` 处理所有 JSON 值类型 | `agri-core/src/telemetry.rs:73` |
+| 2 | `handle_status_change` 用 `serde_json::from_str` 解析 payload，`get("status").as_str()` 提取状态值 | `agri-mqtt/src/handler.rs:66-67` |
+| 3 | `main.rs` 和 `mqtt_ws.rs` 默认端口 `11883` → `1883` | `agri-server/src/main.rs:59`, `agri-server/src/mqtt_ws.rs:15` |
+
+### 经验教训
+- `serde_json::Value::as_f64()` 对 `Bool(false)` 返回 `None`，布尔值必须显式 match
+- `clean_session=false` 的副作用：broker 重放过期状态消息，导致 handler 启动时收到陈旧 "online" 状态报为 offline（telemtry 随后纠正回 online）
+- `mqtt_ws.rs` 和 `main.rs` 各有独立的 broker 地址默认值，必须同步修改
+
+### 测试统计
+- `agri-core`: 92 测试（不变）
+- `agri-server`: 32 测试（不变）
+- `agri-mqtt`: 22 测试（1 测试修复：用 null 代替 string 作为无效类型，因为 string 现在被接受并 parse 为 0.0）
+- **总计: 146 测试**（全部通过）
+
+### 变更文件清单（commit 89b0071）
+```
+修改: agri-core/src/telemetry.rs        # Bool/Number/String 值类型处理 + KNOWN_METRICS 追加 rssi/relay_state
+修改: agri-mqtt/src/handler.rs          # handle_status_change JSON 解析 + 测试修复
+修改: agri-server/src/main.rs           # broker 默认端口 11883→1883
+修改: agri-server/src/mqtt_ws.rs        # broker 默认端口 11883→1883
+修改: agri-server/src/routes.rs         # send_command MQTT 实时发布
+修改: agri-ui/src/theme/echartsTheme.ts # rssi/relay_state 颜色+标签
+修改: agri-server/static/               # 前端构建产物更新
+新增: esp32-firmware/src/main.cpp       # main.ino → main.cpp（C++ 文件命名规范）
+新增: esp32-firmware/keys/              # OTA 密钥
+新增: esp32-firmware/partitions/        # OTA 分区表
+新增: scripts/setup_ssh.sh              # SSH 配置脚本
+删除: esp32-firmware/src/main.ino       # 重命名为 main.cpp
+```
 ```
