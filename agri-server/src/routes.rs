@@ -224,8 +224,8 @@ async fn send_command(
     State(state): State<AppState>, Path(id): Path<String>,
     Json(cmd): Json<CommandPayload>,
 ) -> impl IntoResponse {
-    let device: Option<(String, Option<String>)> = match sqlx::query_as::<_, (String, Option<String>)>(
-        "SELECT status, capabilities FROM devices WHERE id = ?"
+    let device: Option<(String, Option<String>, String)> = match sqlx::query_as::<_, (String, Option<String>, String)>(
+        "SELECT status, capabilities, node_id FROM devices WHERE id = ?"
     ).bind(&id).fetch_optional(&state.pool).await {
         Ok(d) => d,
         Err(e) => {
@@ -233,7 +233,7 @@ async fn send_command(
             return internal_err(e);
         }
     };
-    let (status, capabilities_json) = match device {
+    let (status, capabilities_json, node_id) = match device {
         Some(d) => d,
         None => return not_found(Some("Device not found")),
     };
@@ -255,10 +255,20 @@ async fn send_command(
     let result = sqlx::query(
         "INSERT INTO command_log (device_id, command, payload, status, created_at) VALUES (?, ?, ?, ?, ?)",
     ).bind(&id).bind(&cmd.command).bind(payload_str).bind("pending").bind(now).execute(&state.pool).await;
-    match result {
-        Ok(r) => Json(serde_json::json!({"id": r.last_insert_rowid().to_string(), "message": "Command queued"})).into_response(),
-        Err(e) => internal_err(e),
+    let row_id = match result {
+        Ok(r) => r.last_insert_rowid(),
+        Err(e) => return internal_err(e),
+    };
+    // Also publish to MQTT for real-time delivery
+    if let Some(client) = state.mqtt_client.lock().await.as_ref() {
+        let cmd_id = row_id.to_string();
+        let payload = serde_json::json!({
+            "command": cmd.command,
+            "params": cmd.params,
+        });
+        let _ = agri_mqtt::client::publish_command(client, &node_id, &cmd_id, &payload.to_string()).await;
     }
+    Json(serde_json::json!({"id": row_id.to_string(), "message": "Command queued"})).into_response()
 }
 
 async fn get_pending_commands(

@@ -61,9 +61,11 @@ pub async fn handle_telemetry(
 pub async fn handle_status_change(
     pool: &SqlitePool,
     node_id: &str,
-    status: &str,
+    payload: &str,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let db_status = match status {
+    let data: serde_json::Value = serde_json::from_str(payload).unwrap_or(serde_json::Value::Null);
+    let raw_status = data.get("status").and_then(|s| s.as_str()).unwrap_or(payload);
+    let db_status = match raw_status {
         "online" => "online",
         _ => "offline",
     };
@@ -304,7 +306,8 @@ mod tests {
     async fn test_handle_telemetry_wrong_value_type() {
         let pool = setup_test_db().await;
         
-        let payload = r#"{"metrics": {"temperature": "not_a_number"}}"#;
+        // Strings now parse to f64 (0 for invalid), so use null instead
+        let payload = r#"{"metrics": {"temperature": null}}"#;
         let result = handle_telemetry(&pool, "node-001", payload, None).await;
         
         assert!(result.is_ok(), "类型错误不应报错，只是跳过该 metric");

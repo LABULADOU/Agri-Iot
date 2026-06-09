@@ -7,7 +7,7 @@ const METRIC_MAP: &[(&str, &str)] = &[
     ("air_humidity", "humidity"),
     ("soil_temp", "soil_temperature"),
 ];
-const KNOWN_METRICS: &[&str] = &["temperature", "humidity", "soil_moisture", "soil_temperature", "ec", "light"];
+const KNOWN_METRICS: &[&str] = &["temperature", "humidity", "soil_moisture", "soil_temperature", "ec", "light", "rssi", "relay_state"];
 
 pub fn normalize_metric(name: &str) -> &str {
     METRIC_MAP.iter().find(|(k, _)| *k == name).map(|(_, v)| *v).unwrap_or(name)
@@ -23,6 +23,8 @@ pub fn validate_value(metric: &str, val: f64) -> bool {
         "humidity" | "soil_moisture" => val >= 0.0 && val <= 100.0,
         "ec" => val >= 0.0 && val <= 10.0,
         "light" => val >= 0.0 && val <= 200000.0,
+        "rssi" => val >= -120.0 && val <= 0.0,
+        "relay_state" => val == 0.0 || val == 1.0,
         _ => true,
     }
 }
@@ -33,6 +35,8 @@ pub fn metric_unit(metric: &str) -> &str {
         "humidity" | "soil_moisture" => "%",
         "light" => "lux",
         "ec" => "mS/cm",
+        "rssi" => "dBm",
+        "relay_state" => "",
         _ => "",
     }
 }
@@ -66,10 +70,15 @@ pub async fn process_telemetry(
 
     for (device_id, _) in &devices {
         for (metric, value) in metrics {
-            let Some(mut val) = value.as_f64() else { continue };
             let m = metric.as_str();
             let normalized = normalize_metric(m);
             if !is_known_metric(normalized) { continue; }
+            let mut val = match value {
+                serde_json::Value::Number(n) => n.as_f64().unwrap_or(0.0),
+                serde_json::Value::Bool(b) => if *b { 1.0 } else { 0.0 },
+                serde_json::Value::String(s) => s.parse::<f64>().unwrap_or(0.0),
+                _ => continue,
+            };
             val = maybe_convert_ec(normalized, val);
             if !validate_value(normalized, val) { continue; }
             let unit = metric_unit(normalized);

@@ -1,15 +1,18 @@
 /*
- * 农业物联网 ESP32 固件 v3.0
- * 功能：传感器数据采集 + MQTT 上报 (LAN TCP / WAN WebSocket) + 远程控制
+ * 农业物联网 ESP32 固件 v4.0 (星型组网 + OTA)
+ * 功能：传感器数据采集 + MQTT 上报 (LAN TCP / WAN WebSocket) + OTA 升级
  * 传感器：DHT22 空气温湿度 + RS485 土壤传感器（温度/湿度/EC）
  * 控制：继电器开关（MQTT 命令订阅）
- * 
+ *
+ * 构建: pio run -e esp32-node-001  或  pio run -e esp32-node-002
+ * 需要 -DNODE_ID_STR=\"esp32-node-00x\" 编译标志
+ *
  * 依赖库:
  *   - PubSubClient (knolleary)
  *   - WebSockets (me-no-dev, 用于 WAN WebSocket path)
  *   - ArduinoJson (bblanchon)
  *   - DHT sensor library (adafruit)
- *   - ESP32 Arduino Core (内置 WiFi, LittleFS, mDNS)
+ *   - ESP32 Arduino Core (内置 WiFi, LittleFS, mDNS, mbedtls)
  */
 
 #include <WiFi.h>
@@ -22,20 +25,12 @@
 #include <HardwareSerial.h>
 #include <LittleFS.h>
 #include <ESPmDNS.h>
-#include <esp_now.h>
-
-// ESP-NOW 子节点数据格式
-typedef struct {
-  char  node_id[16];
-  char  boot_id[12];
-  uint32_t seq;
-  float temperature;
-  float humidity;
-  float soil_temp;
-  float soil_moist;
-  float ec;
-  int16_t rssi;
-} SubNodeTelemetry;
+#include <HTTPClient.h>
+#include <Update.h>
+#include <mbedtls/sha256.h>
+#include <mbedtls/pk.h>
+#include <mbedtls/base64.h>
+#include "ota_public.h"
 
 // ==================== 配置 ====================
 
@@ -54,12 +49,12 @@ const char* FUNNEL_HOST = "zero-1.taile2b316.ts.net";
 const int FUNNEL_PORT = 443;
 const char* FUNNEL_PATH = "/mqtt";
 
-// 节点标识（子节点使用不同 ID）
-#ifdef SUB_NODE
-const char* NODE_ID = "esp32-node-002";
-#else
-const char* NODE_ID = "esp32-node-001";
+// 节点标识（从编译标志 -DNODE_ID_STR=... 注入）
+#ifndef NODE_ID_STR
+#error "NODE_ID_STR must be defined via -DNODE_ID_STR=\"esp32-node-00x\""
 #endif
+const char* NODE_ID = NODE_ID_STR;
+const char* FW_VERSION = "4.0.1";
 const char* MQTT_CLIENT_ID = NODE_ID;
 const char* MQTT_USER = "";
 const char* MQTT_PASS = "";
@@ -107,6 +102,7 @@ unsigned long lastMqttReconnect = 0;
 char bootId[12] = {0};
 bool relayState = false;
 unsigned long mqttSeq = 0;
+const char* lastCmdResult = "";  // OTA/命令执行结果反馈
 
 // 连接模式枚举
 enum MqttTransport {
@@ -122,6 +118,20 @@ bool wanMqttConnected = false; // MQTT-level connected (over WS)
 // 接收缓冲区（WebSocket path 用）
 uint8_t wsRxBuf[256];
 size_t wsRxLen = 0;
+
+// ==================== 前向声明 ====================
+
+bool readSoilSensor(float& outTemp, float& outMoist, float& outEC);
+bool tryModbusRead(uint32_t baud, uint8_t addr, unsigned long timeout);
+void scanSoilSensor();
+void diagnoseRS485();
+void rs485Transmit();
+void rs485Receive();
+void flashFlushBuffer();
+void handleMqttCommand(const char* json);
+void resolveLanHost();
+void appendToBuffer(const char* line);
+bool otaUpdate(const char* url, const char* sig);
 
 // ==================== Modbus CRC16 ====================
 
@@ -297,22 +307,14 @@ void diagnoseRS485() {
 
 // ==================== MQTT 工具函数 ====================
 
-// 构建 MQTT topic 字符串到固定缓冲区
-static void makeTopic(char* buf, size_t sz, const char* prefix, const char* suffix) {
-    snprintf(buf, sz, "%s%s", prefix, suffix);
-}
-
-// 获取 telemetry topic
 static void telemetryTopic(char* buf, size_t sz) {
     snprintf(buf, sz, "%s%s/telemetry", TOPIC_TELEMETRY_PREFIX, NODE_ID);
 }
 
-// 获取 status topic
 static void statusTopic(char* buf, size_t sz) {
     snprintf(buf, sz, "%s%s/status", TOPIC_STATUS_PREFIX, NODE_ID);
 }
 
-// 获取 command subscribe topic（通配符）
 static void commandTopic(char* buf, size_t sz) {
     snprintf(buf, sz, "%s%s/command/#", TOPIC_COMMAND_PREFIX, NODE_ID);
 }
@@ -472,8 +474,9 @@ static void handleMqttPacket(const uint8_t* data, size_t len) {
                     // 发送在线状态
                     char status[32];
                     snprintf(status, sizeof(status), "{\"status\":\"online\",\"seq\":%llu}", mqttSeq);
-                    wsSendMqttPublish("agri/node/esp32-node-001/status", 
-                                       (uint8_t*)status, strlen(status), ++mqttSeq);
+                    char statTopic[64];
+                    snprintf(statTopic, sizeof(statTopic), "agri/node/%s/status", NODE_ID);
+                    wsSendMqttPublish(statTopic, (uint8_t*)status, strlen(status), ++mqttSeq);
                     // 回放缓冲区
                     flashFlushBuffer();
                 } else {
@@ -497,7 +500,7 @@ static void handleMqttPacket(const uint8_t* data, size_t len) {
             uint16_t tlen = (data[off] << 8) | data[off + 1];
             off += 2;
             if (off + tlen > len) break;
-            // topic = agri/node/esp32-node-001/command/{cmd_id}
+            // topic = agri/node/{node_id}/command/{cmd_id}
             off += tlen; // skip topic
             // Handle QoS if needed
             uint8_t qos = (data[0] & 0x06) >> 1;
@@ -512,7 +515,7 @@ static void handleMqttPacket(const uint8_t* data, size_t len) {
             // Parse JSON payload
             size_t payloadLen = len - off;
             if (payloadLen == 0) break;
-            char json[128];
+            char json[768];
             size_t copyLen = payloadLen < sizeof(json)-1 ? payloadLen : sizeof(json)-1;
             memcpy(json, data + off, copyLen);
             json[copyLen] = '\0';
@@ -553,7 +556,8 @@ void webSocketEvent(WStype_t type, uint8_t* payload, size_t length) {
 // ==================== MQTT LAN 回调 ====================
 
 void mqttLanCallback(char* topic, byte* payload, unsigned int length) {
-    char json[128];
+    Serial.printf("收到 MQTT 包: topic=%s, len=%d\n", topic, length);
+    char json[768];
     size_t copyLen = length < sizeof(json)-1 ? length : sizeof(json)-1;
     memcpy(json, payload, copyLen);
     json[copyLen] = '\0';
@@ -563,9 +567,12 @@ void mqttLanCallback(char* topic, byte* payload, unsigned int length) {
 // ==================== 命令处理（共享） ====================
 
 void handleMqttCommand(const char* json) {
-    StaticJsonDocument<192> doc;
+    StaticJsonDocument<768> doc;
     DeserializationError err = deserializeJson(doc, json);
-    if (err) return;
+    if (err) {
+        Serial.printf("指令 JSON 解析失败: %s, json=%s\n", err.c_str(), json);
+        return;
+    }
     
     const char* command = doc["command"] | "";
     JsonObject params = doc["params"];
@@ -580,6 +587,23 @@ void handleMqttCommand(const char* json) {
     }
     else if (strcmp(command, "set_interval") == 0) {
         Serial.printf("采集间隔调整请求 (当前: %dms)\n", READ_INTERVAL);
+    }
+    else if (strcmp(command, "ota") == 0) {
+        const char* url = params["url"] | "";
+        const char* sig = params["sig"] | "";
+        if (strlen(url) == 0 || strlen(sig) == 0) {
+            lastCmdResult = "ota:missing_params";
+            Serial.println("OTA: 缺少 url 或 sig");
+            return;
+        }
+        lastCmdResult = "ota:started";
+        Serial.printf("OTA: 收到命令，url=%s\n", url);
+        bool ok = otaUpdate(url, sig);
+        if (ok) {
+            lastCmdResult = "ota:rebooting";
+        } else {
+            lastCmdResult = "ota:failed";
+        }
     }
 }
 
@@ -599,7 +623,11 @@ bool connectLanMqtt() {
         Serial.println("MQTT LAN: 已连接");
         char subTopic[64];
         commandTopic(subTopic, sizeof(subTopic));
-        mqtt.subscribe(subTopic);
+        if (mqtt.subscribe(subTopic)) {
+            Serial.printf("MQTT LAN: 订阅成功 %s\n", subTopic);
+        } else {
+            Serial.printf("MQTT LAN: 订阅失败 %s\n", subTopic);
+        }
         // 发布在线状态
         char status[64];
         snprintf(status, sizeof(status), "{\"status\":\"online\",\"seq\":%llu}", mqttSeq);
@@ -727,7 +755,10 @@ void publishTelemetry() {
     doc["node_id"] = NODE_ID;
     doc["boot_id"] = bootId;
     doc["seq"] = mqttSeq + 1;
-    JsonObject metrics = doc.createNestedObject("metrics");
+    doc["fw_version"] = FW_VERSION;
+    doc["ota_status"] = "idle";
+    if (strlen(lastCmdResult) > 0) doc["last_cmd"] = lastCmdResult;
+    JsonObject metrics = doc["metrics"].to<JsonObject>();
     
     float airTemp = dht.readTemperature();
     float airHum = dht.readHumidity();
@@ -872,6 +903,8 @@ void resolveLanHost() {
 void setupWiFi() {
     Serial.printf("连接 WiFi: %s\n", WIFI_SSID);
     WiFi.mode(WIFI_STA);
+    // 打印 MAC 地址
+    Serial.printf("主节点 MAC: %s\n", WiFi.macAddress().c_str());
     WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
     WiFi.setAutoReconnect(true);
     
@@ -882,7 +915,7 @@ void setupWiFi() {
         }
         if (WiFi.status() == WL_CONNECTED) {
             Serial.printf("\nWiFi 已连接! IP: %s\n", WiFi.localIP().toString().c_str());
-            if (MDNS.begin("esp32-node-001")) Serial.println("mDNS 就绪");
+            if (MDNS.begin(NODE_ID)) Serial.println("mDNS 就绪");
             resolveLanHost();
             return;
         }
@@ -892,158 +925,103 @@ void setupWiFi() {
     ESP.restart();
 }
 
-// ==================== ESP-NOW 接收回调 ====================
+// ==================== OTA 升级 ====================
 
-#ifndef SUB_NODE
-void onEspNowRecv(const uint8_t *mac, const uint8_t *data, int len) {
-  if (len != sizeof(SubNodeTelemetry)) return;
-
-  SubNodeTelemetry sub;
-  memcpy(&sub, data, sizeof(sub));
-  sub.node_id[15] = '\0';
-  sub.boot_id[11] = '\0';
-
-  Serial.printf("ESP-NOW: 收到子节点 %s seq=%u\n", sub.node_id, sub.seq);
-
-  // 构建 JSON 并通过 MQTT 发布到子节点自己的 topic
-  StaticJsonDocument<384> doc;
-  doc["node_id"] = sub.node_id;
-  doc["boot_id"] = sub.boot_id;
-  doc["seq"] = sub.seq;
-  JsonObject metrics = doc.createNestedObject("metrics");
-  metrics["temperature"] = sub.temperature;
-  metrics["humidity"] = sub.humidity;
-  metrics["soil_temperature"] = sub.soil_temp;
-  metrics["soil_moisture"] = sub.soil_moist;
-  metrics["ec"] = sub.ec;
-  metrics["rssi"] = sub.rssi;
-
-  char json[384];
-  size_t n = serializeJson(doc, json, sizeof(json));
-  if (n >= sizeof(json)) {
-    Serial.println("ESP-NOW: JSON 溢出");
-    return;
-  }
-
-  char topic[64];
-  snprintf(topic, sizeof(topic), "agri/node/%s/telemetry", sub.node_id);
-
-  if (activeTransport == TRANSPORT_LAN_TCP) {
-    mqtt.publish(topic, json);
-  } else if (activeTransport == TRANSPORT_WAN_WS) {
-    wsSendMqttPublish(topic, (uint8_t*)json, strlen(json), (uint16_t)(++mqttSeq));
-    webSocket.loop();
-  }
-
-  Serial.printf("ESP-NOW: %s 已中继\n", sub.node_id);
-}
-#endif
-
-// ==================== 初始化 ====================
-
-#ifdef SUB_NODE
-// ====== 子节点固件 (ESP-NOW 发送, 无 WiFi/MQTT) ======
-
-static uint32_t subSeq = 0;
-DHT subDht(DHTPIN, DHTTYPE);
-HardwareSerial subSoilSerial(2);
-
-// 主节点 MAC 地址 — 请先用主节点固件查看串口输出获取
-// 烧录子节点前更新为实际值
-uint8_t mainNodeMac[] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-
-void subSetupEspNow() {
-  WiFi.mode(WIFI_STA);
-  WiFi.disconnect();
-  if (esp_now_init() != ESP_OK) {
-    Serial.println("ESP-NOW 初始化失败");
+bool otaUpdate(const char* url, const char* sig_b64) {
+    Serial.printf("OTA: 开始升级 %s\n", url);
+    bool isHttps = (strncmp(url, "https://", 8) == 0);
+    WiFiClient tcpClient;
+    WiFiClientSecure tlsClient;
+    tlsClient.setInsecure();
+    HTTPClient http;
+    http.setTimeout(30000);
+    if (isHttps) {
+        http.begin(tlsClient, url);
+    } else {
+        http.begin(tcpClient, url);
+    }
+    int code = http.GET();
+    if (code != 200) {
+        Serial.printf("OTA: HTTP %d\n", code);
+        lastCmdResult = "ota:http_err";
+        http.end(); return false;
+    }
+    int totalSize = http.getSize();
+    Serial.printf("OTA: 下载 %d bytes\n", totalSize);
+    if (!Update.begin(totalSize, U_FLASH)) {
+        Serial.printf("OTA: Update.begin 失败 (error=%d)\n", Update.getError());
+        lastCmdResult = "ota:update_beg_fail";
+        http.end(); return false;
+    }
+    WiFiClient* stream = http.getStreamPtr();
+    mbedtls_sha256_context ctx;
+    mbedtls_sha256_init(&ctx);
+    mbedtls_sha256_starts(&ctx, 0);
+    uint8_t buf[512];
+    int written = 0, lastPct = 0;
+    unsigned long dlStart = millis();
+    while (http.connected() && written < totalSize) {
+        if (millis() - dlStart > 120000) {  // 2 分钟超时
+            Serial.println("OTA: 下载超时");
+            lastCmdResult = "ota:dl_timeout";
+            Update.abort(); http.end(); return false;
+        }
+        int avail = stream->available();
+        if (avail <= 0) { delay(1); continue; }
+        int toRead = min(avail, (int)sizeof(buf));
+        int r = stream->readBytes(buf, toRead);
+        if (r <= 0) continue;
+        mbedtls_sha256_update(&ctx, buf, r);
+        if (Update.write(buf, r) != r) {
+            Serial.println("OTA: 写入失败");
+            lastCmdResult = "ota:write_fail";
+            Update.abort(); http.end(); return false;
+        }
+        written += r;
+        int pct = written * 100 / totalSize;
+        if (pct - lastPct >= 10) { Serial.printf("OTA: %d%%\n", pct); lastPct = pct; }
+    }
+    uint8_t hash[32];
+    mbedtls_sha256_finish(&ctx, hash);
+    mbedtls_sha256_free(&ctx);
+    http.end();
+    if (written != totalSize) {
+        Serial.printf("OTA: 下载不完整 %d/%d\n", written, totalSize);
+        lastCmdResult = "ota:partial";
+        Update.abort(); return false;
+    }
+    mbedtls_pk_context pk;
+    mbedtls_pk_init(&pk);
+    int ret = mbedtls_pk_parse_public_key(&pk, ota_public_der, ota_public_der_len);
+    if (ret != 0) { lastCmdResult = "ota:pubkey_fail"; Serial.printf("OTA: 解析公钥失败 %d\n", ret); Update.abort(); return false; }
+    size_t sig_len;
+    uint8_t sig_buf[128];
+    ret = mbedtls_base64_decode(sig_buf, sizeof(sig_buf), &sig_len,
+                                (const unsigned char*)sig_b64, strlen(sig_b64));
+    if (ret != 0) {
+        lastCmdResult = "ota:b64_fail";
+        Serial.printf("OTA: base64 解码失败 %d\n", ret);
+        mbedtls_pk_free(&pk); Update.abort(); return false;
+    }
+    ret = mbedtls_pk_verify(&pk, MBEDTLS_MD_SHA256, hash, 32, sig_buf, sig_len);
+    mbedtls_pk_free(&pk);
+    if (ret != 0) { lastCmdResult = "ota:sign_fail"; Serial.printf("OTA: 签名验证失败 %d\n", ret); Update.abort(); return false; }
+    Serial.println("OTA: 签名验证通过");
+    if (!Update.end(true)) {
+        lastCmdResult = "ota:end_fail";
+        Serial.printf("OTA: Update.end 失败 (error=%d)\n", Update.getError());
+        return false;
+    }
+    Serial.println("OTA: 成功，即将重启");
     ESP.restart();
-  }
-  esp_now_peer_info_t peer = {};
-  memcpy(peer.peer_addr, mainNodeMac, 6);
-  peer.channel = 0;
-  peer.encrypt = false;
-  if (esp_now_add_peer(&peer) != ESP_OK) {
-    Serial.println("ESP-NOW 添加主节点失败");
-  } else {
-    Serial.printf("ESP-NOW: 已添加主节点 %02X:%02X:%02X:%02X:%02X:%02X\n",
-      mainNodeMac[0], mainNodeMac[1], mainNodeMac[2],
-      mainNodeMac[3], mainNodeMac[4], mainNodeMac[5]);
-  }
+    return true;
 }
 
-void subSendTelemetry() {
-  SubNodeTelemetry data;
-  memset(&data, 0, sizeof(data));
-  strncpy(data.node_id, NODE_ID, sizeof(data.node_id) - 1);
-  strncpy(data.boot_id, bootId, sizeof(data.boot_id) - 1);
-  data.seq = ++subSeq;
-
-  float airTemp = subDht.readTemperature();
-  float airHum  = subDht.readHumidity();
-
-  if (!isnan(airTemp)) {
-    data.temperature = roundf(airTemp * 100.0f) / 100.0f;
-    Serial.printf("气温: %.1f℃ | ", airTemp);
-  }
-  if (!isnan(airHum)) {
-    data.humidity = roundf(airHum * 100.0f) / 100.0f;
-    Serial.printf("气湿: %.1f%% | ", airHum);
-  }
-
-  float soilTemp, soilMoist, soilEC;
-  bool soilOk = readSoilSensor(soilTemp, soilMoist, soilEC);
-  Serial.print(" | ");
-  if (soilOk) {
-    data.soil_temp  = roundf(soilTemp * 100.0f) / 100.0f;
-    data.soil_moist = roundf(soilMoist * 100.0f) / 100.0f;
-    data.ec         = roundf(soilEC * 100.0f) / 100.0f;
-  } else {
-    Serial.print("土壤传感器异常");
-  }
-
-  data.rssi = WiFi.RSSI();
-
-  esp_err_t result = esp_now_send(mainNodeMac, (uint8_t*)&data, sizeof(data));
-  Serial.printf(" | ESP-NOW: %s (seq=%u)\n",
-    result == ESP_OK ? "发送成功" : "发送失败", data.seq);
-}
-
-void setup() {
-  Serial.begin(115200);
-  Serial.println("\n=== 农业物联网 ESP32 子节点固件 v1.0 (ESP-NOW) ===");
-  Serial.printf("子节点 ID: %s\n", NODE_ID);
-
-  pinMode(RS485_DIR, OUTPUT);
-  digitalWrite(RS485_DIR, LOW);
-  subSoilSerial.begin(soilBaud, SERIAL_8N1, RS485_RX, RS485_TX);
-  subDht.begin();
-
-  scanSoilSensor();
-
-  uint32_t r = esp_random();
-  snprintf(bootId, sizeof(bootId), "%08lx", (unsigned long)r);
-  Serial.printf("Boot ID: %s\n", bootId);
-  Serial.printf("子节点 MAC: %s\n", WiFi.macAddress().c_str());
-
-  subSetupEspNow();
-}
-
-void loop() {
-  static unsigned long lastRead = 0;
-  unsigned long now = millis();
-  if (now - lastRead >= READ_INTERVAL) {
-    lastRead = now;
-    subSendTelemetry();
-  }
-}
-
-#else
-// ====== 主节点固件 (现有代码 + ESP-NOW 接收中继) ======
+// ==================== 初始化与主循环 ====================
 
 void setup() {
     Serial.begin(115200);
-    Serial.println("\n=== 农业物联网 ESP32 固件 v3.0 (纯 MQTT) ===");
+    Serial.printf("\n=== 农业物联网 ESP32 固件 v%s (%s) ===\n", FW_VERSION, NODE_ID);
     
     pinMode(RELAY_PIN, OUTPUT);
     digitalWrite(RELAY_PIN, LOW);
@@ -1055,10 +1033,19 @@ void setup() {
     dht.begin();
     wanTls.setInsecure();
     
+    mqtt.setBufferSize(512);
+    Serial.printf("MQTT 缓冲区: %d\n", mqtt.getBufferSize());
+    
     scanSoilSensor();
     
     if (!LittleFS.begin()) {
-        Serial.println("LittleFS 初始化失败");
+        Serial.println("LittleFS 初始化失败，尝试格式化...");
+        LittleFS.format();
+        if (LittleFS.begin()) {
+            Serial.println("LittleFS 格式化成功");
+        } else {
+            Serial.println("LittleFS 仍然失败");
+        }
     } else {
         Serial.println("LittleFS 就绪");
     }
@@ -1072,17 +1059,6 @@ void setup() {
     LittleFS.remove(BUFFER_FILE);
 
     setupWiFi();
-
-    // 打印 MAC 地址（供子节点固件配置）
-    Serial.printf("主节点 MAC: %s\n", WiFi.macAddress().c_str());
-
-    // 初始化 ESP-NOW 接收
-    if (esp_now_init() != ESP_OK) {
-        Serial.println("ESP-NOW 初始化失败");
-    } else {
-        esp_now_register_recv_cb(onEspNowRecv);
-        Serial.println("ESP-NOW 接收就绪");
-    }
 }
 
 // ==================== 主循环 ====================
@@ -1107,5 +1083,3 @@ void loop() {
         publishTelemetry();
     }
 }
-
-#endif // SUB_NODE

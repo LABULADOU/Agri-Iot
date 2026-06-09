@@ -56,7 +56,7 @@ async fn main() -> Result<()> {
         .unwrap_or(3001);
 
     let broker_addr: String = std::env::var("MQTT_BROKER_ADDR")
-        .unwrap_or_else(|_| "127.0.0.1:11883".into());
+        .unwrap_or_else(|_| "127.0.0.1:1883".into());
 
     info!("Connecting to external MQTT broker at {}", broker_addr);
 

@@ -15,8 +15,8 @@ fi
 ENV="esp32-${TARGET}"
 FW_BIN=".pio/build/${ENV}/firmware.bin"
 FW_VER=$(date +%Y%m%d-%H%M%S)
-SSH_TARGET="admino@100.67.142.6"
-PROJ_DIR="~/Agri-Iot/esp32-firmware"
+SSH_TARGET="zero"
+PROJ_DIR="~/Agri-lot/esp32-firmware"
 LOCAL_FW_DIR="/root/agri-iot/agri-server/static/firmware"
 PRIVATE_KEY="/root/agri-iot/esp32-firmware/keys/ota_private.pem"
 STATIC_URL="https://zero-1.taile2b316.ts.net/firmware"
@@ -32,12 +32,12 @@ echo "=== OTA 部署: ${NODE_ID} (${FW_VER}) ==="
 
 # 1. 构建
 echo "--- 构建 ${ENV} ---"
-sshpass -e ssh -o StrictHostKeyChecking=no "${SSH_TARGET}" \
+ssh "${SSH_TARGET}" \
     "export PATH=\$PATH:/home/admino/.local/bin && cd ${PROJ_DIR} && pio run -e ${ENV}" 2>&1 | tail -3
 
 # 2. 复制固件到本地
 echo "--- 获取 firmware.bin ---"
-sshpass -e scp -o StrictHostKeyChecking=no \
+scp \
     "${SSH_TARGET}:${PROJ_DIR}/${FW_BIN}" \
     "/tmp/${ENV}.bin"
 

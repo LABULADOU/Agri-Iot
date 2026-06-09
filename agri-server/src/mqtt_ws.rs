@@ -12,7 +12,7 @@ async fn handle_socket(mut socket: WebSocket) {
     info!("WebSocket MQTT client connected");
 
     let broker_addr = std::env::var("MQTT_BROKER_ADDR")
-        .unwrap_or_else(|_| "127.0.0.1:11883".into());
+        .unwrap_or_else(|_| "127.0.0.1:1883".into());
 
     let tcp = match tokio::net::TcpStream::connect(&broker_addr).await {
         Ok(s) => s,

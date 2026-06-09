@@ -36,6 +36,9 @@ error.txt
 *.docx
 *.mdx
 
+# SSH keys (private)
+config/ssh/
+
 # Project docs
 config/default.toml
 migrations/001_init.sql
