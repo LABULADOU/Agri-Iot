@@ -640,6 +640,73 @@ kill $(cat /tmp/agri-init.pid)
 修改: README.md                       # 更新启动方式
 ```
 
+## 决策管理框架 — 三阶段决策流 + 审核 + 通知升级（2026-06-11）
+
+### 新模块 `agri-server/src/decision/`
+
+```
+decision/
+├── mod.rs                   # DecisionEngine + start() 启动入口
+├── engine.rs                # Trigger/Stage trait + DecisionFlow + Builder
+├── registry.rs              # DeviceState 状态机 (Rain/Wind/通风位置)
+├── log.rs                   # decision_log 表 CRUD
+├── approval.rs              # ApprovalPolicy + ApprovalGate + TimeoutAction
+└── notification/
+    ├── mod.rs               # Notifier trait + NotificationDispatch
+    ├── router.rs            # ShiftRouter + 排班/夜间模式
+    └── escalator.rs         # EscalationChain + 逐级升维
+```
+
+### 三阶段决策管线
+
+| 层级 | 触发器 | 延迟 | 说明 |
+|------|--------|------|------|
+| Tier 1 (紧急) | 每次遥测 (PerTelemetry) | 立即 | 大风/大雨/下雪紧急保护 |
+| Tier 2 (状态) | 状态变化 (OnStateChange) | 分类后触发 | 雨/风状态机变更后触发评估 |
+| Tier 3 (评估) | 定时 (Timed, 30min) | 周期执行 | 全面环境评估 + 知识库 RAG |
+
+### 人机协同审批
+
+| 级别 | 等待时间 | 超时行为 | 说明 |
+|------|----------|----------|------|
+| CRITICAL | 0s | ConservativeExec | 紧急保护不等人 |
+| HIGH | 120s | ConservativeExec | 等人2分钟，无人则保守执行 |
+| NORMAL | 600s | Skip | 等人10分钟，无人则跳过 |
+| LOW | 0s | Skip | 仅记日志 |
+
+- **ConservativeExec**：执行"安全、非最优"动作（如 50% 通风替代 80%）
+- **Graceful degradation**：永远不阻塞流程，超时自动降级
+
+### 通知升级链
+
+```
+1. → Push 通知 (30s) → 无人响应
+2. → SMS 短信 (120s) → 无人响应
+3. → 语音电话 → 强制触达
+```
+
+### 排班路由
+- 08:00–18:00 → 主值班员 (Push)
+- 18:00–22:00 → 备用值班员 (Push + IM)
+- 22:00–08:00 → 仅 SMS/语音
+
+### 迁移
+`agri-core/migrations/007_decision_engine.sql` 新增 `decision_log` 表。
+
+### 变更文件清单
+```
+新增: agri-server/src/decision/mod.rs           # 引擎入口 + start()
+新增: agri-server/src/decision/engine.rs        # Trigger/Stage/DecisionFlow
+新增: agri-server/src/decision/registry.rs      # DeviceState 状态机
+新增: agri-server/src/decision/log.rs           # 决策日志 DB
+新增: agri-server/src/decision/approval.rs      # 审批策略
+新增: agri-server/src/decision/notification/mod.rs     # 通知调度
+新增: agri-server/src/decision/notification/router.rs  # 排班路由
+新增: agri-server/src/decision/notification/escalator.rs # 升级链
+新增: agri-core/migrations/007_decision_engine.sql     # decision_log 表
+修改: agri-server/src/main.rs                          # 注册决策模块 + 启动
+```
+
 ## 布尔值遥测修复 + Status JSON 解析 + Broker 默认端口（2026-06-09）
 
 ### 问题

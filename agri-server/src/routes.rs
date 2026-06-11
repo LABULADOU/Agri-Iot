@@ -5,7 +5,7 @@ use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
     response::{IntoResponse, Response, sse::{Event, Sse, KeepAlive}},
-    routing::{get, post, put},
+    routing::{delete, get, post, put},
     Json, Router,
 };
 use chrono::Utc;
@@ -46,10 +46,14 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/v1/dashboard/area-readings", get(dashboard_area_readings))
         .route("/api/v1/dashboard/node-readings", get(dashboard_node_readings))
         .route("/api/v1/system/info", get(system_info))
+        .route("/api/v1/readings/aggregate", get(readings_aggregate))
         .route("/api/v1/monitor/realtime", get(monitor_realtime))
         .route("/api/v1/events", get(sse_events))
+        .route("/api/v1/relations", get(list_relations).post(create_relation))
+        .route("/api/v1/relations/:id", delete(delete_relation))
         .route("/api/v1/commands/node/:node_id", get(get_pending_commands))
         .route("/api/v1/commands/:id/status", put(update_command_status))
+        .route("/api/v1/ws", get(super::ws_handler::ws_handler))
         .with_state(state)
 }
 
@@ -188,6 +192,80 @@ pub struct ReadingsQuery {
     pub start: Option<i64>,
     pub end: Option<i64>,
     pub limit: Option<i64>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct AggregateQuery {
+    pub device_id: String,
+    pub metric: String,
+    pub start: Option<i64>,
+    pub end: Option<i64>,
+    pub period: Option<String>,
+}
+
+async fn readings_aggregate(
+    State(state): State<AppState>,
+    Query(query): Query<AggregateQuery>,
+) -> impl IntoResponse {
+    let period = query.period.as_deref().unwrap_or("hour");
+    let fmt = match period {
+        "month" => "%Y-%m",
+        "week" => "%Y-W%W",
+        "day" => "%Y-%m-%d",
+        "10min" => "",
+        _ => "%Y-%m-%d %H:00:00",
+    };
+    let now = chrono::Utc::now().timestamp();
+    let start = query.start.unwrap_or(now - 86400);
+    let end = query.end.unwrap_or(now);
+
+    let rows = if period == "10min" {
+        sqlx::query_as::<_, (String, String, f64, f64, f64, i64)>(
+            "SELECT strftime('%Y-%m-%d %H:%M', datetime(((timestamp / 600) * 600), 'unixepoch')) as bucket, \
+             metric, MAX(value), MIN(value), AVG(value), COUNT(*) \
+             FROM sensor_readings \
+             WHERE device_id = ? AND metric = ? AND timestamp >= ? AND timestamp <= ? \
+             GROUP BY bucket, metric ORDER BY bucket ASC"
+        )
+        .bind(&query.device_id)
+        .bind(&query.metric)
+        .bind(start)
+        .bind(end)
+        .fetch_all(&state.pool)
+        .await
+    } else {
+        sqlx::query_as::<_, (String, String, f64, f64, f64, i64)>(
+            "SELECT strftime(?, datetime(timestamp, 'unixepoch')) as bucket, \
+             metric, MAX(value), MIN(value), AVG(value), COUNT(*) \
+             FROM sensor_readings \
+             WHERE device_id = ? AND metric = ? AND timestamp >= ? AND timestamp <= ? \
+             GROUP BY bucket, metric ORDER BY bucket ASC"
+        )
+        .bind(fmt)
+        .bind(&query.device_id)
+        .bind(&query.metric)
+        .bind(start)
+        .bind(end)
+        .fetch_all(&state.pool)
+        .await
+    };
+
+    match rows {
+        Ok(rows) => {
+            let result: Vec<serde_json::Value> = rows.into_iter().map(|(bucket, metric, max_val, min_val, avg_val, cnt)| {
+                serde_json::json!({
+                    "timestamp": bucket,
+                    "metric": metric,
+                    "max": max_val,
+                    "min": min_val,
+                    "avg": avg_val,
+                    "count": cnt,
+                })
+            }).collect();
+            Json(result).into_response()
+        }
+        Err(e) => internal_err(e),
+    }
 }
 
 async fn list_readings(
@@ -750,6 +828,76 @@ async fn sse_events(
         }
     });
     Sse::new(stream).keep_alive(KeepAlive::default())
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RelationQuery {
+    pub from_id: Option<String>,
+    pub from_type: Option<String>,
+    pub to_id: Option<String>,
+    pub to_type: Option<String>,
+    pub relation_type: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CreateRelationRequest {
+    pub from_id: String,
+    pub from_type: String,
+    pub to_id: String,
+    pub to_type: String,
+    pub relation_type: String,
+}
+
+async fn list_relations(
+    State(state): State<AppState>,
+    Query(query): Query<RelationQuery>,
+) -> impl IntoResponse {
+    match agri_core::models::EntityRelation::query(
+        &state.pool,
+        query.from_id.as_deref(),
+        query.from_type.as_deref(),
+        query.to_id.as_deref(),
+        query.to_type.as_deref(),
+        query.relation_type.as_deref(),
+    ).await {
+        Ok(relations) => Json(relations).into_response(),
+        Err(e) => internal_err(e),
+    }
+}
+
+async fn create_relation(
+    State(state): State<AppState>,
+    Json(req): Json<CreateRelationRequest>,
+) -> impl IntoResponse {
+    match agri_core::models::EntityRelation::create(
+        &state.pool,
+        &req.from_id,
+        &req.from_type,
+        &req.to_id,
+        &req.to_type,
+        &req.relation_type,
+    ).await {
+        Ok(relation) => (StatusCode::CREATED, Json(relation)).into_response(),
+        Err(e) => {
+            if let sqlx::Error::Database(ref db_err) = e {
+                if db_err.message().contains("UNIQUE") {
+                    return (StatusCode::CONFLICT, Json(serde_json::json!({"error": "relation already exists"}))).into_response();
+                }
+            }
+            internal_err(e)
+        }
+    }
+}
+
+async fn delete_relation(
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+) -> impl IntoResponse {
+    match agri_core::models::EntityRelation::delete(&state.pool, id).await {
+        Ok(true) => StatusCode::NO_CONTENT.into_response(),
+        Ok(false) => not_found(Some("relation")).into_response(),
+        Err(e) => internal_err(e),
+    }
 }
 
 #[derive(Debug, Deserialize)]

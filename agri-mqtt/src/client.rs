@@ -24,7 +24,7 @@ pub async fn publish_command(
     cmd_id: &str,
     payload: &str,
 ) -> Result<()> {
-    let topic = format!("agri/node/{}/command/{}", node_id, cmd_id);
+    let topic = agri_core::topics::command_topic(node_id, cmd_id);
 
     client
         .publish(&topic, QoS::AtLeastOnce, false, payload.as_bytes())

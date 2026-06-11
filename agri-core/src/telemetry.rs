@@ -148,12 +148,16 @@ pub async fn process_telemetry(
             let readings: Vec<serde_json::Value> = inserted_readings.iter().map(|(m, v, u)| {
                 serde_json::json!({"metric": m, "value": v, "unit": u})
             }).collect();
-            let _ = tx.send(serde_json::json!({
+            let payload = serde_json::json!({
                 "type": "telemetry",
                 "node_id": node_id,
                 "timestamp": now,
                 "readings": readings,
-            }).to_string());
+            }).to_string();
+            match tx.send(payload) {
+                Ok(n) => { tracing::trace!("Broadcast telemetry to {} receivers", n); }
+                Err(e) => { tracing::warn!("Broadcast send error: {}", e); }
+            }
         }
     }
 

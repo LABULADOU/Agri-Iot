@@ -164,7 +164,17 @@ agri-server/src/        # 后端服务
 ├── response.rs         # 响应辅助函数（ok_json/err_json/internal_err）
 ├── areas.rs            # 区域/作物/茬口管理
 ├── state.rs            # AppState（含 telemetry_limiter）
-├── rule_engine.rs      # 规则引擎
+├── rule_engine.rs      # 规则引擎（DAG 管线）
+├── decision/           # 决策管理框架
+│   ├── mod.rs          # DecisionEngine + 启动入口
+│   ├── engine.rs       # Trigger/Stage trait + DecisionFlow + Builder
+│   ├── registry.rs     # DeviceState 状态机 (Rain/Wind)
+│   ├── log.rs          # 决策日志 DB
+│   ├── approval.rs     # 审批策略 (ApprovalPolicy/Gate/TimeoutAction)
+│   └── notification/   # 通知调度
+│       ├── mod.rs      # Notifier trait + NotificationDispatch
+│       ├── router.rs   # ShiftRouter 排班路由
+│       └── escalator.rs # EscalationChain 逐级升维
 ├── weather.rs          # 天气 API 代理 (和风天气)
 ├── ai_routes.rs        # AI 决策 API 路由
 ├── mqtt_ws.rs          # WebSocket ↔ MQTT TCP 桥接
@@ -204,7 +214,11 @@ scripts/                # 工具脚本
 agri-core/migrations/   # 数据库迁移（单一来源）
 ├── 001_init.sql        # 基础表（devices, sensor_readings 等）
 ├── 002_ai_knowledge.sql # AI 知识库 + 气象 + 评估表
-└── 003_dedup.sql       # seq 列 + 部分唯一索引（MQTT 去重）
+├── 003_dedup.sql       # seq 列 + 部分唯一索引（MQTT 去重）
+├── 004_boot_id.sql     # boot_id 列
+├── 005_fix_dedup_index.sql
+├── 006_entity_relations.sql
+└── 007_decision_engine.sql  # decision_log 表
 ```
 
 ## 设备模型

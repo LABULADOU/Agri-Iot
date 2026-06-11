@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { sseService } from '../services/sse';
+import { wsService } from '../services/ws';
 
 interface RealtimeReading {
   nodeId: string;
@@ -13,6 +13,7 @@ interface RealtimeStore {
   readings: Map<string, RealtimeReading[]>;
   lastUpdate: string | null;
   connected: boolean;
+  _unsub: (() => void) | null;
   connect: () => void;
   disconnect: () => void;
   getNodeReadings: (nodeId: string) => RealtimeReading[];
@@ -23,12 +24,13 @@ export const useRealtimeStore = create<RealtimeStore>((set, get) => ({
   readings: new Map(),
   lastUpdate: null,
   connected: false,
+  _unsub: null as (() => void) | null,
 
   connect: () => {
-    sseService.connect();
+    wsService.connect();
     set({ connected: true });
 
-    const unsubscribe = sseService.subscribe((data) => {
+    const unsub = wsService.subscribe('telemetry', [], (data) => {
       set(state => {
         const newReadings = new Map(state.readings);
         const msg = data as Record<string, unknown>;
@@ -55,12 +57,14 @@ export const useRealtimeStore = create<RealtimeStore>((set, get) => ({
       });
     });
 
-    return unsubscribe;
+    set({ _unsub: unsub });
   },
 
   disconnect: () => {
-    sseService.disconnect();
-    set({ connected: false, readings: new Map() });
+    const unsub = get()._unsub;
+    if (unsub) unsub();
+    wsService.disconnect();
+    set({ connected: false, readings: new Map(), _unsub: null });
   },
 
   getNodeReadings: (nodeId: string) => {

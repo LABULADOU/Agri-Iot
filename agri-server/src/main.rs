@@ -27,11 +27,13 @@ mod state;
 mod request_logger;
 mod rule_engine;
 mod areas;
+mod ws_handler;
 mod weather;
 mod ai_routes;
 mod response;
 mod mqtt_ws;
 mod rate_limiter;
+mod decision;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -85,6 +87,14 @@ async fn main() -> Result<()> {
         tokio::time::sleep(std::time::Duration::from_secs(2)).await;
         if let Err(e) = rule_engine::start(rule_state).await {
             tracing::error!("Rule engine error: {}", e);
+        }
+    });
+
+    let decision_state = app_state.clone();
+    tokio::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+        if let Err(e) = decision::start(decision_state).await {
+            tracing::error!("Decision engine error: {}", e);
         }
     });
 
@@ -172,12 +182,12 @@ fn create_mqtt_client(broker_addr: &str) -> (rumqttc::AsyncClient, rumqttc::Even
     let sub_client = client.clone();
     tokio::spawn(async move {
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        let topics = agri_core::topics::subscribe_topics();
         loop {
-            if let Err(e) = sub_client.subscribe("agri/node/+/telemetry", QoS::AtLeastOnce).await {
-                tracing::warn!("MQTT subscribe telemetry failed: {}", e);
-            }
-            if let Err(e) = sub_client.subscribe("agri/node/+/status", QoS::AtLeastOnce).await {
-                tracing::warn!("MQTT subscribe status failed: {}", e);
+            for topic in &topics {
+                if let Err(e) = sub_client.subscribe(topic, QoS::AtLeastOnce).await {
+                    tracing::warn!("MQTT subscribe {} failed: {}", topic, e);
+                }
             }
             tokio::time::sleep(std::time::Duration::from_secs(10)).await;
         }

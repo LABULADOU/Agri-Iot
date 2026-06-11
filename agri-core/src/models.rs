@@ -887,6 +887,72 @@ impl VentilationController {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct EntityRelation {
+    pub id: i64,
+    pub from_id: String,
+    pub from_type: String,
+    pub to_id: String,
+    pub to_type: String,
+    pub relation_type: String,
+    pub created_at: Option<i64>,
+}
+
+impl EntityRelation {
+    pub async fn create(
+        pool: &sqlx::SqlitePool,
+        from_id: &str,
+        from_type: &str,
+        to_id: &str,
+        to_type: &str,
+        relation_type: &str,
+    ) -> Result<Self, sqlx::Error> {
+        sqlx::query_as::<_, Self>(
+            "INSERT INTO entity_relations (from_id, from_type, to_id, to_type, relation_type) \
+             VALUES (?, ?, ?, ?, ?) \
+             RETURNING *"
+        )
+        .bind(from_id)
+        .bind(from_type)
+        .bind(to_id)
+        .bind(to_type)
+        .bind(relation_type)
+        .fetch_one(pool)
+        .await
+    }
+
+    pub async fn query(
+        pool: &sqlx::SqlitePool,
+        from_id: Option<&str>,
+        from_type: Option<&str>,
+        to_id: Option<&str>,
+        to_type: Option<&str>,
+        relation_type: Option<&str>,
+    ) -> Result<Vec<Self>, sqlx::Error> {
+        let mut sql = String::from("SELECT * FROM entity_relations WHERE 1=1");
+        let mut binds: Vec<String> = Vec::new();
+        if let Some(v) = from_id { sql.push_str(" AND from_id = ?"); binds.push(v.to_string()); }
+        if let Some(v) = from_type { sql.push_str(" AND from_type = ?"); binds.push(v.to_string()); }
+        if let Some(v) = to_id { sql.push_str(" AND to_id = ?"); binds.push(v.to_string()); }
+        if let Some(v) = to_type { sql.push_str(" AND to_type = ?"); binds.push(v.to_string()); }
+        if let Some(v) = relation_type { sql.push_str(" AND relation_type = ?"); binds.push(v.to_string()); }
+        sql.push_str(" ORDER BY id ASC");
+        let mut q = sqlx::query_as::<_, Self>(&sql);
+        for b in &binds {
+            q = q.bind(b);
+        }
+        q.fetch_all(pool).await
+    }
+
+    pub async fn delete(pool: &sqlx::SqlitePool, id: i64) -> Result<bool, sqlx::Error> {
+        let r = sqlx::query("DELETE FROM entity_relations WHERE id = ?")
+            .bind(id)
+            .execute(pool)
+            .await?;
+        Ok(r.rows_affected() > 0)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

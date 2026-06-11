@@ -2,7 +2,8 @@ import axios from 'axios';
 import type {
   Zone, SensorNode, SensorReading, AggregatedReading,
   WeatherData, WeatherForecastDay, WeatherWarning, MinutelyForecast, HourlyPrecip, GeoCity,
-  Device, Rule, QueryParams
+  Device, Rule, QueryParams,
+  EmergencyStatusResponse, KnowledgeSearchResult, ControlCaseRecord,
 } from '../types';
 
 const api = axios.create({
@@ -34,25 +35,25 @@ export const nodeApi = {
 export const dataApi = {
   query: async (params: QueryParams) => {
     if (!params.node_id) return [];
-    const queryParams: Record<string, string> = {};
-    if (params.start) queryParams.start = String(Math.floor(new Date(params.start).getTime() / 1000));
-    if (params.end) queryParams.end = String(Math.floor(new Date(params.end).getTime() / 1000));
-    queryParams.limit = '5000';
-    const raw = await api.get<SensorReading[]>(`/devices/${params.node_id}/readings`, { params: queryParams });
-    const readings = raw.data;
-    const result: AggregatedReading[] = readings
-      .filter(r => r.metric && r.value !== null)
-      .map(r => ({
+    const metrics = params.metric ? params.metric.split(',') : [];
+    const allResults: AggregatedReading[] = [];
+    for (const metric of metrics) {
+      const queryParams: Record<string, string> = {
+        device_id: params.node_id,
+        metric,
+        period: params.period || 'hour',
+      };
+      if (params.start) queryParams.start = String(Math.floor(new Date(params.start).getTime() / 1000));
+      if (params.end) queryParams.end = String(Math.floor(new Date(params.end).getTime() / 1000));
+      const raw = await api.get<AggregatedReading[]>('/readings/aggregate', { params: queryParams });
+      allResults.push(...raw.data.map(r => ({
+        ...r,
         timestamp: typeof r.timestamp === 'number'
           ? new Date((r.timestamp as number) * 1000).toISOString()
           : r.timestamp,
-        metric: r.metric,
-        max: r.value,
-        min: r.value,
-        avg: r.value,
-        count: 1,
-      }));
-    return result;
+      })));
+    }
+    return allResults;
   },
 };
 
@@ -91,6 +92,16 @@ export const ruleApi = {
   create: (data: Partial<Rule>) => api.post<Rule>('/rules', data).then(res => res.data),
   update: (id: string, data: Partial<Rule>) => api.put<Rule>(`/rules/${id}`, data).then(res => res.data),
   delete: (id: string) => api.delete(`/rules/${id}`),
+};
+
+// AI Decision APIs
+export const aiApi = {
+  emergencyStatus: () =>
+    api.get<EmergencyStatusResponse>('/ai/emergency/status').then(res => res.data),
+  knowledgeSearch: (query: string) =>
+    api.get<KnowledgeSearchResult[]>('/ai/knowledge/search', { params: { query } }).then(res => res.data),
+  knowledgeCases: (limit?: number) =>
+    api.get<ControlCaseRecord[]>('/ai/knowledge/cases', { params: { limit } }).then(res => res.data),
 };
 
 export default api;

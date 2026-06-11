@@ -263,7 +263,50 @@ export interface Action {
   payload?: Record<string, unknown>;
 }
 
-export type TimePeriod = 'hour' | 'day' | 'week' | 'month' | 'custom';
+export interface EmergencyStatusResponse {
+  active_emergencies: EmergencyRuleResponse[];
+  night_mode_active: boolean;
+  pauses_auto_mode: boolean;
+}
+
+export interface EmergencyRuleResponse {
+  type: string;
+  confidence: number;
+  message: string;
+  triggered_at: number;
+  pauses_auto_mode: boolean;
+  night_additional_contact: boolean;
+}
+
+export interface KnowledgeSearchResult {
+  type: 'crop_profile' | 'pest_knowledge' | 'weather_knowledge';
+  id: string;
+  name: string;
+  condition_type?: string;
+  data: Record<string, unknown>;
+}
+
+export interface ControlCaseRecord {
+  id: string;
+  area_id?: string;
+  crop_profile_id?: string;
+  situation?: string;
+  weather_forecast?: string;
+  action_taken?: string;
+  manual_override?: number;
+  outcome?: string;
+  effect_rating?: number;
+  health_improvement?: number;
+  action_duration_minutes?: number;
+  recovery_time_minutes?: number;
+  notes?: string;
+  timestamp: number;
+  embedding_id?: string;
+}
+
+export type TimePeriod = 'hour' | 'day' | 'week' | 'month' | '10min' | 'custom';
+
+export type ViewMode = 'ten_min' | 'daily' | 'realtime';
 
 export interface QueryParams {
   node_id?: string;

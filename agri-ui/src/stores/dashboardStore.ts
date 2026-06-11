@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { Zone, Assessment, Emergency, TodoItem, AIRecommendation } from '../types';
-import { sseService } from '../services/sse';
+import { wsService } from '../services/ws';
 
 interface LatestReadings {
   airTemp: number | undefined;
@@ -35,7 +35,7 @@ interface DashboardState {
   executeRecommendation: (item: TodoItem) => Promise<void>;
   setHealthScore: (score: number) => void;
   stopRealtimeUpdates: () => void;
-  _sseUnsub: (() => void) | null;
+  _wsUnsub: (() => void) | null;
 }
 
 function calcHealthScore(assessments: Record<string, Assessment>): number {
@@ -73,7 +73,7 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
   healthScore: 85,
   healthTrend: 0,
   nodeReadings: [],
-  _sseUnsub: null,
+  _wsUnsub: null,
 
   fetchAll: async () => {
     try {
@@ -110,10 +110,9 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
       set({ zones, nodeReadings });
       get().fetchAssessments();
 
-      if (!get()._sseUnsub) {
-        const unsub = sseService.subscribe((data) => {
+      if (!get()._wsUnsub) {
+        const unsub = wsService.subscribe('telemetry', [], (data) => {
           const msg = data as Record<string, unknown>;
-          if (msg.type !== 'telemetry') return;
           const nodeId = msg.node_id as string;
           const readings = msg.readings as Array<{ metric: string; value: number }> | undefined;
           if (!nodeId || !readings) return;
@@ -136,7 +135,7 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
             return { nodeReadings: updated };
           });
         });
-        set({ _sseUnsub: unsub });
+        set({ _wsUnsub: unsub });
       }
     } catch {
       // API not available - keep defaults
@@ -199,10 +198,10 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
   },
 
   stopRealtimeUpdates: () => {
-    const unsub = get()._sseUnsub;
+    const unsub = get()._wsUnsub;
     if (unsub) {
       unsub();
-      set({ _sseUnsub: null });
+      set({ _wsUnsub: null });
     }
   },
 }));

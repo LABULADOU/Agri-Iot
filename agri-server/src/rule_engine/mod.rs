@@ -1,3 +1,6 @@
+pub mod dag;
+pub mod nodes;
+
 use sqlx::Row;
 use crate::state::AppState;
 use agri_core::ai::emergency::{check_emergency, WeatherAlertInput};
@@ -5,7 +8,11 @@ use agri_core::models::{Rule, WeatherData};
 use agri_mqtt::client::publish_command;
 use anyhow::Result;
 use chrono::{Timelike, Utc};
+use dag::{NodeContext, RuleChain, TbMsg, TbMsgType, telemetry_to_tbmsg};
+use nodes::*;
+use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::Mutex;
 use tokio::time::interval;
 use tracing::info;
 
@@ -14,8 +21,62 @@ pub async fn start(state: AppState) -> Result<()> {
 
     refresh_rules_cache(&state).await?;
 
+    let chain = build_rule_chain(&state).await?;
+    let chain = Arc::new(tokio::sync::Mutex::new(chain));
+
+    let tx = state.event_tx.clone();
+    let chain_sub = chain.clone();
+    tokio::spawn(async move {
+        let mut rx = tx.subscribe();
+        tracing::debug!("DAG broadcast subscriber started, waiting for messages");
+        loop {
+            match rx.recv().await {
+                Ok(data) => {
+                    tracing::trace!("DAG broadcast received {} bytes", data.len());
+                    if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&data) {
+                        let is_telemetry = parsed.get("type").and_then(|v| v.as_str()) == Some("telemetry");
+                        if is_telemetry {
+                            let node_id = parsed.get("node_id").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                            let msg = telemetry_to_tbmsg(&node_id, parsed);
+                            if let Err(e) = chain_sub.lock().await.process_async(msg).await {
+                                tracing::warn!("DAG process error: {}", e);
+                            }
+                        }
+                    }
+                }
+                Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                    tracing::warn!("DAG broadcast lagged by {} messages", n);
+                }
+                Err(tokio::sync::broadcast::error::RecvError::Closed) => {
+                    tracing::warn!("DAG broadcast channel closed, exiting");
+                    break;
+                }
+            }
+        }
+    });
+
+    // Timer-based checks (offline detection, weather)
+    let chain_timer = chain.clone();
+    let pool = state.pool.clone();
+    let mqtt = state.mqtt_client.clone();
+    let ectx = state.emergency_ctx.clone();
+    let rules_cache = state.rules_cache.clone();
+    let event_tx = state.event_tx.clone();
+    tokio::spawn(async move {
+        let mut timer = interval(Duration::from_secs(30));
+        loop {
+            timer.tick().await;
+            if let Err(e) = run_timer_checks(&pool, &mqtt, &ectx, &rules_cache, &event_tx).await {
+                tracing::warn!("Timer check error: {}", e);
+            }
+            let tick_msg = TbMsg::new("system", TbMsgType::TimerTick, serde_json::json!({"tick": Utc::now().timestamp()}));
+            chain_timer.lock().await.process_async(tick_msg).await;
+        }
+    });
+
+    // Keep the original 5-second loop for backward compatibility
     let mut interval_timer = interval(Duration::from_secs(5));
-    let mut last_minute_refresh: Option<u32> = None; // 记录上次刷新规则的分钟数
+    let mut last_minute_refresh: Option<u32> = None;
 
     loop {
         interval_timer.tick().await;
@@ -24,7 +85,6 @@ pub async fn start(state: AppState) -> Result<()> {
             tracing::warn!("Rule evaluation error: {}", e);
         }
 
-        // 每分钟的第0秒刷新规则缓存（避免每秒检查）
         let now = Utc::now();
         let current_minute = now.minute();
         if now.second() == 0 && Some(current_minute) != last_minute_refresh {
@@ -34,6 +94,75 @@ pub async fn start(state: AppState) -> Result<()> {
             last_minute_refresh = Some(current_minute);
         }
     }
+}
+
+async fn build_rule_chain(state: &AppState) -> Result<RuleChain> {
+    let ctx = NodeContext {
+        pool: state.pool.clone(),
+        mqtt_client: state.mqtt_client.clone(),
+        event_tx: state.event_tx.clone(),
+    };
+    let mut chain = RuleChain::new(ctx);
+
+    let rules = state.rules_cache.lock().await.clone();
+    if rules.is_empty() { return Ok(chain); }
+
+    let log_idx = chain.add_node(Box::new(LogNode::new("log", "log")));
+
+    for rule in &rules {
+        if !rule.enabled { continue; }
+        match rule.trigger_type {
+            agri_core::models::TriggerType::Condition => {
+                if let Some(conditions) = rule.conditions.get("conditions").and_then(|c| c.as_array()) {
+                    if conditions.is_empty() { continue; }
+
+                    let mut conds: Vec<(String, String, f64)> = Vec::new();
+                    for c in conditions {
+                        let metric = c["metric"].as_str().unwrap_or("").to_string();
+                        let operator = c["operator"].as_str().unwrap_or(">").to_string();
+                        let threshold = c["value"].as_f64().unwrap_or(0.0);
+                        conds.push((metric, operator, threshold));
+                    }
+
+                    let filter_idx = chain.add_node(Box::new(
+                        MsgTypeFilterNode::new(&format!("filter_{}", rule.id), &rule.name, vec![TbMsgType::Telemetry])
+                    ));
+
+                    let cond_idx = if conds.len() == 1 {
+                        chain.add_node(Box::new(ConditionNode::new(
+                            &format!("cond_{}", rule.id), &rule.name,
+                            &conds[0].0, &conds[0].1, conds[0].2,
+                        )))
+                    } else {
+                        chain.add_node(Box::new(MultiConditionNode::new(
+                            &format!("cond_{}", rule.id), &rule.name, conds,
+                        )))
+                    };
+
+                    chain.add_edge(filter_idx, cond_idx);
+                    chain.add_edge(filter_idx, log_idx);
+
+                    if let Some(actions) = rule.actions.get("actions").and_then(|a| a.as_array()) {
+                        for (ai, action) in actions.iter().enumerate() {
+                            let device_id = action["device_id"].as_str().unwrap_or("");
+                            let command = action["command"].as_str().unwrap_or("");
+                            let params = action["params"].clone();
+                            if device_id.is_empty() || command.is_empty() { continue; }
+                            let act_idx = chain.add_node(Box::new(ActionNode::new(
+                                &format!("act_{}_{}", rule.id, ai), &rule.name,
+                                device_id, command, params,
+                                rule.priority > 0 || rule.auto_execute,
+                            )));
+                            chain.add_edge(cond_idx, act_idx);
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    Ok(chain)
 }
 
 async fn refresh_rules_cache(state: &AppState) -> Result<()> {
@@ -49,12 +178,17 @@ async fn refresh_rules_cache(state: &AppState) -> Result<()> {
     Ok(())
 }
 
-async fn evaluate_rules(state: &AppState) -> Result<()> {
-    // Step 1: 检查紧急情况
+async fn run_timer_checks(
+    pool: &sqlx::SqlitePool,
+    mqtt_client: &Arc<Mutex<Option<rumqttc::AsyncClient>>>,
+    emergency_ctx: &Arc<Mutex<agri_core::ai::emergency::EmergencyContext>>,
+    _rules_cache: &Arc<Mutex<Vec<Rule>>>,
+    event_tx: &tokio::sync::broadcast::Sender<String>,
+) -> Result<()> {
     let weather = sqlx::query_as::<_, WeatherData>(
         "SELECT * FROM weather_data ORDER BY timestamp DESC LIMIT 1"
     )
-    .fetch_optional(&state.pool)
+    .fetch_optional(pool)
     .await?;
 
     if let Some(w) = weather {
@@ -65,104 +199,66 @@ async fn evaluate_rules(state: &AppState) -> Result<()> {
             snow_probability: w.snow_probability,
             humidity: w.humidity,
         };
-        let mut ctx = state.emergency_ctx.lock().await;
+        let mut ctx = emergency_ctx.lock().await;
         let output = check_emergency(&input, &mut ctx, "all");
 
-        if !output.emergencies.is_empty() {
-            for emergency in &output.emergencies {
-                let action = agri_core::ai::emergency::get_emergency_action(emergency);
-                info!(
-                    "EMERGENCY triggered: {:?} — {}",
-                    emergency.emergency_type, emergency.message
-                );
+        for emergency in &output.emergencies {
+            let action = agri_core::ai::emergency::get_emergency_action(emergency);
+            info!("EMERGENCY triggered: {:?} — {}", emergency.emergency_type, emergency.message);
 
-                // 写入 command_log
-                let device_type = &action.device_type;
-                let cmd = &action.command;
-                let payload = serde_json::json!({
-                    "emergency": true,
-                    "emergency_type": format!("{:?}", emergency.emergency_type),
-                    "command": cmd,
-                    "target_percent": action.target_percent,
-                });
+            let payload = serde_json::json!({
+                "emergency": true,
+                "emergency_type": format!("{:?}", emergency.emergency_type),
+                "command": &action.command,
+                "target_percent": action.target_percent,
+            });
 
-                let _ = sqlx::query(
-                    "INSERT INTO command_log (device_id, command, payload, status, created_at)
-                     VALUES ('emergency', ?, ?, 'pending', datetime('now'))"
-                )
-                .bind(cmd)
-                .bind(payload.to_string())
-                .execute(&state.pool)
-                .await;
+            let _ = sqlx::query(
+                "INSERT INTO command_log (device_id, command, payload, status, created_at) VALUES ('emergency', ?, ?, 'pending', datetime('now'))"
+            )
+            .bind(&action.command)
+            .bind(payload.to_string())
+            .execute(pool)
+            .await;
 
-                // 如果有 MQTT 客户端，直接发送紧急命令
-                if let Some(client) = state.mqtt_client.lock().await.as_ref() {
-                    let cmd_id = uuid::Uuid::new_v4().to_string();
-                    let _ = publish_command(client, device_type, &cmd_id, &payload.to_string()).await;
-                }
-
-                // 广播 SSE 事件
-                let _ = state.event_tx.send(serde_json::json!({
-                    "type": "emergency",
-                    "emergency_type": format!("{:?}", emergency.emergency_type),
-                    "message": emergency.message,
-                    "pauses_auto_mode": output.pauses_auto_mode,
-                }).to_string());
+            if let Some(client) = mqtt_client.lock().await.as_ref() {
+                let cmd_id = uuid::Uuid::new_v4().to_string();
+                let _ = publish_command(client, &action.device_type, &cmd_id, &payload.to_string()).await;
             }
 
-            // Step 2: 如果紧急情况要求暂停自动模式，跳过规则评估
-            if output.pauses_auto_mode {
-                info!("Emergency pauses auto mode — skipping rule evaluation");
-                return Ok(());
-            }
+            let _ = event_tx.send(serde_json::json!({
+                "type": "emergency",
+                "emergency_type": format!("{:?}", emergency.emergency_type),
+                "message": &emergency.message,
+                "pauses_auto_mode": output.pauses_auto_mode,
+            }).to_string());
         }
     }
 
-    // Step 3: 更新设备在线状态（用于 SystemFailure 检测）
-    {
-        let devices = sqlx::query(
-            "SELECT id, updated_at FROM devices WHERE status = 'online'"
-        )
-        .fetch_all(&state.pool)
-        .await?;
-        let mut ctx = state.emergency_ctx.lock().await;
-        for row in devices {
-            let device_id: String = row.try_get(0)?;
-            let updated_at: i64 = row.try_get(1)?;
-            let dt = chrono::DateTime::from_timestamp(updated_at, 0)
-                .unwrap_or_else(|| Utc::now());
-            ctx.track_device(&device_id, dt);
-        }
+    let cutoff = Utc::now().timestamp() - 300;
+    let affected = sqlx::query(
+        "UPDATE devices SET status = 'offline' WHERE status = 'online' AND updated_at < ?"
+    )
+    .bind(cutoff)
+    .execute(pool)
+    .await?;
+    if affected.rows_affected() > 0 {
+        info!("{} device(s) marked offline due to timeout", affected.rows_affected());
     }
 
-    // Step 3.5: 设备离线检测 — 超过5分钟无数据标记为 offline
-    {
-        let cutoff = Utc::now().timestamp() - 300;
-        let affected = sqlx::query(
-            "UPDATE devices SET status = 'offline' WHERE status = 'online' AND updated_at < ?"
-        )
-        .bind(cutoff)
-        .execute(&state.pool)
-        .await?;
-        if affected.rows_affected() > 0 {
-            info!("{} device(s) marked offline due to timeout", affected.rows_affected());
-        }
-    }
+    Ok(())
+}
 
-    // Step 4: 正常规则评估
+async fn evaluate_rules(state: &AppState) -> Result<()> {
+    // Legacy polling: only schedule rules remain here
+    // Condition rules are now handled by the DAG (real-time via telemetry events)
+    // Weather emergency and offline detection are handled by run_timer_checks (30s interval)
+
     let rules = state.rules_cache.lock().await.clone();
     for rule in rules {
-        if !rule.enabled {
-            continue;
-        }
-
-        match rule.trigger_type {
-            agri_core::models::TriggerType::Condition => {
-                evaluate_condition_rule(state, &rule).await?;
-            }
-            agri_core::models::TriggerType::Schedule => {
-                evaluate_schedule_rule(state, &rule).await?;
-            }
+        if !rule.enabled { continue; }
+        if let agri_core::models::TriggerType::Schedule = rule.trigger_type {
+            evaluate_schedule_rule(state, &rule).await?;
         }
     }
 
