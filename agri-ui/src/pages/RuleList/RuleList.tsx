@@ -86,12 +86,12 @@ const RuleList: React.FC = () => {
 
   const columns = [
     { title: '规则名称', dataIndex: 'name', key: 'name' },
-    { title: '触发类型', key: 'triggerType', render: (_: unknown, record: Rule) => {
+    { title: '触发类型', key: 'triggerType', responsive: ['md'] as ['md'], render: (_: unknown, record: Rule) => {
       const t = record.triggerType || record.trigger_type;
       return <Tag color={t === 'schedule' ? 'blue' : 'green'}>{t === 'schedule' ? '定时' : '条件'}</Tag>;
     }},
     { title: '状态', dataIndex: 'enabled', key: 'enabled', render: (enabled: boolean) => <Tag color={enabled ? 'success' : 'default'}>{enabled ? '启用' : '禁用'}</Tag> },
-    { title: '创建时间', key: 'createdAt', render: (_: unknown, record: Rule) => {
+    { title: '创建时间', key: 'createdAt', responsive: ['md'] as ['md'], render: (_: unknown, record: Rule) => {
       const t = record.createdAt || record.created_at;
       return t ? new Date(t).toLocaleString('zh-CN') : '-';
     }},
@@ -100,7 +100,7 @@ const RuleList: React.FC = () => {
       key: 'action',
       render: (_: unknown, record: Rule) => (
         <Space>
-          <Switch size="small" checked={record.enabled} onChange={() => handleToggle(record)} />
+          <Switch checked={record.enabled} onChange={() => handleToggle(record)} />
           <Button type="link" icon={<EditOutlined />} onClick={() => handleEdit(record)}>编辑</Button>
           <Popconfirm title="确定删除?" onConfirm={() => handleDelete(record.id)}>
             <Button type="link" danger icon={<DeleteOutlined />}>删除</Button>
@@ -120,7 +120,7 @@ const RuleList: React.FC = () => {
         </Space>
       </div>
 
-      <Table columns={columns} dataSource={filteredRules} rowKey="id" loading={loading} pagination={{ pageSize: 10 }} />
+      <Table columns={columns} dataSource={filteredRules} rowKey="id" loading={loading} size="small" pagination={{ pageSize: 10 }} scroll={{ x: 'max-content' }} />
 
       <Modal
         title={editingRule ? '编辑规则' : '新增规则'}
@@ -128,6 +128,7 @@ const RuleList: React.FC = () => {
         onOk={handleSubmit}
         onCancel={() => setModalVisible(false)}
         width={600}
+        className={styles.ruleModal}
       >
         <Form form={form} layout="vertical">
           <Form.Item name="name" label="规则名称" rules={[{ required: true }]}>

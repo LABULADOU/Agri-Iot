@@ -8,3 +8,11 @@
   overflow-y: auto;
   height: calc(100vh - 56px);
 }
+
+@media (max-width: 767px) {
+  .content {
+    padding: 12px;
+    height: calc(100vh - 56px - 56px);
+    padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  }
+}

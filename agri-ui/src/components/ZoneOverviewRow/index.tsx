@@ -54,19 +54,19 @@ const ZoneOverviewRow: React.FC<ZoneOverviewRowProps> = ({
       <span className={styles.nodeCol}>
         <Text>{nodeName || zone.cropType || '--'}</Text>
       </span>
-      <span className={styles.metric}>
+      <span className={styles.metric} data-label="气温">
         <Text>{latestReadings.airTemp?.toFixed(1) ?? '--'}℃</Text>
       </span>
-      <span className={styles.metric}>
+      <span className={styles.metric} data-label="湿度">
         <Text>{latestReadings.humidity?.toFixed(0) ?? '--'}%</Text>
       </span>
-      <span className={styles.metric}>
+      <span className={styles.metric} data-label="地温">
         <Text>{latestReadings.soilTemp?.toFixed(1) ?? '--'}℃</Text>
       </span>
-      <span className={styles.metric}>
+      <span className={styles.metric} data-label="土壤">
         <Text>{latestReadings.soilMoisture?.toFixed(0) ?? '--'}%</Text>
       </span>
-      <span className={styles.metric}>
+      <span className={styles.metric} data-label="EC">
         <Text>{latestReadings.ec?.toFixed(2) ?? '--'}mS/cm</Text>
       </span>
       <span className={styles.nodes}>

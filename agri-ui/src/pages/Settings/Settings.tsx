@@ -60,12 +60,12 @@ const Settings: React.FC = () => {
 
   const columns = [
     { title: '区域名称', dataIndex: 'name', key: 'name' },
-    { title: '作物类型', key: 'cropType', render: (_: unknown, record: Zone) => record.cropType ?? '--' },
+    { title: '作物类型', key: 'cropType', responsive: ['md'] as ['md'], render: (_: unknown, record: Zone) => record.cropType ?? '--' },
     { title: '空气温度', key: 'airTemp', render: (_: unknown, record: Zone) => record.comfortConfig ? `${record.comfortConfig.airTemp.min} ~ ${record.comfortConfig.airTemp.max}℃` : '--' },
     { title: '空气湿度', key: 'airHumidity', render: (_: unknown, record: Zone) => record.comfortConfig ? `${record.comfortConfig.airHumidity.min} ~ ${record.comfortConfig.airHumidity.max}%` : '--' },
-    { title: '土壤温度', key: 'soilTemp', render: (_: unknown, record: Zone) => record.comfortConfig ? `${record.comfortConfig.soilTemp.min} ~ ${record.comfortConfig.soilTemp.max}℃` : '--' },
-    { title: '土壤湿度', key: 'soilMoisture', render: (_: unknown, record: Zone) => record.comfortConfig ? `${record.comfortConfig.soilMoisture.min} ~ ${record.comfortConfig.soilMoisture.max}%` : '--' },
-    { title: 'EC值', key: 'ecValue', render: (_: unknown, record: Zone) => record.comfortConfig ? `${record.comfortConfig.ecValue.min} ~ ${record.comfortConfig.ecValue.max} dS/m` : '--' },
+    { title: '土壤温度', key: 'soilTemp', responsive: ['md'] as ['md'], render: (_: unknown, record: Zone) => record.comfortConfig ? `${record.comfortConfig.soilTemp.min} ~ ${record.comfortConfig.soilTemp.max}℃` : '--' },
+    { title: '土壤湿度', key: 'soilMoisture', responsive: ['md'] as ['md'], render: (_: unknown, record: Zone) => record.comfortConfig ? `${record.comfortConfig.soilMoisture.min} ~ ${record.comfortConfig.soilMoisture.max}%` : '--' },
+    { title: 'EC值', key: 'ecValue', responsive: ['md'] as ['md'], render: (_: unknown, record: Zone) => record.comfortConfig ? `${record.comfortConfig.ecValue.min} ~ ${record.comfortConfig.ecValue.max} dS/m` : '--' },
     {
       title: '操作',
       key: 'action',
@@ -103,7 +103,7 @@ const Settings: React.FC = () => {
               <Card
                 title={<Space><SettingOutlined />作物舒适区间设置</Space>}
               >
-                <Table columns={columns} dataSource={zones} rowKey="id" loading={loading} pagination={false} />
+                <Table columns={columns} dataSource={zones} rowKey="id" loading={loading} size="small" pagination={false} scroll={{ x: 'max-content' }} />
               </Card>
             ),
           },
@@ -155,6 +155,7 @@ const Settings: React.FC = () => {
         onOk={handleSubmit}
         onCancel={() => setModalVisible(false)}
         width={700}
+        className={styles.settingsModal}
       >
         <Form form={form} layout="vertical">
           <Title level={5}>区域信息</Title>

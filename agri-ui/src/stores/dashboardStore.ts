@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import type { Zone, Assessment, Emergency, TodoItem, AIRecommendation } from '../types';
+import type { Zone, Assessment, Emergency, TodoItem, AIRecommendation, Device } from '../types';
+import { zoneApi, deviceApi } from '../services/api';
 import { wsService } from '../services/ws';
 
 interface LatestReadings {
@@ -77,14 +78,11 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
 
   fetchAll: async () => {
     try {
-      const [areaRes, readingsRes, deviceRes] = await Promise.all([
-        fetch('/api/v1/areas'),
-        fetch('/api/v1/dashboard/node-readings'),
-        fetch('/api/v1/devices'),
+      const [zones, readingsData, devices] = await Promise.all([
+        zoneApi.list(),
+        fetch('/api/v1/dashboard/node-readings').then(r => r.json()) as Promise<{ areas?: Array<{ area_id: string; area_name: string; nodes: Array<{ node_id: string; latest: Record<string, { value: number; unit: string }> }> }> }>,
+        deviceApi.list(),
       ]);
-      const zones = await areaRes.json() as Zone[];
-      const readingsData = await readingsRes.json() as { areas?: Array<{ area_id: string; area_name: string; nodes: Array<{ node_id: string; latest: Record<string, { value: number }> }> }> };
-      const devices = await deviceRes.json() as Array<{ node_id: string; name: string }>;
       const deviceNameMap = new Map(devices.map(d => [d.node_id, d.name]));
 
       const nodeReadings: ZoneNodeReading[] = [];
@@ -118,6 +116,7 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
           if (!nodeId || !readings) return;
 
           set(state => {
+            let newNodeReadings = false;
             const updated = state.nodeReadings.map(nr => {
               if (nr.nodeId !== nodeId) return nr;
               const newReadings = { ...nr.readings };
@@ -132,13 +131,36 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
               }
               return { ...nr, readings: newReadings };
             });
+            if (!state.nodeReadings.some(nr => nr.nodeId === nodeId)) {
+              const device = devices.find(d => d.node_id === nodeId);
+              if (device) {
+                const newReadings: LatestReadings = { airTemp: undefined, humidity: undefined, soilTemp: undefined, soilMoisture: undefined, ec: undefined };
+                for (const r of readings) {
+                  switch (r.metric) {
+                    case 'temperature': newReadings.airTemp = r.value; break;
+                    case 'humidity': newReadings.humidity = r.value; break;
+                    case 'soil_temperature': newReadings.soilTemp = r.value; break;
+                    case 'soil_moisture': newReadings.soilMoisture = r.value; break;
+                    case 'ec': newReadings.ec = r.value; break;
+                  }
+                }
+                updated.push({
+                  zoneId: device.area_id || '__unassigned__',
+                  zoneName: '未分配',
+                  nodeId: device.node_id,
+                  nodeName: device.name || device.node_id,
+                  readings: newReadings,
+                });
+                newNodeReadings = true;
+              }
+            }
             return { nodeReadings: updated };
           });
         });
         set({ _wsUnsub: unsub });
       }
-    } catch {
-      // API not available - keep defaults
+    } catch (e) {
+      console.error('Dashboard fetchAll failed:', e);
     }
   },
 
@@ -152,6 +174,7 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ area_id: zone.id }),
         });
+        if (!res.ok) continue;
         const raw = await res.json() as Record<string, unknown>;
         const scores = raw.scores as Record<string, number> || {};
         const overall = scores.overall ?? 85;

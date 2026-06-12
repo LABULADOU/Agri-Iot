@@ -61,3 +61,21 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+@media (max-width: 767px) {
+  .row {
+    grid-template-columns: 70px 70px 1fr;
+    gap: var(--space-2, 8px);
+    font-size: 13px;
+    padding: var(--space-2, 8px) 0;
+  }
+
+  .statusTag {
+    display: none;
+  }
+
+  .aiBlock {
+    grid-column: 1 / -1;
+    padding-top: 2px;
+  }
+}

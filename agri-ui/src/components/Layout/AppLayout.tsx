@@ -3,6 +3,7 @@ import { Layout } from 'antd';
 import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
+import MobileTabBar from './MobileTabBar';
 import styles from './AppLayout.module.css';
 
 const { Content } = Layout;
@@ -17,6 +18,7 @@ const AppLayout: React.FC = () => {
           <Outlet />
         </Content>
       </Layout>
+      <MobileTabBar />
     </Layout>
   );
 };

@@ -606,20 +606,25 @@ async fn dashboard_area_readings(State(state): State<AppState>) -> Json<serde_js
 }
 
 async fn dashboard_node_readings(State(state): State<AppState>) -> impl IntoResponse {
-    // 查每个设备的最新一条读数（group-wise max 写法兼容 SQLite）
-    // 同时包含未分配区域的设备（area_id 为 NULL 时用空字符串占位，后续归入"未分配"区域）
-    let latest_readings = sqlx::query_as::<_, (Option<String>, String, String, f64, String, i64)>(
+    let latest_readings = match sqlx::query_as::<_, (Option<String>, String, String, f64, String, i64)>(
         "SELECT d.area_id, d.node_id, sr.metric, sr.value, sr.unit, sr.timestamp \
          FROM sensor_readings sr \
          INNER JOIN devices d ON sr.device_id = d.id \
-         WHERE sr.id IN ( \
-               SELECT MAX(sr2.id) FROM sensor_readings sr2 \
-               WHERE sr2.device_id = sr.device_id AND sr2.metric = sr.metric \
-         )"
+         INNER JOIN ( \
+               SELECT device_id, metric, MAX(id) as max_id \
+               FROM sensor_readings \
+               GROUP BY device_id, metric \
+         ) latest ON sr.id = latest.max_id"
     )
     .fetch_all(&state.pool)
     .await
-    .unwrap_or_default();
+    {
+        Ok(rows) => rows,
+        Err(e) => {
+            tracing::error!("dashboard_node_readings query failed: {e}");
+            return Json(serde_json::json!({"areas": [], "error": format!("query failed: {e}")}));
+        }
+    };
 
     let mut node_latest: std::collections::BTreeMap<(String, String), serde_json::Map<String, serde_json::Value>> = std::collections::BTreeMap::new();
     let known_metrics = ["temperature", "humidity", "soil_moisture", "soil_temperature", "ec", "light"];

@@ -156,7 +156,7 @@ const ZoneDetail: React.FC = () => {
           <Tag color={onlineCount > 0 ? 'green' : 'default'}>
             在线 {onlineCount}/{nodes.length}
           </Tag>
-          <Button size="small" icon={<ReloadOutlined />} onClick={fetchData}>刷新</Button>
+          <Button icon={<ReloadOutlined />} onClick={fetchData}>刷新</Button>
         </Space>
       </div>
 

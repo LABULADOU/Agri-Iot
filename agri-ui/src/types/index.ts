@@ -55,11 +55,11 @@ export interface SensorReading {
   metric: string;
   value: number;
   unit: string;
-  timestamp: string;
+  timestamp: number | string;
 }
 
 export interface AggregatedReading {
-  timestamp: string;
+  timestamp: number | string;
   metric: string;
   node_id?: string;
   max: number;

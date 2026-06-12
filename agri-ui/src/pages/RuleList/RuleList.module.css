@@ -1,6 +1,32 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3, 12px);
+}
+
 .header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 16px;
+}
+
+@media (max-width: 767px) {
+  .header {
+    flex-direction: column;
+    gap: 8px;
+    align-items: stretch;
+  }
+
+  .header :global .ant-input-affix-wrapper {
+    width: 100% !important;
+  }
+
+  .header :global .ant-btn {
+    width: 100%;
+  }
+
+  .ruleModal {
+    max-width: calc(100vw - 16px);
+  }
 }

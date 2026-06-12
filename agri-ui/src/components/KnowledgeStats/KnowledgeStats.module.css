@@ -21,3 +21,14 @@
 .label {
   font-size: 12px;
 }
+
+@media (max-width: 767px) {
+  .grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-3, 12px);
+  }
+
+  .value {
+    font-size: 22px;
+  }
+}

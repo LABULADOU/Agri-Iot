@@ -41,8 +41,8 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ node, onStatusChange }) => 
 
       <div className={styles.block}>
         <div className={styles.btnGroup}>
-          <Button size="small" type="primary" loading={loading === 'switch_on'} onClick={() => sendCommand(node.id, 'switch', { on: true })}>开启</Button>
-          <Button size="small" danger loading={loading === 'switch_off'} onClick={() => sendCommand(node.id, 'switch', { on: false })}>关闭</Button>
+          <Button type="primary" loading={loading === 'switch_on'} onClick={() => sendCommand(node.id, 'switch', { on: true })}>开启</Button>
+          <Button danger loading={loading === 'switch_off'} onClick={() => sendCommand(node.id, 'switch', { on: false })}>关闭</Button>
         </div>
       </div>
     </div>

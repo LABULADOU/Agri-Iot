@@ -9,7 +9,18 @@
 
 .comfortSection {
   padding: 12px 0;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--border-color-light, #f0f0f0);
+}
+
+@media (max-width: 767px) {
+  .settingsModal {
+    max-width: calc(100vw - 16px);
+  }
+
+  .settingsModal :global .ant-col-12 {
+    flex: 0 0 100%;
+    max-width: 100%;
+  }
 }
 
 .comfortSection:last-child {

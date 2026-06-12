@@ -76,9 +76,9 @@ const NodeList: React.FC = () => {
 
   const columns = [
     { title: '节点名称', dataIndex: 'name', key: 'name' },
-    { title: '节点ID', dataIndex: 'id', key: 'id', width: 200 },
+    { title: '节点ID', dataIndex: 'id', key: 'id', width: 200, responsive: ['md'] as ['md'] },
     { title: '状态', dataIndex: 'status', key: 'status', render: (s: string) => <Tag color={s === 'online' ? 'success' : 'default'}>{s === 'online' ? '在线' : '离线'}</Tag> },
-    { title: '控制功能', key: 'controls', render: (_: unknown, record: SensorNode) => {
+    { title: '控制功能', key: 'controls', responsive: ['md'] as ['md'], render: (_: unknown, record: SensorNode) => {
       const caps = record.capabilities ?? [];
       return (
         <Space size={4}>
@@ -88,7 +88,7 @@ const NodeList: React.FC = () => {
         </Space>
       );
     }},
-    { title: '最后在线', key: 'lastSeen', render: (_: unknown, record: SensorNode) => record.updated_at ? new Date(Number(record.updated_at) * 1000).toLocaleString('zh-CN') : '-' },
+    { title: '最后在线', key: 'lastSeen', responsive: ['md'] as ['md'], render: (_: unknown, record: SensorNode) => record.updated_at ? new Date(Number(record.updated_at) * 1000).toLocaleString('zh-CN') : '-' },
     {
       title: '操作',
       key: 'action',
@@ -113,7 +113,7 @@ const NodeList: React.FC = () => {
         </Space>
       </div>
 
-      <Table columns={columns} dataSource={filteredNodes} rowKey="id" loading={loading} pagination={{ pageSize: 10 }} />
+      <Table columns={columns} dataSource={filteredNodes} rowKey="id" loading={loading} size="small" pagination={{ pageSize: 10 }} scroll={{ x: 'max-content' }} />
 
       <Modal
         title={editingNode ? '编辑节点' : '新增节点'}
@@ -121,15 +121,16 @@ const NodeList: React.FC = () => {
         onOk={handleSubmit}
         onCancel={() => setModalVisible(false)}
         width={600}
+        className={styles.nodeModal}
       >
         <Form form={form} layout="vertical">
           <Row gutter={16}>
-            <Col span={12}>
+            <Col xs={24} sm={12}>
               <Form.Item name="name" label="节点名称" rules={[{ required: true }]}>
                 <Input />
               </Form.Item>
             </Col>
-            <Col span={12}>
+            <Col xs={24} sm={12}>
               <Form.Item name="zoneId" label="所属区域" rules={[{ required: true }]}>
                 <Select>
                   <Select.Option value="1">A区 - 番茄大棚</Select.Option>

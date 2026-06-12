@@ -28,6 +28,7 @@
 
 .search {
   max-width: 500px;
+  width: 100%;
   margin-bottom: var(--space-3, 12px);
 }
 
@@ -40,11 +41,26 @@
 .resultItem {
   padding: var(--space-2, 8px) var(--space-3, 12px);
   background: var(--bg-page, #F8FAFC);
-  border-radius: 6px;
+  border-radius: 8px;
   cursor: pointer;
   font-size: 14px;
 }
 
 .resultItem:hover {
   background: var(--bg-hover, #F5F5F5);
+  transition: background 0.15s;
+}
+
+@media (max-width: 767px) {
+  .resultItem {
+    font-size: 13px;
+    padding: var(--space-2, 8px);
+  }
+
+  .resultItem :global .ant-tag {
+    font-size: 11px;
+    line-height: 18px;
+    height: 20px;
+    padding: 0 6px;
+  }
 }

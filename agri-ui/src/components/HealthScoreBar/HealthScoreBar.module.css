@@ -50,3 +50,30 @@
   font-size: 12px;
   font-weight: 600;
 }
+
+@media (max-width: 767px) {
+  .container {
+    gap: var(--space-3, 12px);
+  }
+
+  .track {
+    height: 32px;
+    border-radius: 6px;
+  }
+
+  .fill {
+    border-radius: 6px;
+  }
+
+  .info {
+    min-width: 60px;
+  }
+
+  .score {
+    font-size: 20px;
+  }
+
+  .trend {
+    font-size: 11px;
+  }
+}

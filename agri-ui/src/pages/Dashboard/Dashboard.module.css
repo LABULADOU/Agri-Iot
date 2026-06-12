@@ -16,6 +16,12 @@
   gap: var(--space-2, 8px);
 }
 
+@media (max-width: 767px) {
+  .tableHeadRow {
+    display: none;
+  }
+}
+
 .th {
   font-size: 11px;
   color: var(--text-tertiary, #9CA3AF);
@@ -33,7 +39,7 @@
 }
 
 .tableBody {
-  border-radius: 8px;
+  border-radius: 12px;
   overflow: hidden;
   background: var(--bg-card, #fff);
 }
@@ -43,6 +49,12 @@
   grid-template-columns: 1fr 1fr;
   gap: var(--space-4, 16px);
   margin-top: var(--space-2, 8px);
+}
+
+@media (max-width: 767px) {
+  .bottomGrid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .bottomSection {

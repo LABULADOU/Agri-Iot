@@ -18,6 +18,14 @@
   margin-bottom: 0;
 }
 
+.filterLabel {
+  font-size: 12px;
+}
+
+.filterRow {
+  margin-bottom: 0 !important;
+}
+
 .statRange {
   font-size: 11px;
   display: block;
@@ -34,4 +42,42 @@
   background: var(--bg-card, #fff);
   border-radius: 12px;
   padding: var(--space-4, 16px);
+}
+
+@media (max-width: 767px) {
+  .filterCard {
+    padding: 8px;
+    font-size: 12px;
+  }
+
+  .filterCard :global .ant-select,
+  .filterCard :global .ant-segmented-item {
+    font-size: 12px;
+  }
+
+  .filterCard :global .ant-picker {
+    font-size: 12px;
+    min-width: 0;
+    width: 100%;
+  }
+
+  .chartCard {
+    padding: var(--space-3, 12px);
+  }
+
+  .tableCard {
+    padding: var(--space-3, 12px);
+  }
+
+  .filterLabel {
+    font-size: 11px;
+  }
+
+  .statsRow {
+    margin-bottom: 0;
+  }
+
+  .statsRow :global .ant-statistic-content {
+    font-size: 18px;
+  }
 }

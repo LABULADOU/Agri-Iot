@@ -24,7 +24,7 @@
 .metricsCard {
   background: var(--bg-card, #fff);
   border-radius: 12px;
-  padding: var(--space-3, 12px) var(--space-4, 16px);
+  padding: var(--space-4, 16px);
 }
 
 .controlCol {
@@ -38,10 +38,32 @@
   padding: var(--space-4, 16px);
 }
 
+@media (max-width: 767px) {
+  .mainGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .controlCol {
+    position: static;
+  }
+
+  .metricsCard {
+    padding: var(--space-2, 8px) var(--space-3, 12px);
+  }
+
+  .controlCard {
+    padding: var(--space-3, 12px);
+  }
+
+  .header :global .ant-btn {
+    min-height: 44px;
+  }
+}
+
 .section {
   background: var(--bg-card, #fff);
   border-radius: 12px;
-  padding: var(--space-3, 12px) var(--space-4, 16px);
+  padding: var(--space-4, 16px);
 }
 
 .sectionTitle {

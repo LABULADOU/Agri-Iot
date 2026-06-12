@@ -1,5 +1,5 @@
 .table {
-  border-radius: 8px;
+  border-radius: 12px;
   overflow: hidden;
   border: 1px solid var(--border-color-light, #F3F4F6);
 }
@@ -16,6 +16,7 @@
   font-size: 11px;
   color: var(--text-tertiary, #9CA3AF);
   text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .row {
@@ -38,4 +39,31 @@
 .td {
   display: flex;
   align-items: center;
+}
+
+@media (max-width: 767px) {
+  .headRow {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .headRow :nth-child(3),
+  .headRow :nth-child(4) {
+    display: none;
+  }
+
+  .row {
+    grid-template-columns: 1fr 1fr;
+    font-size: 12px;
+    padding: var(--space-2, 8px) var(--space-3, 12px);
+    gap: var(--space-1, 4px);
+  }
+
+  .row :nth-child(3) {
+    grid-column: 1;
+  }
+
+  .row :nth-child(4) {
+    grid-column: 2;
+    text-align: right;
+  }
 }

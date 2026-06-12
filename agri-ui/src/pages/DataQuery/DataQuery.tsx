@@ -38,6 +38,7 @@ const DataQuery: React.FC = () => {
   const [selectedNode, setSelectedNode] = useState<string>('');
   const [selectedMetrics, setSelectedMetrics] = useState<string[]>(['temperature', 'humidity']);
   const [viewMode, setViewMode] = useState<ViewMode>('realtime');
+  const [lastPollTime, setLastPollTime] = useState(Date.now());
   const [dateRange, setDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs]>([
     dayjs().subtract(24, 'hour'),
     dayjs(),
@@ -84,7 +85,7 @@ const DataQuery: React.FC = () => {
       const readings = (msg.readings as Array<Record<string, string>> || [])
         .filter(r => r.metric && r.value != null)
         .map(r => ({
-          id: 0,
+          id: Date.now() + Math.floor(Math.random() * 10000),
           device_id: msgNodeId,
           metric: r.metric as string,
           value: Number(r.value) || 0,
@@ -96,7 +97,7 @@ const DataQuery: React.FC = () => {
 
       setRealtimeReadings(prev => {
         const next = [...prev, ...readings.filter(r => {
-          const key = `${r.metric}:${r.timestamp}`;
+          const key = `${r.metric}:${r.id}`;
           if (seenKeys.current.has(key)) return false;
           seenKeys.current.add(key);
           return true;
@@ -104,17 +105,20 @@ const DataQuery: React.FC = () => {
         const MAX_BUF = 30000;
         if (next.length > MAX_BUF) {
           const removed = next.slice(0, next.length - MAX_BUF);
-          removed.forEach(r => seenKeys.current.delete(`${r.metric}:${r.timestamp}`));
+          removed.forEach(r => seenKeys.current.delete(`${r.metric}:${r.id}`));
           return next.slice(-MAX_BUF);
         }
         return next;
       });
     });
 
+    const pollInterval = setInterval(() => fetchRealtimeInitial(false), 10000);
+
     return () => {
       unsubscribe();
+      clearInterval(pollInterval);
     };
-  }, [viewMode, selectedNode]);
+  }, [viewMode, selectedNode, selectedNodeId]);
 
   const fetchNodes = async () => {
     try {
@@ -128,19 +132,27 @@ const DataQuery: React.FC = () => {
     }
   };
 
-  const fetchRealtimeInitial = async () => {
+  const fetchRealtimeInitial = async (showLoading = true) => {
     if (!selectedNode || selectedNode === 'all') return;
-    setLoading(true);
+    if (showLoading) setLoading(true);
     try {
       const raw = await nodeApi.getReadings(selectedNode, {
         limit: 5000,
       });
-      raw.forEach(r => seenKeys.current.add(`${r.metric}:${r.timestamp}`));
-      setRealtimeReadings(raw.reverse());
+      const mapped = raw.map(r => ({
+        ...r,
+        device_id: selectedNodeId || r.device_id,
+        timestamp: typeof r.timestamp === 'number'
+          ? (r.timestamp as number) * 1000
+          : r.timestamp,
+      }));
+      setRealtimeReadings(mapped.reverse());
+      mapped.forEach(r => seenKeys.current.add(`${r.metric}:${r.id}`));
+      setLastPollTime(Date.now());
     } catch (e) {
       console.error('fetchRealtimeInitial error:', e);
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   };
 
@@ -175,7 +187,7 @@ const DataQuery: React.FC = () => {
         if (selectedNodeId && r.device_id !== selectedNodeId) return false;
         return selectedMetrics.includes(r.metric) && ts >= start && ts <= end;
       })
-      .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+      .sort((a, b) => dayjs(a.timestamp).valueOf() - dayjs(b.timestamp).valueOf());
   }, [realtimeReadings, selectedMetrics, selectedNodeId, dateRange]);
 
   const filteredData = useMemo(() => {
@@ -192,8 +204,8 @@ const DataQuery: React.FC = () => {
     if (!selectedMetrics.length) return [];
     return data
       .filter(d => selectedMetrics.includes(d.metric))
-      .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
-  }, [isRealtime ? realtimeReadings : data, selectedMetrics]);
+      .sort((a, b) => dayjs(a.timestamp).valueOf() - dayjs(b.timestamp).valueOf());
+  }, [isRealtime ? realtimeReadings : data, selectedMetrics, filteredRealtime]);
 
   const statsData = useMemo(() => {
     if (isRealtime) {
@@ -202,6 +214,7 @@ const DataQuery: React.FC = () => {
       return selectedMetrics.map(metric => {
         const vals = realtimeReadings.filter(r => {
           const ts = dayjs(r.timestamp).valueOf();
+          if (selectedNodeId && r.device_id !== selectedNodeId) return false;
           return r.metric === metric && ts >= start && ts <= end;
         });
         if (!vals.length) return null;
@@ -220,7 +233,7 @@ const DataQuery: React.FC = () => {
       const allAvg = values.reduce((a, b) => a + b, 0) / values.length;
       return { metric, max: allMax, min: allMin, avg: allAvg };
     }).filter(Boolean);
-  }, [isRealtime ? realtimeReadings : data, selectedMetrics]);
+  }, [isRealtime ? realtimeReadings : data, selectedMetrics, selectedNodeId, dateRange]);
 
   const tableColumns = isRealtime
     ? [
@@ -251,53 +264,55 @@ const DataQuery: React.FC = () => {
       </div>
 
       <div className={styles.filterCard}>
-        <Row gutter={16} align="middle">
-          <Col span={6}>
-            <Space direction="vertical" size={4}>
-              <Text type="secondary">采集节点</Text>
+        <Row gutter={[8, 8]} className={styles.filterRow} align="middle">
+          <Col xs={12} sm={12} lg={6}>
+            <Space direction="vertical" size={2} style={{ width: '100%' }}>
+              <Text type="secondary" className={styles.filterLabel}>采集节点</Text>
               <Select value={selectedNode} onChange={setSelectedNode} style={{ width: '100%' }}>
                 <Select.Option value="all">全部节点</Select.Option>
                 {nodes.map(n => <Select.Option key={n.id} value={n.id}>{n.name}</Select.Option>)}
               </Select>
             </Space>
           </Col>
-          <Col span={6}>
-            <Space direction="vertical" size={4}>
-              <Text type="secondary">监测指标</Text>
-              <Select mode="multiple" value={selectedMetrics} onChange={setSelectedMetrics} style={{ width: '100%' }} maxTagCount={2}>
+          <Col xs={12} sm={12} lg={6}>
+            <Space direction="vertical" size={2} style={{ width: '100%' }}>
+              <Text type="secondary" className={styles.filterLabel}>监测指标</Text>
+              <Select mode="multiple" value={selectedMetrics} onChange={setSelectedMetrics} style={{ width: '100%' }} maxTagCount={1}>
                 {metricOptions.map(o => <Select.Option key={o.value} value={o.value}>{o.label}</Select.Option>)}
               </Select>
             </Space>
           </Col>
-          <Col span={6}>
-            <Space direction="vertical" size={4}>
-              <Text type="secondary">展示粒度</Text>
+          <Col xs={12} sm={12} lg={6}>
+            <Space direction="vertical" size={2} style={{ width: '100%' }}>
+              <Text type="secondary" className={styles.filterLabel}>展示粒度</Text>
               <Segmented
                 value={viewMode}
                 onChange={(v) => setViewMode(v as ViewMode)}
                 options={segOptions}
-                style={{ width: '100%' }}
+                size="small"
+                block
               />
             </Space>
           </Col>
-          <Col span={6}>
-            <Space direction="vertical" size={4}>
-              <Text type="secondary">时间范围</Text>
+          <Col xs={12} sm={12} lg={6}>
+            <Space direction="vertical" size={2} style={{ width: '100%' }}>
+              <Text type="secondary" className={styles.filterLabel}>时间范围</Text>
               <RangePicker
                 value={dateRange}
                 onChange={(dates) => dates && setDateRange([dates[0]!, dates[1]!])}
                 style={{ width: '100%' }}
                 showTime={viewMode !== 'daily'}
                 disabled={viewMode === 'realtime'}
+                size="small"
               />
             </Space>
           </Col>
         </Row>
       </div>
 
-      <Row gutter={16} className={styles.statsRow}>
+      <Row gutter={[12, 12]} className={styles.statsRow}>
         {statsData.map(stat => stat && (
-          <Col span={4} key={stat.metric}>
+          <Col xs={12} sm={8} lg={4} key={stat.metric}>
             <div>
               <Statistic
                 title={
@@ -328,7 +343,7 @@ const DataQuery: React.FC = () => {
         <LineChart
           key={`${viewMode}-${selectedMetrics.join(',')}`}
           data={filteredData}
-          height={400}
+          height={typeof window !== 'undefined' && window.innerWidth < 768 ? 220 : 400}
           showLegend={selectedMetrics.length > 1}
         />
       </div>
@@ -337,16 +352,21 @@ const DataQuery: React.FC = () => {
         <Text strong style={{ display: 'block', marginBottom: 12 }}>
           {isRealtime ? '实时数据明细' : '数据明细'}
           {isRealtime && (
-            <Badge
-              status="processing"
-              text={`${realtimeReadings.length} 条`}
-              style={{ marginLeft: 12, fontWeight: 'normal' }}
-            />
+            <>
+              <Badge
+                status="processing"
+                text={`${realtimeReadings.length} 条`}
+                style={{ marginLeft: 12, fontWeight: 'normal' }}
+              />
+              <Text type="secondary" style={{ marginLeft: 8, fontSize: 12 }}>
+                最后更新: {new Date(lastPollTime).toLocaleTimeString()}
+              </Text>
+            </>
           )}
         </Text>
         <Table
           columns={tableColumns}
-          dataSource={(isRealtime ? filteredRealtime : filteredData) as any}
+          dataSource={((isRealtime ? filteredRealtime : filteredData).slice().reverse()) as any}
           rowKey={(_record, index) => `${index}`}
           loading={loading}
           size="small"

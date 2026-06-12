@@ -4,7 +4,7 @@
   z-index: 100;
   background: #EF4444;
   color: #fff;
-  border-radius: 8px;
+  border-radius: 12px;
   margin-bottom: var(--space-3, 12px);
   animation: pulse 2s ease-in-out infinite;
 }

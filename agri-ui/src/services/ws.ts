@@ -111,10 +111,10 @@ class WsService {
   private scheduleReconnect() {
     const delay = Math.min(5000 * Math.pow(2, this.reconnectAttempts), 30000);
     this.reconnectAttempts++;
-    this.reconnectTimer = setTimeout(() => {
-      this.reconnectTimer = null;
-      this.connect(this.url);
-    }, delay);
+      this.reconnectTimer = setTimeout(() => {
+        this.reconnectTimer = null;
+        this.connect(this.url || '/api/v1/ws');
+      }, delay);
   }
 
   private send(msg: string) {
@@ -135,7 +135,7 @@ class WsService {
 
     if (!this.connected) {
       if (!this.ws || this.ws.readyState === WebSocket.CLOSED) {
-        this.connect(this.url);
+        this.connect(this.url || '/api/v1/ws');
       }
       return () => {
         const sub = this.subs.get(id);
@@ -179,7 +179,7 @@ class WsService {
       } else {
         this.pendingMessages.push(JSON.stringify({ id, cmd: 'query', type, ...params }));
         if (!this.ws || this.ws.readyState === WebSocket.CLOSED) {
-          this.connect(this.url);
+          this.connect(this.url || '/api/v1/ws');
         }
       }
     });
