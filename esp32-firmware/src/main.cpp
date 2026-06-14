@@ -84,7 +84,8 @@ const unsigned long MQTT_RECONNECT_INTERVAL = 5000;
 // 离线缓冲区
 #define BUFFER_FILE "/buffer.dat"
 #define BUFFER_TMP "/buffer.tmp"
-#define BUFFER_MAX_LINES 2000
+// 256KB SPIFFS: 每行 ~300B, 800 行 ≈ 240KB (留 ~16KB 给临时文件)
+#define BUFFER_MAX_LINES 800
 #define BUFFER_FLUSH_BATCH 20
 #define MQTT_BUF_SIZE 512
 
@@ -658,6 +659,8 @@ bool connectWanWsMqtt() {
         if (wanMqttConnected) {
             activeTransport = TRANSPORT_WAN_WS;
             Serial.println("WebSocket MQTT: 连接成功");
+            // 回放缓冲区（同 connectLanMqtt）
+            flashFlushBuffer();
             return true;
         }
         delay(10);
@@ -1055,8 +1058,11 @@ void setup() {
     snprintf(bootId, sizeof(bootId), "%08lx", (unsigned long)r);
     Serial.printf("Boot ID: %s\n", bootId);
 
-    // 清理旧缓冲区
-    LittleFS.remove(BUFFER_FILE);
+    // 保留旧缓冲区 (/buffer.dat) 跨重启恢复数据。
+    // 连接建立后 flashFlushBuffer() 会自动回放。
+    if (LittleFS.exists(BUFFER_FILE)) {
+        Serial.printf("离线缓冲区存在，待回放\n");
+    }
 
     setupWiFi();
 }

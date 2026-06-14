@@ -13,7 +13,7 @@ BROKER_BIN="$ROOT_DIR/target/$BUILD_TYPE/broker"
 SERVER_BIN="$ROOT_DIR/target/$BUILD_TYPE/agri-server"
 SERVER_ENV="MQTT_BROKER_ADDR=127.0.0.1:1883 RUST_LOG=info,agri_mqtt=info,agri_server=info"
 
-LOG_DIR="/var/log/agri"
+LOG_DIR="$ROOT_DIR/logs"
 mkdir -p "$LOG_DIR"
 
 CHECK_INTERVAL=5

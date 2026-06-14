@@ -21,8 +21,9 @@ fn main() {
         .parse()
         .unwrap_or(1884);
 
-    let storage_path: String = std::env::var("MQTT_STORAGE_PATH")
-        .unwrap_or_else(|_| "./mqtt-data".into());
+    // NOTE: rumqttd 0.18 纯内存运行，不支持磁盘持久化。
+    // 不使用 MQTT_STORAGE_PATH 环境变量（rumqttd 此版本无此功能）。
+    // Broker 重启会丢失所有会话和离线消息，依赖 ESP32 LittleFS 缓冲区恢复。
 
     let bind_ip: std::net::IpAddr = std::env::var("MQTT_BIND_IP")
         .unwrap_or_else(|_| "0.0.0.0".into())  // LAN 访问需要 0.0.0.0
@@ -32,9 +33,9 @@ fn main() {
     let mut config = Config::default();
     config.id = 0;
     config.router.max_connections = 1000;
-    config.router.max_outgoing_packet_count = 100_000;
+    config.router.max_outgoing_packet_count = 1_000_000;
     config.router.max_segment_size = 1_000_000;
-    config.router.max_segment_count = 1000;
+    config.router.max_segment_count = 10_000;
 
     let mut v4 = HashMap::new();
     v4.insert(
@@ -79,11 +80,10 @@ fn main() {
     config.console.listen = "0.0.0.0:0".to_string();
 
     tracing::info!(
-        "MQTT Broker starting — TCP {}:{}, WS 127.0.0.1:{}, storage: {}",
+        "MQTT Broker starting — TCP {}:{}, WS 127.0.0.1:{} (in-memory, no disk persistence)",
         bind_ip,
         port,
         ws_port,
-        storage_path
     );
 
     let mut broker = Broker::new(config);
