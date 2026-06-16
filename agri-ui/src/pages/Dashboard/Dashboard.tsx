@@ -59,13 +59,14 @@ const Dashboard: React.FC = () => {
         {nodeReadings.map((nr, i) => {
           const assessment = assessments[nr.zoneId];
           const zone = zones.find(z => z.id === nr.zoneId);
+          const isOnline = nr.status === 'online';
           return (
             <ZoneOverviewRow
               key={`${nr.nodeId}-${i}`}
               zone={zone || { id: nr.zoneId, name: nr.zoneName }}
               nodeName={nr.nodeName}
               assessment={assessment ? { score: assessment.score, status: assessment.status } : undefined}
-              onlineCount={1}
+              onlineCount={isOnline ? 1 : 0}
               totalCount={1}
               latestReadings={nr.readings}
               onClick={() => navigate(`/zones/${nr.zoneId}`)}

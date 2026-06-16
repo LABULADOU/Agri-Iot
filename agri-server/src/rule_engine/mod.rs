@@ -236,14 +236,28 @@ async fn run_timer_checks(
     }
 
     let cutoff = Utc::now().timestamp() - 300;
-    let affected = sqlx::query(
-        "UPDATE devices SET status = 'offline' WHERE status = 'online' AND updated_at < ?"
+    let stale_devices = sqlx::query_as::<_, (String,)>(
+        "SELECT node_id FROM devices WHERE status = 'online' AND updated_at < ?"
     )
     .bind(cutoff)
-    .execute(pool)
+    .fetch_all(pool)
     .await?;
-    if affected.rows_affected() > 0 {
-        info!("{} device(s) marked offline due to timeout", affected.rows_affected());
+
+    if !stale_devices.is_empty() {
+        for (node_id,) in &stale_devices {
+            let _ = event_tx.send(serde_json::json!({
+                "type": "status_change",
+                "node_id": node_id,
+                "status": "offline",
+            }).to_string());
+        }
+        sqlx::query(
+            "UPDATE devices SET status = 'offline' WHERE status = 'online' AND updated_at < ?"
+        )
+        .bind(cutoff)
+        .execute(pool)
+        .await?;
+        info!("{} device(s) marked offline due to timeout", stale_devices.len());
     }
 
     Ok(())

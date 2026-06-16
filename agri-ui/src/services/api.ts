@@ -3,12 +3,17 @@ import type {
   Zone, SensorNode, SensorReading, AggregatedReading,
   WeatherData, WeatherForecastDay, WeatherWarning, MinutelyForecast, HourlyPrecip, GeoCity,
   Device, Rule, QueryParams,
-  EmergencyStatusResponse, KnowledgeSearchResult, ControlCaseRecord,
+  EmergencyStatusResponse, KnowledgeSearchResult, ControlCaseRecord, AgentResponse,
 } from '../types';
 
 const api = axios.create({
   baseURL: '/api/v1',
   timeout: 10000,
+});
+
+const apiLong = axios.create({
+  baseURL: '/api/v1',
+  timeout: 120000,
 });
 
 // Zone APIs → /areas
@@ -102,6 +107,19 @@ export const aiApi = {
     api.get<KnowledgeSearchResult[]>('/ai/knowledge/search', { params: { query } }).then(res => res.data),
   knowledgeCases: (limit?: number) =>
     api.get<ControlCaseRecord[]>('/ai/knowledge/cases', { params: { limit } }).then(res => res.data),
+  agentQuery: (query: string, history?: { role: string; content: string }[]) =>
+    apiLong.post<AgentResponse>('/ai/agent/query', { query, history }).then(res => res.data),
+  agentQueryStream: async (query: string, onChunk: (text: string) => void, onDone: (resp: AgentResponse) => void, signal?: AbortSignal, history?: { role: string; content: string }[]) => {
+    const res = await fetch('/api/v1/ai/agent/query', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query, history }),
+      signal,
+    });
+    const data: AgentResponse = await res.json();
+    onChunk(data.answer);
+    onDone(data);
+  },
 };
 
 export default api;

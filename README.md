@@ -49,7 +49,17 @@
 
 ```bash
 cp .env.example .env
-# 编辑 .env，配置 WEATHER_API_KEY（和风天气）
+# 编辑 .env，配置以下环境变量：
+
+# 和风天气 API（免费套餐）
+WEATHER_API_KEY=your_key_here
+
+# LLM（NVIDIA 或其他 OpenAI 兼容 API）
+LLM_API_KEY=nvapi-...
+LLM_API_URL=https://integrate.api.nvidia.com/v1
+LLM_MODEL=minimaxai/minimax-m2.7
+LLM_TEMPERATURE=0.3
+LLM_MAX_TOKENS=4096
 ```
 
 ### 3. 构建并启动
@@ -129,6 +139,7 @@ http://172.20.10.13:3001 (container)
 | GET            | `/api/v1/ai/ventilation/config/:area_id`      | 通风配置查询 |
 | GET            | `/api/v1/ai/ec/analyze/:area_id`  | EC 分析            |
 | POST           | `/api/v1/ai/control/ventilation`  | 手动控制通风          |
+| POST           | `/api/v1/ai/agent/query`          | Agent 对话查询（LLM）  |
 | GET            | `/api/v1/weather/now`             | 实时天气            |
 | GET            | `/api/v1/weather/3d`              | 3 天预报           |
 | GET            | `/api/v1/weather/24h`             | 24 小时预报         |
@@ -156,15 +167,18 @@ agri-core/src/          # 核心库
     ├── fertigation.rs  # EC 分析
     ├── night_mode.rs   # 夜间模式
     ├── calibration.rs  # 卷膜器校准
-    └── knowledge.rs    # Obsidian 知识库 RAG
+    ├── embedding.rs    # 向量嵌入
+    ├── retrieval.rs    # RAG 检索
+    ├── observer.rs     # 自动索引观察者
+    └── llm.rs          # LLM Provider（OpenAI-compatible API）
 
 agri-server/src/        # 后端服务
-├── main.rs             # 入口
+├── main.rs             # 入口（含 Cache-Control 头）
 ├── routes.rs           # API 路由
 ├── response.rs         # 响应辅助函数（ok_json/err_json/internal_err）
 ├── areas.rs            # 区域/作物/茬口管理
 ├── state.rs            # AppState（含 telemetry_limiter）
-├── rule_engine.rs      # 规则引擎（DAG 管线）
+├── rule_engine.rs      # 规则引擎（DAG 管线 + 30s 离线检测）
 ├── decision/           # 决策管理框架
 │   ├── mod.rs          # DecisionEngine + 启动入口
 │   ├── engine.rs       # Trigger/Stage trait + DecisionFlow + Builder
@@ -178,6 +192,7 @@ agri-server/src/        # 后端服务
 ├── weather.rs          # 天气 API 代理 (和风天气)
 ├── ai_routes.rs        # AI 决策 API 路由
 ├── mqtt_ws.rs          # WebSocket ↔ MQTT TCP 桥接
+├── ws_handler.rs       # WebSocket 事件推送（telemetry + status_change）
 ├── rate_limiter.rs     # 遥测速率限制
 └── request_logger.rs   # 请求日志
 
@@ -189,9 +204,11 @@ agri-mqtt/src/          # MQTT 通信
 └── handler.rs          # 遥测/状态处理（QoS 1 + 通道解耦 + seq 去重）
 
 agri-ui/                # React SPA (TypeScript + Ant Design + ECharts)
-├── src/pages/          # 页面组件
+├── src/pages/          # 页面组件（含 AgentChat 对话页面）
 ├── src/components/     # 通用组件
-├── src/services/       # API 服务封装
+├── src/services/       # API 服务封装（含 apiLong 120s 超时）
+├── src/stores/         # Zustand 状态管理（dashboardStore + realtimeStore）
+├── src/theme/          # ECharts 主题配置
 └── build → agri-server/static/
 
 esp32-firmware/src/     # ESP32 固件
@@ -239,6 +256,7 @@ agri-core/migrations/   # 数据库迁移（单一来源）
 > ESP32 WAN WebSocket 超时已从 5s 调整为 30s，补偿 TLS handshake 延迟。
 > 仪表盘同时显示已分配和未分配区域的设备。
 > **断线容错**：handler 使用 `clean_session=false`，agri-server 重启后 broker 自动回放离线期间的 QoS 1 消息（含 LittleFS 本地缓存双重保障）。
+> **设备在线状态**：仪表盘通过 WebSocket 订阅 `status_change` 事件实时更新节点在线/离线状态，无需手动刷新页面。规则引擎每 30s 检测超 5 分钟未上报的设备，自动标记离线并推送通知。
 
 ## 开发
 

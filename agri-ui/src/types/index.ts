@@ -304,6 +304,21 @@ export interface ControlCaseRecord {
   embedding_id?: string;
 }
 
+export interface AgentResponse {
+  answer: string;
+  data_sources: string[];
+  follow_up_questions: string[];
+}
+
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'agent';
+  content: string;
+  timestamp: number;
+  data_sources?: string[];
+  follow_up_questions?: string[];
+}
+
 export type TimePeriod = 'hour' | 'day' | 'week' | 'month' | '10min' | 'custom';
 
 export type ViewMode = 'ten_min' | 'daily' | 'realtime';

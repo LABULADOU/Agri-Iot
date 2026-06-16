@@ -4,12 +4,17 @@ pub mod log;
 pub mod approval;
 pub mod notification;
 
+use crate::decision::approval::ApprovalLevel;
 use crate::state::AppState;
 use anyhow::Result;
 use engine::{DecisionFlow, Trigger};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tracing::info;
+
+mod stages {
+    pub mod llm_stage;
+}
 
 pub struct DecisionEngine {
     flows: Vec<DecisionFlow>,
@@ -51,9 +56,20 @@ pub async fn start(state: AppState) -> Result<()> {
     let _t2 = engine::DecisionFlow::builder("state_flow")
         .trigger(Trigger::OnStateChange)
         .build();
-    let _t3 = engine::DecisionFlow::builder("assess_flow")
+
+    // Tier 3: LLM 评估管线（1800s = 30 分钟）
+    let mut t3 = engine::DecisionFlow::builder("assess_flow")
         .trigger(Trigger::Timed { interval_secs: 1800 })
-        .build();
+        .approval(ApprovalLevel::Normal);
+
+    if let Some(llm) = stages::llm_stage::create_llm_stage(&state) {
+        t3 = t3.stage(Box::new(llm));
+        info!("[decision] LlmStage registered for assess_flow");
+    } else {
+        info!("[decision] LlmStage skipped (LLM not configured), assess_flow runs without AI");
+    }
+
+    let _t3 = t3.build();
 
     info!("Decision flows registered: emergency(state), state(state), assess(1800s)");
 

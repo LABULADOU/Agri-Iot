@@ -7,6 +7,7 @@ import {
   SettingOutlined,
   AlertOutlined,
   RobotOutlined,
+  MessageOutlined,
 } from '@ant-design/icons';
 import styles from './Sidebar.module.css';
 
@@ -22,6 +23,7 @@ const menuItems: MenuItem[] = [
   { key: '/', icon: <DashboardOutlined />, label: '总览' },
   { key: '/query', icon: <DatabaseOutlined />, label: '数据' },
   { key: '/ai', icon: <RobotOutlined />, label: 'AI 决策' },
+  { key: '/agent', icon: <MessageOutlined />, label: 'Agent 对话' },
   { key: '/automation', icon: <AlertOutlined />, label: '自动化' },
   { key: '/settings', icon: <SettingOutlined />, label: '设置' },
 ];

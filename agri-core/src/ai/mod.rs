@@ -5,3 +5,7 @@ pub mod fertigation;
 pub mod night_mode;
 pub mod calibration;
 pub mod knowledge;
+pub mod embedding;
+pub mod retrieval;
+pub mod llm;
+pub mod observer;

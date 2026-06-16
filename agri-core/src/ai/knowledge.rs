@@ -23,6 +23,8 @@ impl fmt::Display for KnowledgeError {
     }
 }
 
+impl std::error::Error for KnowledgeError {}
+
 impl From<io::Error> for KnowledgeError {
     fn from(e: io::Error) -> Self {
         KnowledgeError::IoError(e.to_string())
@@ -54,6 +56,31 @@ impl ObsidianKnowledge {
     /// 获取 vault 根目录
     pub fn vault_path(&self) -> &Path {
         &self.vault_path
+    }
+
+    /// 列出 vault 下所有 Markdown 文件的相对路径
+    pub fn list_markdown_files(&self) -> Result<Vec<String>, KnowledgeError> {
+        let mut files = Vec::new();
+        self.collect_md(&self.vault_path, &mut files)?;
+        Ok(files)
+    }
+
+    fn collect_md(&self, dir: &Path, files: &mut Vec<String>) -> Result<(), KnowledgeError> {
+        if !dir.is_dir() {
+            return Ok(());
+        }
+        for entry in fs::read_dir(dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.is_dir() {
+                self.collect_md(&path, files)?;
+            } else if path.extension().map_or(false, |e| e == "md") {
+                if let Ok(relative) = path.strip_prefix(&self.vault_path) {
+                    files.push(relative.display().to_string());
+                }
+            }
+        }
+        Ok(())
     }
 
     /// 安全地解析 vault 内路径，防止路径穿越

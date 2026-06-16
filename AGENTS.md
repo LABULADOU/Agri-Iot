@@ -751,4 +751,68 @@ decision/
 新增: scripts/setup_ssh.sh              # SSH 配置脚本
 删除: esp32-firmware/src/main.ino       # 重命名为 main.cpp
 ```
+
+## Agent 对话 + 设备在线状态实时推送（2026-06-16）
+
+### Agent Chat 前端
+
+**功能**: 自然语言查询温室状态 / 调控建议 / 作物知识
+**技术**:
+- `agri-ui/src/pages/AgentChat/` — `react-markdown` + `remark-gfm` 渲染 LLM 回复
+- `/agent` 路由（`App.tsx`）+ 侧边栏菜单 + 移动端 TabBar
+- `localStorage` 持久化对话（`agent-chat-messages`），刷新/切换页面不丢失
+
+### 对话历史上下文
+
+| 端 | 变更 |
+|---|------|
+| 前端 | `agentQuery(query, history)` — 发送 `history: [{role, content}]` |
+| 后端 | `LlmProvider::chat_with_history(system, history, user)` — 将历史拼入 OpenAI messages |
+| API | `AgentQueryRequest.history: Vec<HistoryMessage>` |
+
+### LLM 超时修复
+
+| 层 | 原值 | 新值 |
+|----|------|------|
+| 前端 Axios（agent 专用） | `timeout: 10000` | `apiLong` 实例 120s |
+| 后端 reqwest Client | 无超时 | `Client::builder().timeout(90s)` |
+
+### 设备在线状态实时显示
+
+#### 问题
+`dashboard/node-readings` 只返回传感器读数，不包含设备 `status`，前端硬编码 `onlineCount={1}` 永远显示在线。
+
+#### 修复
+
+| # | 变更 | 文件 |
+|---|------|------|
+| 1 | `dashboard/node-readings` 返回 `status` + `updated_at` | `routes.rs:608-741` |
+| 2 | 规则引擎离线检测时先发 `status_change` SSE 事件，再标记 `offline` | `rule_engine/mod.rs:238-258` |
+| 3 | 前端订阅 WebSocket `status_change`，实时更新 `nodeReadings[n].status` | `dashboardStore.ts` |
+| 4 | Dashboard `onlineCount` 基于 `nr.status === 'online'` 动态计算 | `Dashboard.tsx` |
+| 5 | SSE 遥测事件到达时自动设 `status='online'` | `dashboardStore.ts:134` |
+
+#### 数据流
+```
+规则引擎(30s) → SELECT stale devices → event_tx.send(status_change)
+  → WebSocket handler → wsService.subscribe('status_change')
+  → set({ nodeReadings: nodeReadings.map(...status) }) → 无刷新 UI
+```
+
+### 变更文件清单
+```
+新增: agri-ui/src/pages/AgentChat/AgentChat.tsx     # 对话页面
+新增: agri-ui/src/pages/AgentChat/AgentChat.module.css
+新增: agri-core/src/ai/llm.rs                       # HistoryMessage + chat_with_history
+修改: agri-server/src/ai_routes.rs                  # 接收 history 参数
+修改: agri-server/src/routes.rs                     # node-readings 返回 status
+修改: agri-server/src/rule_engine/mod.rs            # 离线检测发 SSE
+修改: agri-server/src/main.rs                       # Cache-Control 头
+修改: agri-ui/src/services/api.ts                   # apiLong (120s) + history 参数
+修改: agri-ui/src/stores/dashboardStore.ts          # status_change 订阅 + status 存储
+修改: agri-ui/src/pages/Dashboard/Dashboard.tsx     # 真实 onlineCount
+修改: agri-ui/src/App.tsx                           # /agent 路由
+修改: agri-ui/src/components/Layout/Sidebar.tsx     # Agent 菜单
+修改: agri-ui/src/components/Layout/MobileTabBar.tsx
+修改: agri-ui/src/types/index.ts                   # ChatMessage 类型
 ```

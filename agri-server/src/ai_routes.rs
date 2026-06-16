@@ -3,6 +3,8 @@ use agri_core::ai::calibration::calibrate_ventilator;
 use agri_core::ai::emergency::{check_emergency_basic, WeatherAlertInput};
 use agri_core::ai::fertigation::analyze_ec;
 use agri_core::ai::knowledge::ObsidianKnowledge;
+use agri_core::ai::llm::{HistoryMessage, LlmProvider, AgentResponse, SYSTEM_PROMPT_AGENT};
+use agri_core::ai::retrieval::RetrievalEngine;
 use agri_core::models::{
     ControlCase, CropProfile, ECTrends, ECRecommendation,
     GreenhouseConfig, NightModeConfig, PestKnowledge, WeatherData,
@@ -78,6 +80,7 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/v1/ai/ventilation/calibrate/:device_id", post(calibrate))
         .route("/api/v1/ai/ec/analyze/:area_id", get(ec_analyze))
         .route("/api/v1/ai/control/ventilation", post(control_ventilation))
+        .route("/api/v1/ai/agent/query", post(agent_query))
         .with_state(state)
 }
 
@@ -594,6 +597,78 @@ async fn obsidian_add_case(
     }
 }
 
+// ========== Agent 查询端点 ==========
+
+#[derive(Debug, Deserialize)]
+struct AgentQueryRequest {
+    query: String,
+    node_id: Option<String>,
+    history: Option<Vec<agri_core::ai::llm::HistoryMessage>>,
+}
+
+/// POST /api/v1/ai/agent/query — 自然语言查询
+async fn agent_query(
+    State(state): State<AppState>,
+    Json(req): Json<AgentQueryRequest>,
+) -> impl IntoResponse {
+    // 1. 构建 LLM Provider
+    let provider = match LlmProvider::from_env() {
+        Ok(p) => p,
+        Err(e) => {
+            return (StatusCode::SERVICE_UNAVAILABLE, Json(serde_json::json!({
+                "error": format!("LLM not configured: {}", e),
+                "answer": "AI 助手未配置，请设置 LLM_API_KEY 等环境变量",
+                "data_sources": [],
+                "follow_up_questions": [],
+            }))).into_response();
+        }
+    };
+
+    // 2. 构建 RAG 上下文
+    let node_id = req.node_id.as_deref().unwrap_or("");
+    let vault_path = state.obsidian_vault_path.clone().unwrap_or_default();
+    let mut retrieval = RetrievalEngine::new(state.pool.clone());
+    if !vault_path.is_empty() {
+        retrieval = retrieval.with_vault(ObsidianKnowledge::new(&vault_path));
+    }
+
+    let context_json = match retrieval.build(node_id, 3).await {
+        Ok(r) => serde_json::to_string_pretty(&r).unwrap_or_default(),
+        Err(e) => {
+            tracing::warn!("[agent] retrieval failed: {}", e);
+            format!("检索失败: {}", e)
+        }
+    };
+
+    // 3. 调用 LLM（携带对话历史）
+    let user_prompt = format!(
+        "用户问题：{}\n\n当前系统状态：\n{}",
+        req.query, context_json
+    );
+
+    let history = req.history.as_deref().unwrap_or(&[]);
+    match provider.chat_with_history(SYSTEM_PROMPT_AGENT, history, &user_prompt).await {
+        Ok(answer) => {
+            (StatusCode::OK, Json(serde_json::json!({
+                "answer": answer,
+                "data_sources": ["sensor_readings", "weather_data", "crop_profiles", "control_cases"],
+                "follow_up_questions": [
+                    "需要我查询更多历史数据吗？",
+                    "想了解某个指标的详细趋势吗？",
+                    "需要我给出调控建议吗？",
+                ],
+            }))).into_response()
+        }
+        Err(e) => {
+            tracing::warn!("[agent] LLM call failed: {}", e);
+            (StatusCode::OK, Json(serde_json::json!({
+                "answer": "AI 暂时无法回答，请稍后重试",
+                "data_sources": [],
+                "follow_up_questions": [],
+            }))).into_response()
+        }
+    }
+}
 /// 辅助：获取通风设备 ID
 async fn get_vent_device_id(state: &AppState, area_id: &str, vent_type: &str) -> Option<String> {
     let col = match vent_type {

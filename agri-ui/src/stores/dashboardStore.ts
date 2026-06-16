@@ -17,6 +17,7 @@ export interface ZoneNodeReading {
   nodeId: string;
   nodeName: string;
   readings: LatestReadings;
+  status: string;
 }
 
 interface DashboardState {
@@ -80,7 +81,7 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
     try {
       const [zones, readingsData, devices] = await Promise.all([
         zoneApi.list(),
-        fetch('/api/v1/dashboard/node-readings').then(r => r.json()) as Promise<{ areas?: Array<{ area_id: string; area_name: string; nodes: Array<{ node_id: string; latest: Record<string, { value: number; unit: string }> }> }> }>,
+        fetch('/api/v1/dashboard/node-readings').then(r => r.json()) as Promise<{ areas?: Array<{ area_id: string; area_name: string; nodes: Array<{ node_id: string; status: string; updated_at: number; latest: Record<string, { value: number; unit: string }> }> }> }>,
         deviceApi.list(),
       ]);
       const deviceNameMap = new Map(devices.map(d => [d.node_id, d.name]));
@@ -101,6 +102,7 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
             nodeId: node.node_id,
             nodeName: deviceNameMap.get(node.node_id) || node.node_id,
             readings,
+            status: node.status || 'offline',
           });
         }
       }
@@ -109,7 +111,7 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
       get().fetchAssessments();
 
       if (!get()._wsUnsub) {
-        const unsub = wsService.subscribe('telemetry', [], (data) => {
+        const unsubTelemetry = wsService.subscribe('telemetry', [], (data) => {
           const msg = data as Record<string, unknown>;
           const nodeId = msg.node_id as string;
           const readings = msg.readings as Array<{ metric: string; value: number }> | undefined;
@@ -129,7 +131,7 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
                   case 'ec': newReadings.ec = r.value; break;
                 }
               }
-              return { ...nr, readings: newReadings };
+              return { ...nr, readings: newReadings, status: 'online' };
             });
             if (!state.nodeReadings.some(nr => nr.nodeId === nodeId)) {
               const device = devices.find(d => d.node_id === nodeId);
@@ -150,6 +152,7 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
                   nodeId: device.node_id,
                   nodeName: device.name || device.node_id,
                   readings: newReadings,
+                  status: 'online',
                 });
                 newNodeReadings = true;
               }
@@ -157,7 +160,21 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
             return { nodeReadings: updated };
           });
         });
-        set({ _wsUnsub: unsub });
+
+        const unsubStatus = wsService.subscribe('status_change', [], (data) => {
+          const msg = data as Record<string, unknown>;
+          const nodeId = msg.node_id as string;
+          const status = msg.status as string;
+          if (!nodeId || !status) return;
+
+          set(state => ({
+            nodeReadings: state.nodeReadings.map(nr =>
+              nr.nodeId === nodeId ? { ...nr, status } : nr
+            ),
+          }));
+        });
+
+        set({ _wsUnsub: () => { unsubTelemetry(); unsubStatus(); } });
       }
     } catch (e) {
       console.error('Dashboard fetchAll failed:', e);

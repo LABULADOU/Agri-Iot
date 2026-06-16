@@ -12,6 +12,7 @@ import DataQuery from './pages/DataQuery';
 import RuleList from './pages/RuleList';
 import Settings from './pages/Settings';
 import AIDecisions from './pages/AIDecisions';
+import AgentChat from './pages/AgentChat';
 
 const App: React.FC = () => {
   useEffect(() => {
@@ -29,6 +30,7 @@ const App: React.FC = () => {
             <Route path="query" element={<DataQuery />} />
             <Route path="automation" element={<RuleList />} />
             <Route path="ai" element={<AIDecisions />} />
+            <Route path="agent" element={<AgentChat />} />
             <Route path="settings" element={<Settings />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>

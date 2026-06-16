@@ -636,6 +636,28 @@ async fn dashboard_node_readings(State(state): State<AppState>) -> impl IntoResp
         entry.insert(metric.clone(), serde_json::json!({"value": value, "unit": unit, "timestamp": ts}));
     }
 
+    // 收集所有 node_id 并查询设备状态
+    let mut all_node_ids: Vec<String> = Vec::new();
+    for (key, _) in &node_latest {
+        if !all_node_ids.contains(&key.1) {
+            all_node_ids.push(key.1.clone());
+        }
+    }
+    let mut device_status: std::collections::HashMap<String, (String, i64)> = std::collections::HashMap::new();
+    if !all_node_ids.is_empty() {
+        let placeholders = all_node_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+        let status_query = format!("SELECT node_id, status, updated_at FROM devices WHERE node_id IN ({})", placeholders);
+        let mut q = sqlx::query_as::<_, (String, String, i64)>(&status_query);
+        for nid in &all_node_ids {
+            q = q.bind(nid);
+        }
+        if let Ok(rows) = q.fetch_all(&state.pool).await {
+            for (nid, st, ts) in rows {
+                device_status.insert(nid, (st, ts));
+            }
+        }
+    }
+
     let mut result: Vec<serde_json::Value> = Vec::new();
 
     let areas = sqlx::query_as::<_, (String, String)>(
@@ -670,9 +692,15 @@ async fn dashboard_node_readings(State(state): State<AppState>) -> impl IntoResp
                 }
             }
 
+            let (status, updated_at) = device_status.get(node_id.as_str())
+                .map(|(s, t)| (s.as_str(), *t))
+                .unwrap_or(("offline", 0i64));
+
             nodes.push(serde_json::json!({
                 "node_id": node_id,
                 "node_number": node_number,
+                "status": status,
+                "updated_at": updated_at,
                 "latest": latest_obj,
             }));
         }
@@ -698,9 +726,14 @@ async fn dashboard_node_readings(State(state): State<AppState>) -> impl IntoResp
                     latest_obj.insert(metric.to_string(), v.clone());
                 }
             }
+            let (status, updated_at) = device_status.get(node_id.as_str())
+                .map(|(s, t)| (s.as_str(), *t))
+                .unwrap_or(("offline", 0i64));
             serde_json::json!({
                 "node_id": node_id,
                 "node_number": i + 1,
+                "status": status,
+                "updated_at": updated_at,
                 "latest": latest_obj,
             })
         }).collect();

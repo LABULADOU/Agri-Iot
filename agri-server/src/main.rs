@@ -98,6 +98,26 @@ async fn main() -> Result<()> {
         }
     });
 
+    // AI 观察者：定期重建 embedding 索引（如果 LLM 已配置）
+    if std::env::var("LLM_API_KEY").is_ok() {
+        let observer_pool = app_state.pool.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+            match agri_core::ai::embedding::EmbeddingEngine::from_env(observer_pool.clone()) {
+                Ok(embed) => {
+                    let embed = std::sync::Arc::new(tokio::sync::Mutex::new(embed));
+                    let vault_path = std::env::var("OBSIDIAN_VAULT_PATH").ok();
+                    let mut observer = agri_core::ai::observer::Observer::new(observer_pool, embed);
+                    if let Some(ref vp) = vault_path {
+                        observer = observer.with_vault(agri_core::ai::knowledge::ObsidianKnowledge::new(vp));
+                    }
+                    observer.start();
+                }
+                Err(e) => tracing::warn!("Embedding engine not started: {}", e),
+            }
+        });
+    }
+
     let weather_router = Router::new()
         .route("/api/v1/weather/now", axum::routing::get(weather::get_weather_now))
         .route("/api/v1/weather/3d", axum::routing::get(weather::get_forecast_3d))
@@ -132,8 +152,15 @@ async fn main() -> Result<()> {
                         match tokio::fs::read(&canon).await {
                             Ok(data) => {
                                 let ext = canon.extension().and_then(|e| e.to_str()).unwrap_or("");
+                                let is_html = raw == "index.html" || ext == "html";
+                                let cache_control = if is_html {
+                                    "no-cache, no-store, must-revalidate"
+                                } else {
+                                    "public, max-age=31536000, immutable"
+                                };
                                 Ok::<_, Infallible>(Response::builder()
                                     .header("Content-Type", content_type(ext))
+                                    .header("Cache-Control", cache_control)
                                     .body(Body::from(data))
                                     .expect("valid response builder"))
                             }
@@ -160,6 +187,7 @@ async fn serve_index(dir: &std::path::Path) -> Result<Response<Body>, Infallible
     match tokio::fs::read(&idx).await {
         Ok(data) => Ok(Response::builder()
             .header("Content-Type", "text/html; charset=utf-8")
+            .header("Cache-Control", "no-cache, no-store, must-revalidate")
             .body(Body::from(data))
             .expect("valid response builder")),
         Err(_) => Ok(Response::builder()
