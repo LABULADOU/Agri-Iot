@@ -12,6 +12,8 @@ interface Subscription {
   handlers: Set<WsMessageHandler>;
 }
 
+type ConnectionHandler = (connected: boolean) => void;
+
 class WsService {
   private ws: WebSocket | null = null;
   private url: string = '';
@@ -23,9 +25,15 @@ class WsService {
   private subs: Map<string, Subscription> = new Map();
   private pending: Map<string, PendingRequest> = new Map();
   private pendingMessages: string[] = [];
+  private connHandlers: Set<ConnectionHandler> = new Set();
 
   get connected(): boolean {
     return this.ws?.readyState === WebSocket.OPEN;
+  }
+
+  onConnectionChange(handler: ConnectionHandler): () => void {
+    this.connHandlers.add(handler);
+    return () => this.connHandlers.delete(handler);
   }
 
   connect(url = '/api/v1/ws') {
@@ -54,6 +62,7 @@ class WsService {
 
   private onOpen() {
     this.reconnectAttempts = 0;
+    this.connHandlers.forEach(h => h(true));
 
     for (const msg of this.pendingMessages) {
       this.ws?.send(msg);
@@ -103,6 +112,7 @@ class WsService {
   }
 
   private onClose() {
+    this.connHandlers.forEach(h => h(false));
     if (this.shouldReconnect) {
       this.scheduleReconnect();
     }

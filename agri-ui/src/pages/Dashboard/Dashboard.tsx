@@ -2,18 +2,18 @@ import React, { useEffect } from 'react';
 import { Typography } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { useDashboardStore } from '../../stores/dashboardStore';
-import HealthScoreBar from '../../components/HealthScoreBar';
-import ZoneOverviewRow from '../../components/ZoneOverviewRow';
-import EmergencyBanner from '../../components/EmergencyBanner';
-import TodoList from '../../components/TodoList';
-import AISummaryPanel from '../../components/AISummaryPanel';
+import HealthScoreBar from '../../components/dashboard/HealthScoreBar';
+import ZoneOverviewRow from '../../components/dashboard/ZoneOverviewRow';
+import EmergencyBanner from '../../components/dashboard/EmergencyBanner';
+import TodoList from '../../components/dashboard/TodoList';
+import AISummaryPanel from '../../components/ai/AISummaryPanel';
 import styles from './Dashboard.module.css';
 
 const { Title } = Typography;
 
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
-  const { zones, assessments, emergencies, todoItems, recommendations, healthScore, healthTrend, nodeReadings, dismissEmergency, executeRecommendation } = useDashboardStore();
+  const { zones, assessments, emergencies, todoItems, healthScore, healthTrend, nodeReadings, dismissEmergency, executeRecommendation } = useDashboardStore();
 
   useEffect(() => {
     useDashboardStore.getState().fetchAll();
@@ -82,7 +82,7 @@ const Dashboard: React.FC = () => {
         </div>
         <div className={styles.bottomSection}>
           <Title level={5} style={{ margin: 0, marginBottom: 8 }}>AI 摘要</Title>
-          <AISummaryPanel recommendations={recommendations} />
+          <AISummaryPanel recommendations={[]} />
         </div>
       </div>
     </div>

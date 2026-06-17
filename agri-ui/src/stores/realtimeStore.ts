@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { wsService } from '../services/ws';
 
-interface RealtimeReading {
+export interface RealtimeReading {
   nodeId: string;
   metric: string;
   value: number;
@@ -14,10 +14,12 @@ interface RealtimeStore {
   lastUpdate: string | null;
   connected: boolean;
   _unsub: (() => void) | null;
+  _subscribers: Set<(msg: Record<string, unknown>) => void>;
   connect: () => void;
   disconnect: () => void;
   getNodeReadings: (nodeId: string) => RealtimeReading[];
   getMetricValue: (nodeId: string, metric: string) => number | null;
+  onTelemetry: (cb: (msg: Record<string, unknown>) => void) => () => void;
 }
 
 export const useRealtimeStore = create<RealtimeStore>((set, get) => ({
@@ -25,15 +27,16 @@ export const useRealtimeStore = create<RealtimeStore>((set, get) => ({
   lastUpdate: null,
   connected: false,
   _unsub: null as (() => void) | null,
+  _subscribers: new Set(),
 
   connect: () => {
+    wsService.onConnectionChange((connected) => set({ connected }));
     wsService.connect();
-    set({ connected: true });
 
     const unsub = wsService.subscribe('telemetry', [], (data) => {
+      const msg = data as Record<string, unknown>;
       set(state => {
         const newReadings = new Map(state.readings);
-        const msg = data as Record<string, unknown>;
         const nodeId = msg.node_id as string || msg.nodeId as string || '';
         const readings = (msg.readings as Array<Record<string, unknown>> || [msg])
           .map(r => ({
@@ -55,6 +58,7 @@ export const useRealtimeStore = create<RealtimeStore>((set, get) => ({
           lastUpdate: new Date().toISOString(),
         };
       });
+      get()._subscribers.forEach(cb => cb(msg));
     });
 
     set({ _unsub: unsub });
@@ -75,5 +79,10 @@ export const useRealtimeStore = create<RealtimeStore>((set, get) => ({
     const readings = get().readings.get(nodeId) || [];
     const latest = readings.filter(r => r.metric === metric).pop();
     return latest?.value ?? null;
+  },
+
+  onTelemetry: (cb: (msg: Record<string, unknown>) => void) => {
+    get()._subscribers.add(cb);
+    return () => get()._subscribers.delete(cb);
   },
 }));

@@ -4,19 +4,14 @@ import dayjs from 'dayjs';
 import { dataApi, nodeApi } from '../../services/api';
 import LineChart from '../../components/Charts/LineChart';
 import { wsService } from '../../services/ws';
+import { metricSelectOptions } from '../../config/metrics';
 import type { SensorNode, SensorReading, AggregatedReading, ViewMode } from '../../types';
 import styles from './DataQuery.module.css';
 
 const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
 
-const metricOptions = [
-  { value: 'temperature', label: '空气温度' },
-  { value: 'humidity', label: '空气湿度' },
-  { value: 'soil_temperature', label: '土壤温度' },
-  { value: 'soil_moisture', label: '土壤湿度' },
-  { value: 'ec', label: 'EC值' },
-];
+const metricOptions = metricSelectOptions;
 
 interface ViewConfig {
   period: 'hour' | '10min';

@@ -12,6 +12,16 @@
   border-bottom: 1px solid var(--border-color-light, #f0f0f0);
 }
 
+.comfortSection:last-child {
+  border-bottom: none;
+}
+
+.rulesHeader {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 16px;
+}
+
 @media (max-width: 767px) {
   .settingsModal {
     max-width: calc(100vw - 16px);
@@ -21,8 +31,14 @@
     flex: 0 0 100%;
     max-width: 100%;
   }
-}
 
-.comfortSection:last-child {
-  border-bottom: none;
+  .rulesHeader {
+    flex-direction: column;
+    gap: 8px;
+    align-items: stretch;
+  }
+
+  .ruleModal {
+    max-width: calc(100vw - 16px);
+  }
 }

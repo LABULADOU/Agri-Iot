@@ -1,5 +1,0 @@
-凭据ID:K9B77BKBY6
-APIKEY:ce4c45582c584880a5e17a6927e9a5ad
-
-开发者ID:Q833A716CE
-API Host:ku36x9fh3j.re.qweatherapi.com

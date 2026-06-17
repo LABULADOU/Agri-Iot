@@ -109,13 +109,6 @@ export interface TodoItem {
   actionable: boolean;
 }
 
-export interface AIRecommendation {
-  id: string;
-  content: string;
-  targetArea: string;
-  caseLink?: string;
-}
-
 // Raw QWeather API response shapes (returned by backend proxy)
 export interface QWeatherNow {
   temp: string;
@@ -168,6 +161,8 @@ export interface WeatherData {
   windScale: string;
   windSpeed: number;
   precip: number;
+  pressure: number;
+  vis: number;
   updateTime: string;
 }
 
@@ -317,6 +312,19 @@ export interface ChatMessage {
   timestamp: number;
   data_sources?: string[];
   follow_up_questions?: string[];
+}
+
+export interface KnowledgeNoteMeta {
+  path: string;
+  title: string;
+  knowledge_type?: string;
+  适用作物?: string;
+  知识领域?: string;
+  置信度?: string;
+}
+
+export interface KnowledgeNote extends KnowledgeNoteMeta {
+  content: string;
 }
 
 export type TimePeriod = 'hour' | 'day' | 'week' | 'month' | '10min' | 'custom';

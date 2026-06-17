@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Button, Slider, Typography, message } from 'antd';
-import { deviceApi } from '../../services/api';
-import type { SensorNode } from '../../types';
+import { deviceApi } from '../../../services/api';
+import type { SensorNode } from '../../../types';
 import styles from './ControlPanel.module.css';
 
 const { Text } = Typography;

@@ -200,8 +200,8 @@ async fn serve_index(dir: &std::path::Path) -> Result<Response<Body>, Infallible
 fn create_mqtt_client(broker_addr: &str) -> (rumqttc::AsyncClient, rumqttc::EventLoop) {
     let client_id = "agri-server-001".to_string();
     let (host, port) = broker_addr.split_once(':')
-        .map(|(h, p)| (h.to_string(), p.parse::<u16>().unwrap_or(11883)))
-        .unwrap_or_else(|| (broker_addr.to_string(), 11883));
+        .map(|(h, p)| (h.to_string(), p.parse::<u16>().unwrap_or(1883)))
+        .unwrap_or_else(|| (broker_addr.to_string(), 1883));
     let mut options = rumqttc::MqttOptions::new(&client_id, host, port);
     options.set_keep_alive(std::time::Duration::from_secs(30));
     options.set_clean_session(false);

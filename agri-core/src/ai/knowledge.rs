@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -235,6 +236,61 @@ area: {}
         fs::write(&file_path, content).map_err(|e| KnowledgeError::WriteFailed(e.to_string()))?;
         Ok(file_path.display().to_string())
     }
+}
+
+/// 笔记元数据
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct NoteMetadata {
+    pub path: String,
+    pub title: String,
+    #[serde(flatten)]
+    pub frontmatter: HashMap<String, String>,
+}
+
+impl ObsidianKnowledge {
+    /// 列出 vault 内所有笔记及其元数据
+    pub fn list_notes_metadata(&self) -> Result<Vec<NoteMetadata>, KnowledgeError> {
+        let files = self.list_markdown_files()?;
+        let mut notes = Vec::new();
+        for f in &files {
+            match self.read_note(f) {
+                Ok(content) => {
+                    let fm = parse_frontmatter(&content);
+                    let title = extract_title(&content)
+                        .or_else(|| fm.get("title").cloned())
+                        .unwrap_or_default();
+                    notes.push(NoteMetadata {
+                        path: f.clone(),
+                        title,
+                        frontmatter: fm,
+                    });
+                }
+                Err(_) => continue,
+            }
+        }
+        Ok(notes)
+    }
+}
+
+/// 提取 YAML frontmatter（介于 `---` 之间的键值对）
+fn parse_frontmatter(content: &str) -> HashMap<String, String> {
+    let mut map = HashMap::new();
+    let lines: Vec<&str> = content.lines().collect();
+    if lines.len() < 3 { return map; }
+    if lines[0].trim() != "---" { return map; }
+    let mut i = 1;
+    while i < lines.len() && lines[i].trim() != "---" {
+        let line = lines[i].trim();
+        if let Some(pos) = line.find(':') {
+            let key = line[..pos].trim().to_string();
+            let value = line[pos+1..].trim().to_string();
+            if !key.is_empty() {
+                map.insert(key, value);
+            }
+        }
+        i += 1;
+    }
+    map
 }
 
 fn extract_title(content: &str) -> Option<String> {

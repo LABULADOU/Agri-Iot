@@ -21,6 +21,8 @@ function normalizeNow(raw: Record<string, string>): WeatherData {
     windScale: raw.windScale || '0',
     windSpeed: Number(raw.windSpeed) || 0,
     precip: Number(raw.precip) || 0,
+    pressure: Number(raw.pressure) || 0,
+    vis: Number(raw.vis) || 0,
     updateTime: raw.obsTime || '',
   };
 }
@@ -86,6 +88,7 @@ const TopBar: React.FC = () => {
   const [searchResults, setSearchResults] = useState<GeoCity[]>([]);
   const [searchValue, setSearchValue] = useState('');
   const [searching, setSearching] = useState(false);
+  const [mobileExpanded, setMobileExpanded] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchAll = useCallback(async () => {
@@ -139,57 +142,55 @@ const TopBar: React.FC = () => {
     const found = searchResults.find(g => g.id === value);
     if (found) {
       setLocation({ id: found.id, name: found.name, adm1: found.adm1, adm2: found.adm2 });
-      const display = !found.adm2
-        ? found.name
-        : found.adm2 === found.adm1
-          ? `${found.adm1} / ${found.name}`
-          : `${found.adm1} / ${found.adm2} / ${found.name}`;
-      setSearchValue(display);
+      setSearchValue(found.name);
     }
   }, [searchResults, setLocation]);
 
-  const displayName = !location.adm2
-    ? location.name
-    : location.adm2 === location.adm1
-      ? `${location.adm1} / ${location.name}`
-      : `${location.adm1} / ${location.adm2} / ${location.name}`;
-
-  const nowH = new Date().getHours().toString().padStart(2, '0');
-  const nowM = new Date().getMinutes().toString().padStart(2, '0');
+  const displayName = location.name;
 
   const searchOptions = searchResults.map(g => ({
     value: g.id,
     label: `${g.adm1} / ${g.adm2 || g.name} / ${g.name}`,
   }));
 
+  const toggleMobileWeather = () => setMobileExpanded(v => !v);
+
   return (
-    <AntHeader className={styles.topbar}>
-      <div className={styles.row1}>
-        <Space size="small">
+    <AntHeader className={`${styles.topbar} ${mobileExpanded ? styles.topbarExpanded : ''}`}>
+      <div className={styles.row1} onClick={toggleMobileWeather}>
+        <Space size="small" className={styles.leftSpace}>
           <Text type="secondary" className={styles.cityLabel}>
             📍{displayName}
           </Text>
           {weatherLastRefresh && (
-            <Text type="secondary" className={styles.updateTime}>
+            <Text type="secondary" className={`${styles.updateTime} ${styles.desktopOnly}`}>
               天气 {weatherLastRefresh}
             </Text>
           )}
+          {now && (
+            <span className={styles.mobileWeatherInline}>
+              <span className={styles.inlineIcon}>{weatherIcon(now.icon, now.text)}</span>
+              <span className={styles.inlineTemp}>{now.temp}℃</span>
+              <span className={styles.inlineMeta}>💧{now.humidity}%</span>
+              <span className={styles.inlineMeta}>🌬️{now.windDir}{now.windScale}级</span>
+              <span className={styles.inlineMeta}>🔽{now.pressure}hPa</span>
+            </span>
+          )}
         </Space>
         <Space size="small">
-          <Text type="secondary" className={styles.time}>{nowH}:{nowM}</Text>
           <Badge status={connected ? 'success' : 'error'} />
           <Text type="secondary" className={styles.connText}>
             {connected ? '在线' : '离线'}
           </Text>
           {lastUpdate && (
-            <Text type="secondary" className={styles.updateTime}>
+            <Text type="secondary" className={`${styles.updateTime} ${styles.desktopOnly}`}>
               {new Date(lastUpdate).toLocaleTimeString('zh-CN')}
             </Text>
           )}
         </Space>
       </div>
 
-      <div className={styles.row2}>
+      <div className={`${styles.row2} ${mobileExpanded ? styles.row2Visible : ''}`}>
         <div className={styles.cityBlock}>
           <AutoComplete
             value={searchValue}
@@ -228,9 +229,13 @@ const TopBar: React.FC = () => {
                 <Text className={styles.currentText}>{now?.text || '--'}</Text>
               </div>
               <div className={styles.currentMeta}>
-                <Text type="secondary">湿度 {now?.humidity ?? '--'}%</Text>
+                <Text type="secondary">💧 {now?.humidity ?? '--'}%</Text>
                 <Text type="secondary" className={styles.metaSep}>|</Text>
-                <Text type="secondary">{now?.windDir ?? '--'} {now?.windScale ?? '--'}级</Text>
+                <Text type="secondary">🌬️ {now?.windDir ?? '--'} {now?.windScale ?? '--'}级</Text>
+                <Text type="secondary" className={styles.metaSep}>|</Text>
+                <Text type="secondary">🔽 {now?.pressure ?? '--'}hPa</Text>
+                <Text type="secondary" className={styles.metaSep}>|</Text>
+                <Text type="secondary">👁️ {now?.vis ?? '--'}km</Text>
               </div>
             </div>
 

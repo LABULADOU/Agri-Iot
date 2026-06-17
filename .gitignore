@@ -27,6 +27,11 @@ Thumbs.db
 *~
 error.txt
 *-error.txt
+/logs/
+
+# Project docs
+config/default.toml
+migrations/001_init.sql
 
 # Firmware reference materials
 *.zip
@@ -39,11 +44,7 @@ error.txt
 # SSH keys (private)
 config/ssh/
 
-# Project docs
-config/default.toml
-migrations/001_init.sql
-和风天气API.md
-数字孪生.md
+
 
 # Python
 __pycache__/

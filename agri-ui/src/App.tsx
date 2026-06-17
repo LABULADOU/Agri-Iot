@@ -9,10 +9,9 @@ import Dashboard from './pages/Dashboard';
 import ZoneDetail from './pages/ZoneDetail';
 import NodeList from './pages/NodeList';
 import DataQuery from './pages/DataQuery';
-import RuleList from './pages/RuleList';
+import AI from './pages/AI';
+import KnowledgeBase from './pages/KnowledgeBase';
 import Settings from './pages/Settings';
-import AIDecisions from './pages/AIDecisions';
-import AgentChat from './pages/AgentChat';
 
 const App: React.FC = () => {
   useEffect(() => {
@@ -28,10 +27,11 @@ const App: React.FC = () => {
             <Route path="zones/:id" element={<ZoneDetail />} />
             <Route path="nodes" element={<NodeList />} />
             <Route path="query" element={<DataQuery />} />
-            <Route path="automation" element={<RuleList />} />
-            <Route path="ai" element={<AIDecisions />} />
-            <Route path="agent" element={<AgentChat />} />
+            <Route path="ai" element={<AI />} />
+            <Route path="knowledge" element={<KnowledgeBase />} />
             <Route path="settings" element={<Settings />} />
+            <Route path="automation" element={<Navigate to="/settings?tab=rules" replace />} />
+            <Route path="agent" element={<Navigate to="/ai?tab=chat" replace />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>

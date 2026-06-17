@@ -1,10 +1,62 @@
 .container {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 120px);
+  gap: var(--space-4, 16px);
+}
+
+.statsRow {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3, 12px);
+}
+
+.statCard {
+  background: var(--bg-card, #fff) !important;
+}
+
+.statLabel {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  display: block;
+  margin-bottom: var(--space-3, 12px);
+}
+
+.section {
+  background: var(--bg-card, #fff) !important;
+}
+
+.search {
+  max-width: 500px;
+  width: 100%;
+  margin-bottom: var(--space-3, 12px);
+}
+
+.results {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2, 8px);
+}
+
+.resultItem {
+  padding: var(--space-2, 8px) var(--space-3, 12px);
+  background: var(--bg-page, #F8FAFC);
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.resultItem:hover {
+  background: var(--bg-hover, #F5F5F5);
+  transition: background 0.15s;
+}
+
+.chatContainer {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 260px);
   max-width: 900px;
   margin: 0 auto;
-  padding: 0 16px;
 }
 
 .header {
@@ -196,4 +248,22 @@
 
 .sendBtn {
   flex-shrink: 0;
+}
+
+@media (max-width: 767px) {
+  .resultItem {
+    font-size: 13px;
+    padding: var(--space-2, 8px);
+  }
+
+  .resultItem :global .ant-tag {
+    font-size: 11px;
+    line-height: 18px;
+    height: 20px;
+    padding: 0 6px;
+  }
+
+  .messageRow {
+    max-width: 95%;
+  }
 }

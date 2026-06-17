@@ -25,8 +25,6 @@ uuid = { version = "1.0", features = ["v4", "serde"] }
 sqlx = { version = "0.7", features = ["runtime-tokio", "sqlite", "chrono", "uuid"] }
 axum = "0.7"
 tower = "0.4"
-tower-http = { version = "0.5", features = ["fs", "trace", "cors"] }
-jsonwebtoken = "9.2"
 rumqttd = "0.18"
 rumqttc = "0.24"
 dotenvy = "0.15"

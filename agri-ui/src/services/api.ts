@@ -3,7 +3,7 @@ import type {
   Zone, SensorNode, SensorReading, AggregatedReading,
   WeatherData, WeatherForecastDay, WeatherWarning, MinutelyForecast, HourlyPrecip, GeoCity,
   Device, Rule, QueryParams,
-  EmergencyStatusResponse, KnowledgeSearchResult, ControlCaseRecord, AgentResponse,
+  EmergencyStatusResponse, KnowledgeSearchResult, ControlCaseRecord, AgentResponse, KnowledgeNoteMeta,
 } from '../types';
 
 const api = axios.create({
@@ -76,12 +76,6 @@ export const weatherApi = {
     api.get<{ location: GeoCity[] }>('/weather/geo', { params: { location: query, number } }).then(res => res.data),
 };
 
-// Control APIs → use device command endpoint
-export const controlApi = {
-  sendCommand: (deviceId: string, command: string, params?: Record<string, unknown>) =>
-    api.post(`/devices/${deviceId}/command`, { command, params }),
-};
-
 // Device APIs
 export const deviceApi = {
   list: () => api.get<Device[]>('/devices').then(res => res.data),
@@ -101,12 +95,18 @@ export const ruleApi = {
 
 // AI Decision APIs
 export const aiApi = {
+  assess: (areaId: string) =>
+    api.post<Record<string, unknown>>('/ai/assess', { area_id: areaId }).then(res => res.data),
   emergencyStatus: () =>
     api.get<EmergencyStatusResponse>('/ai/emergency/status').then(res => res.data),
   knowledgeSearch: (query: string) =>
     api.get<KnowledgeSearchResult[]>('/ai/knowledge/search', { params: { query } }).then(res => res.data),
   knowledgeCases: (limit?: number) =>
     api.get<ControlCaseRecord[]>('/ai/knowledge/cases', { params: { limit } }).then(res => res.data),
+  listKnowledgeBase: () =>
+    api.get<{ notes: KnowledgeNoteMeta[] }>('/ai/knowledge/obsidian/list').then(res => res.data),
+  readNote: (path: string) =>
+    api.get<{ path: string; content: string }>('/ai/knowledge/obsidian/note', { params: { path } }).then(res => res.data),
   agentQuery: (query: string, history?: { role: string; content: string }[]) =>
     apiLong.post<AgentResponse>('/ai/agent/query', { query, history }).then(res => res.data),
   agentQueryStream: async (query: string, onChunk: (text: string) => void, onDone: (resp: AgentResponse) => void, signal?: AbortSignal, history?: { role: string; content: string }[]) => {

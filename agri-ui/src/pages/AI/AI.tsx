@@ -1,0 +1,412 @@
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { Input, Button, Typography, Card, Spin, Tag, Empty, Tabs } from 'antd';
+import { ClockCircleOutlined, SendOutlined, RobotOutlined, UserOutlined, ClearOutlined } from '@ant-design/icons';
+import { useSearchParams } from 'react-router-dom';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import AISystemStatus from '../../components/ai/AISystemStatus';
+import EmergencyRules from '../../components/ai/EmergencyRules';
+import KnowledgeStats from '../../components/ai/KnowledgeStats';
+import { aiApi } from '../../services/api';
+import type { ChatMessage, AgentResponse, EmergencyRuleResponse, KnowledgeSearchResult, ControlCaseRecord } from '../../types';
+import styles from './AI.module.css';
+
+const { Title, Text } = Typography;
+const { Search } = Input;
+const { TextArea } = Input;
+
+const EMERGENCY_RULE_DEFS = [
+  { id: 'e1', name: '大风保护', condition: '风速 > 40km/h', action: '关闭顶部通风' },
+  { id: 'e2', name: '大雨保护', condition: '降雨 > 10mm/h', action: '关闭顶部通风' },
+  { id: 'e3', name: '低温保护', condition: '气温 < 0℃', action: '关闭通风+暂停自动' },
+];
+
+const STORAGE_KEY = 'agent-chat-messages';
+
+const WELCOME_MESSAGE: ChatMessage = {
+  id: 'welcome',
+  role: 'agent',
+  content: `👋 你好！我是温室 AI 助手，可以帮你：
+
+- 🌡️ **环境分析** — 查询温室当前状态、温度、湿度等
+- 🌱 **作物建议** — 针对特定作物（如番茄、黄瓜）给出栽培建议
+- ⚠️ **风险预警** — 恶劣天气应对、病虫害防治
+- 🎯 **调控建议** — 通风、灌溉、保温等操作建议
+
+有什么想问的吗？`,
+  timestamp: Date.now(),
+};
+
+function loadMessages(): ChatMessage[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const parsed: ChatMessage[] = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch { /* ignore */ }
+  return [WELCOME_MESSAGE];
+}
+
+function saveMessages(msgs: ChatMessage[]) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(msgs));
+  } catch { /* ignore */ }
+}
+
+const MAX_HISTORY = 20;
+
+const AIDecisionsTab: React.FC = () => {
+  const [emergencyStatus, setEmergencyStatus] = useState<{
+    active: EmergencyRuleResponse[];
+    nightMode: boolean;
+    pausesAuto: boolean;
+  } | null>(null);
+  const [cases, setCases] = useState<ControlCaseRecord[]>([]);
+  const [searchResults, setSearchResults] = useState<KnowledgeSearchResult[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    Promise.all([
+      aiApi.emergencyStatus(),
+      aiApi.knowledgeCases(10),
+    ]).then(([status, caseList]) => {
+      setEmergencyStatus({
+        active: status.active_emergencies,
+        nightMode: status.night_mode_active,
+        pausesAuto: status.pauses_auto_mode,
+      });
+      setCases(caseList);
+    }).finally(() => setLoading(false));
+  }, []);
+
+  const handleSearch = useCallback(async (value: string) => {
+    if (!value.trim()) {
+      setSearchResults([]);
+      return;
+    }
+    setSearching(true);
+    try {
+      const results = await aiApi.knowledgeSearch(value);
+      setSearchResults(results);
+    } catch {
+      setSearchResults([]);
+    } finally {
+      setSearching(false);
+    }
+  }, []);
+
+  const rules = EMERGENCY_RULE_DEFS.map(def => ({
+    ...def,
+    active: emergencyStatus?.active.some(e => {
+      const type = e.type.toLowerCase();
+      return (
+        (type.includes('wind') && def.id === 'e1') ||
+        (type.includes('rain') && def.id === 'e2') ||
+        (type.includes('snow') && def.id === 'e3') ||
+        (type.includes('cold') && def.id === 'e3')
+      );
+    }) ?? false,
+  }));
+
+  if (loading) {
+    return <Spin style={{ display: 'block', margin: '40px auto' }} />;
+  }
+
+  const caseCount = cases.length;
+  const thisMonthNew = cases.filter(c => {
+    const d = new Date(c.timestamp * 1000);
+    const now = new Date();
+    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+  }).length;
+
+  return (
+    <>
+      <div className={styles.statsRow}>
+        <Card size="small" className={styles.statCard}>
+          <Text type="secondary" className={styles.statLabel}>系统状态</Text>
+          <AISystemStatus
+            autoModeEnabled={!emergencyStatus?.pausesAuto}
+            nightModeActive={emergencyStatus?.nightMode ?? false}
+            aiEnabled
+          />
+        </Card>
+        <Card size="small" className={styles.statCard}>
+          <Text type="secondary" className={styles.statLabel}>紧急规则状态</Text>
+          <EmergencyRules rules={rules} />
+        </Card>
+        <Card size="small" className={styles.statCard}>
+          <Text type="secondary" className={styles.statLabel}>知识库统计</Text>
+          <KnowledgeStats cropCount={12} pestCount={8} caseCount={caseCount} thisMonthNew={thisMonthNew} />
+        </Card>
+      </div>
+
+      <Card size="small" className={styles.section}>
+        <Title level={5}>知识库检索</Title>
+        <Search
+          placeholder="搜索作物、病虫害、调控案例..."
+          allowClear
+          enterButton="搜索"
+          onSearch={handleSearch}
+          loading={searching}
+          className={styles.search}
+        />
+        {searchResults.length > 0 && (
+          <div className={styles.results}>
+            {searchResults.map((r) => (
+              <div key={r.id} className={styles.resultItem}>
+                <Tag color={r.type === 'crop_profile' ? 'green' : r.type === 'pest_knowledge' ? 'red' : 'blue'}>
+                  {r.type === 'crop_profile' ? '作物' : r.type === 'pest_knowledge' ? '病虫害' : '气象'}
+                </Tag>
+                <Text>{r.name || r.condition_type}</Text>
+              </div>
+            ))}
+          </div>
+        )}
+        {searchResults.length === 0 && !searching && (
+          <Text type="secondary">输入关键词搜索知识库</Text>
+        )}
+      </Card>
+
+      <Card size="small" className={styles.section}>
+        <Title level={5}>调控案例记录</Title>
+        {cases.length > 0 ? (
+          <div className={styles.results}>
+            {cases.map(c => (
+              <div key={c.id} className={styles.resultItem}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text strong>{c.situation ? JSON.parse(c.situation).soil_temp ? `土壤温度 ${JSON.parse(c.situation).soil_temp}°C` : c.situation.slice(0, 50) : '-'}</Text>
+                  <Text type="secondary" style={{ fontSize: 12 }}>
+                    <ClockCircleOutlined style={{ marginRight: 4 }} />
+                    {new Date(c.timestamp * 1000).toLocaleDateString()}
+                  </Text>
+                </div>
+                {c.outcome && (
+                  <div style={{ marginTop: 4 }}>
+                    <Text type="secondary">效果: </Text>
+                    <Text>{c.outcome}</Text>
+                    {c.effect_rating && (
+                      <Tag color={c.effect_rating >= 4 ? 'green' : c.effect_rating >= 2 ? 'orange' : 'red'} style={{ marginLeft: 8 }}>
+                        {c.effect_rating}/5
+                      </Tag>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <Empty description="暂无案例数据" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+        )}
+      </Card>
+    </>
+  );
+};
+
+const AgentChatTab: React.FC = () => {
+  const [messages, setMessages] = useState<ChatMessage[]>(loadMessages);
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = useCallback(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, []);
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, scrollToBottom]);
+
+  const handleSend = useCallback(async (text?: string) => {
+    const query = (text || input).trim();
+    if (!query || loading) return;
+
+    const userMsg: ChatMessage = {
+      id: `user-${Date.now()}`,
+      role: 'user',
+      content: query,
+      timestamp: Date.now(),
+    };
+
+    setMessages(prev => {
+      const updated = [...prev, userMsg];
+      saveMessages(updated);
+      return updated;
+    });
+    setInput('');
+    setLoading(true);
+
+    try {
+      const history = messagesRef.current
+        .filter(m => m.id !== 'welcome')
+        .slice(-MAX_HISTORY)
+        .map(m => ({ role: m.role, content: m.content }));
+      const resp: AgentResponse = await aiApi.agentQuery(query, history);
+      const agentMsg: ChatMessage = {
+        id: `agent-${Date.now()}`,
+        role: 'agent',
+        content: resp.answer,
+        timestamp: Date.now(),
+        data_sources: resp.data_sources,
+        follow_up_questions: resp.follow_up_questions,
+      };
+      setMessages(prev => {
+        const updated = [...prev, agentMsg];
+        saveMessages(updated);
+        return updated;
+      });
+    } catch (err) {
+      const errorMsg: ChatMessage = {
+        id: `error-${Date.now()}`,
+        role: 'agent',
+        content: `❌ 请求失败：${err instanceof Error ? err.message : '未知错误'}`,
+        timestamp: Date.now(),
+      };
+      setMessages(prev => {
+        const updated = [...prev, errorMsg];
+        saveMessages(updated);
+        return updated;
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [input, loading]);
+
+  const handleFollowUp = useCallback((question: string) => {
+    setInput(question);
+    handleSend(question);
+  }, [handleSend]);
+
+  const handleClear = useCallback(() => {
+    setMessages([WELCOME_MESSAGE]);
+    localStorage.removeItem(STORAGE_KEY);
+  }, []);
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  }, [handleSend]);
+
+  return (
+    <div className={styles.chatContainer}>
+      <div className={styles.header}>
+        <Title level={4} style={{ margin: 0 }}>
+          <RobotOutlined style={{ marginRight: 8 }} />
+          AI 助手对话
+        </Title>
+        <Button
+          icon={<ClearOutlined />}
+          size="small"
+          onClick={handleClear}
+          disabled={messages.length <= 1}
+        >
+          清空对话
+        </Button>
+      </div>
+
+      <div className={styles.messageArea}>
+        {messages.map(msg => (
+          <div
+            key={msg.id}
+            className={`${styles.messageRow} ${msg.role === 'user' ? styles.userRow : styles.agentRow}`}
+          >
+            <div className={`${styles.avatar} ${msg.role === 'user' ? styles.userAvatar : styles.agentAvatar}`}>
+              {msg.role === 'user' ? <UserOutlined /> : <RobotOutlined />}
+            </div>
+            <div className={`${styles.bubble} ${msg.role === 'user' ? styles.userBubble : styles.agentBubble}`}>
+              {msg.role === 'agent' ? (
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  {msg.content}
+                </ReactMarkdown>
+              ) : (
+                <Text>{msg.content}</Text>
+              )}
+              {msg.data_sources && msg.data_sources.length > 0 && (
+                <div className={styles.sources}>
+                  <Text type="secondary" style={{ fontSize: 12 }}>
+                    数据来源：{msg.data_sources.join('、')}
+                  </Text>
+                </div>
+              )}
+              {msg.follow_up_questions && msg.follow_up_questions.length > 0 && (
+                <div className={styles.followUps}>
+                  {msg.follow_up_questions.map((q, i) => (
+                    <Button
+                      key={i}
+                      type="dashed"
+                      size="small"
+                      className={styles.followUpBtn}
+                      onClick={() => handleFollowUp(q)}
+                    >
+                      {q}
+                    </Button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+        {loading && (
+          <div className={`${styles.messageRow} ${styles.agentRow}`}>
+            <div className={`${styles.avatar} ${styles.agentAvatar}`}>
+              <RobotOutlined />
+            </div>
+            <div className={`${styles.bubble} ${styles.agentBubble}`}>
+              <Spin size="small" style={{ marginRight: 8 }} />
+              <Text type="secondary">思考中...</Text>
+            </div>
+          </div>
+        )}
+        <div ref={messagesEndRef} />
+      </div>
+
+      <div className={styles.inputArea}>
+        <TextArea
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder="输入你的问题，按 Enter 发送..."
+          autoSize={{ minRows: 1, maxRows: 4 }}
+          disabled={loading}
+          className={styles.textInput}
+        />
+        <Button
+          type="primary"
+          icon={<SendOutlined />}
+          onClick={() => handleSend()}
+          loading={loading}
+          disabled={!input.trim()}
+          className={styles.sendBtn}
+        >
+          发送
+        </Button>
+      </div>
+    </div>
+  );
+};
+
+const AI: React.FC = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tab = searchParams.get('tab') || 'decisions';
+
+  return (
+    <div className={styles.container}>
+      <Title level={4}>AI 决策中枢</Title>
+      <Tabs
+        activeKey={tab}
+        onChange={(key) => setSearchParams({ tab: key })}
+        items={[
+          { key: 'decisions', label: 'AI 决策', children: <AIDecisionsTab /> },
+          { key: 'chat', label: '对话', children: <AgentChatTab /> },
+        ]}
+      />
+    </div>
+  );
+};
+
+export default AI;

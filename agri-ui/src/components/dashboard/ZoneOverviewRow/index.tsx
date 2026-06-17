@@ -1,6 +1,6 @@
 import React from 'react';
 import { Typography, Badge } from 'antd';
-import type { Zone } from '../../types';
+import type { Zone } from '../../../types';
 import styles from './ZoneOverviewRow.module.css';
 
 const { Text } = Typography;

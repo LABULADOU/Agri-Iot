@@ -73,6 +73,7 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/v1/ai/emergency/status", get(emergency_status))
         .route("/api/v1/ai/knowledge/search", get(knowledge_search))
         .route("/api/v1/ai/knowledge/cases", get(knowledge_cases).post(knowledge_add_case))
+        .route("/api/v1/ai/knowledge/obsidian/list", get(obsidian_list))
         .route("/api/v1/ai/knowledge/obsidian/note", get(obsidian_read_note))
         .route("/api/v1/ai/knowledge/obsidian/search", get(obsidian_search))
         .route("/api/v1/ai/knowledge/obsidian/case", post(obsidian_add_case))
@@ -546,6 +547,28 @@ struct ObsidianCaseRequest {
     area_id: String,
     situation: String,
     outcome: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct ObsidianListQuery {
+    #[serde(rename = "type")]
+    filter_type: Option<String>, // optional: 通用知识 | 单一作物 | 品种差异
+}
+
+/// GET /api/v1/ai/knowledge/obsidian/list — 列出 vault 所有笔记及元数据
+async fn obsidian_list(
+    State(state): State<AppState>,
+    Query(_q): Query<ObsidianListQuery>,
+) -> impl IntoResponse {
+    let vault_path = match &state.obsidian_vault_path {
+        Some(p) => p.clone(),
+        None => return not_found(Some("OBSIDIAN_VAULT_PATH not set")),
+    };
+    let vault = ObsidianKnowledge::new(&vault_path);
+    match vault.list_notes_metadata() {
+        Ok(notes) => (StatusCode::OK, Json(serde_json::json!({"notes": notes}))).into_response(),
+        Err(e) => internal_err(e),
+    }
 }
 
 /// GET /api/v1/ai/knowledge/obsidian/note?path=...

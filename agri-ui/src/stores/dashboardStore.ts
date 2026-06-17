@@ -1,7 +1,8 @@
 import { create } from 'zustand';
-import type { Zone, Assessment, Emergency, TodoItem, AIRecommendation, Device } from '../types';
-import { zoneApi, deviceApi } from '../services/api';
+import type { Zone, Assessment, Emergency, TodoItem, Device } from '../types';
+import { zoneApi, deviceApi, aiApi } from '../services/api';
 import { wsService } from '../services/ws';
+import { useRealtimeStore } from './realtimeStore';
 
 interface LatestReadings {
   airTemp: number | undefined;
@@ -25,7 +26,6 @@ interface DashboardState {
   assessments: Record<string, Assessment>;
   emergencies: Emergency[];
   todoItems: TodoItem[];
-  recommendations: AIRecommendation[];
   healthScore: number;
   healthTrend: number;
   nodeReadings: ZoneNodeReading[];
@@ -38,6 +38,9 @@ interface DashboardState {
   setHealthScore: (score: number) => void;
   stopRealtimeUpdates: () => void;
   _wsUnsub: (() => void) | null;
+  _realtimeUnsub: (() => void) | null;
+  _statusUnsub: (() => void) | null;
+  _assessTimer: number | undefined;
 }
 
 function calcHealthScore(assessments: Record<string, Assessment>): number {
@@ -71,11 +74,13 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
   assessments: {},
   emergencies: [],
   todoItems: [],
-  recommendations: [],
   healthScore: 85,
   healthTrend: 0,
   nodeReadings: [],
   _wsUnsub: null,
+  _realtimeUnsub: null,
+  _statusUnsub: null,
+  _assessTimer: undefined,
 
   fetchAll: async () => {
     try {
@@ -110,15 +115,13 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
       set({ zones, nodeReadings });
       get().fetchAssessments();
 
-      if (!get()._wsUnsub) {
-        const unsubTelemetry = wsService.subscribe('telemetry', [], (data) => {
-          const msg = data as Record<string, unknown>;
+      if (!get()._realtimeUnsub) {
+        const unsubRealtime = useRealtimeStore.getState().onTelemetry((msg) => {
           const nodeId = msg.node_id as string;
           const readings = msg.readings as Array<{ metric: string; value: number }> | undefined;
           if (!nodeId || !readings) return;
 
           set(state => {
-            let newNodeReadings = false;
             const updated = state.nodeReadings.map(nr => {
               if (nr.nodeId !== nodeId) return nr;
               const newReadings = { ...nr.readings };
@@ -154,13 +157,18 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
                   readings: newReadings,
                   status: 'online',
                 });
-                newNodeReadings = true;
               }
             }
             return { nodeReadings: updated };
           });
+          clearTimeout(get()._assessTimer);
+          const timer = window.setTimeout(() => get().fetchAssessments(), 10000);
+          set({ _assessTimer: timer });
         });
+        set({ _realtimeUnsub: unsubRealtime });
+      }
 
+      if (!get()._statusUnsub) {
         const unsubStatus = wsService.subscribe('status_change', [], (data) => {
           const msg = data as Record<string, unknown>;
           const nodeId = msg.node_id as string;
@@ -173,8 +181,7 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
             ),
           }));
         });
-
-        set({ _wsUnsub: () => { unsubTelemetry(); unsubStatus(); } });
+        set({ _statusUnsub: unsubStatus });
       }
     } catch (e) {
       console.error('Dashboard fetchAll failed:', e);
@@ -186,20 +193,14 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
     const assessments: Record<string, Assessment> = {};
     for (const zone of zones) {
       try {
-        const res = await fetch('/api/v1/ai/assess', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ area_id: zone.id }),
-        });
-        if (!res.ok) continue;
-        const raw = await res.json() as Record<string, unknown>;
-        const scores = raw.scores as Record<string, number> || {};
+        const raw = await aiApi.assess(zone.id);
+        const scores = (raw.scores as Record<string, number>) || {};
         const overall = scores.overall ?? 85;
         assessments[zone.id] = {
           score: overall,
           status: overall >= 80 ? 'normal' : overall >= 60 ? 'warning' : 'danger',
           summary: raw.deviations ? `存在 ${(raw.deviations as unknown[]).length} 项偏离` : '各项指标正常',
-          details: (raw.deviations as Array<{ param: string; current: number; optimal: number }> || [])
+          details: ((raw.deviations as Array<{ param: string; current: number; optimal: number }>) || [])
             .map(d => `${d.param}: 当前 ${d.current}, 最优 ${d.optimal}`),
         };
       } catch {
@@ -207,17 +208,25 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
       }
     }
     const healthScore = calcHealthScore(assessments);
-    const prevScore = get().healthScore;
-    const healthTrend = prevScore === 85 ? 0 : healthScore - prevScore;
+    const state = get();
+    const prevScore = state.healthScore;
+    const prevAssessments = state.assessments;
+    const isFirstReal = Object.keys(prevAssessments).length === 0 || prevScore === 85;
+    const healthTrend = isFirstReal ? 0 : healthScore - prevScore;
     const todoItems = buildTodoItems(zones, assessments);
     set({ assessments, healthScore, healthTrend, todoItems });
   },
 
   fetchEmergencies: async () => {
     try {
-      const res = await fetch('/api/v1/ai/emergency/status');
-      const data = await res.json() as { active_emergencies?: Emergency[] };
-      set({ emergencies: data.active_emergencies || [] });
+      const data = await aiApi.emergencyStatus();
+      set({ emergencies: (data.active_emergencies || []).map(e => ({
+        id: `${e.type}-${e.triggered_at}`,
+        type: e.type,
+        message: e.message,
+        severity: e.confidence > 0.8 ? 'critical' as const : 'high' as const,
+        timestamp: new Date(e.triggered_at * 1000).toISOString(),
+      })) });
     } catch {
       // keep current
     }
@@ -238,10 +247,9 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
   },
 
   stopRealtimeUpdates: () => {
-    const unsub = get()._wsUnsub;
-    if (unsub) {
-      unsub();
-      set({ _wsUnsub: null });
-    }
+    get()._realtimeUnsub?.();
+    get()._statusUnsub?.();
+    clearTimeout(get()._assessTimer);
+    set({ _realtimeUnsub: null, _statusUnsub: null, _assessTimer: undefined });
   },
 }));

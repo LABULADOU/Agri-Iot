@@ -4,8 +4,9 @@ import { Typography, Button, Space, Spin, Tag, Empty } from 'antd';
 import { ArrowLeftOutlined, ReloadOutlined } from '@ant-design/icons';
 import { zoneApi, nodeApi } from '../../services/api';
 import { useRealtimeStore } from '../../stores/realtimeStore';
-import MetricRow from '../../components/MetricRow';
-import ControlPanel from '../../components/ControlPanel';
+import MetricRow from '../../components/zone/MetricRow';
+import ControlPanel from '../../components/zone/ControlPanel';
+import { METRIC_CONFIG } from '../../config/metrics';
 import type { Zone, SensorNode, SensorReading } from '../../types';
 import styles from './ZoneDetail.module.css';
 
@@ -16,19 +17,10 @@ interface DisplayReading {
   key: string;
   value: number | null;
   unit: string;
-  min: number;
-  max: number;
-  maxScale: number;
+  min?: number;
+  max?: number;
+  maxScale?: number;
 }
-
-const METRIC_CONFIG: Record<string, { label: string; unit: string; min: number; max: number; maxScale: number }> = {
-  temperature: { label: '空气温度', unit: '℃', min: 18, max: 28, maxScale: 50 },
-  humidity: { label: '空气湿度', unit: '%', min: 60, max: 80, maxScale: 100 },
-  soil_temperature: { label: '土壤温度', unit: '℃', min: 15, max: 25, maxScale: 50 },
-  soil_moisture: { label: '土壤湿度', unit: '%', min: 40, max: 70, maxScale: 100 },
-  ec: { label: 'EC值', unit: 'mS/cm', min: 1.5, max: 3.5, maxScale: 5 },
-  light: { label: '光照', unit: 'lux', min: 0, max: 200000, maxScale: 200000 },
-};
 
 const METRIC_KEYS = Object.keys(METRIC_CONFIG);
 
@@ -190,8 +182,8 @@ const ZoneDetail: React.FC = () => {
                   label={r.label}
                   value={r.value ?? 0}
                   unit={r.unit}
-                  status={getStatus(r.value, r.min, r.max)}
-                  range={{ min: r.min, max: r.max }}
+                  status={getStatus(r.value, r.min ?? 0, r.max ?? 100)}
+                  range={{ min: r.min ?? 0, max: r.max ?? 100 }}
                   maxScale={r.maxScale}
                 />
               ))
