@@ -143,20 +143,18 @@ ESP32 → POST /api/v1/telemetry → process_telemetry() → DB写入
 - Dashboard (SSE实时更新 + 健康评分 + 区域概览)
 - 区域详情 (ZoneDetail, 实时数据流)
 - 节点列表 (NodeList)
-- 规则管理 (RuleList)
 - 数据查询 (DataQuery, 多指标折线图)
-- AI 决策 (AIDecisions)
-- 系统设置 (Settings)
-- 设备控制面板 (ControlPanel)
+- AI 决策 (AgentChat + 知识库，合并到 AI/)
+- 系统设置 (Settings，含规则管理)
 
 ### 关键组件
 | 组件 | 路径 | 用途 |
 |------|------|------|
 | `TopBar` | `components/Layout/` | 天气面板+ SSE状态 |
-| `HealthScoreBar` | `components/` | 健康评分进度条 + 趋势 |
-| `EmergencyBanner` | `components/` | 紧急告警横幅 |
-| `MetricRow` | `components/` | 单指标显示条（值/进度/状态） |
-| `ControlPanel` | `components/` | 开关/卷膜器控制（发 `params`） |
+| `HealthScoreBar` | `components/dashboard/` | 健康评分进度条 + 趋势 |
+| `EmergencyBanner` | `components/dashboard/` | 紧急告警横幅 |
+| `MetricRow` | `components/zone/` | 单指标显示条（值/进度/状态） |
+| `ControlPanel` | `components/zone/` | 开关/卷膜器控制（发 `params`） |
 | `LineChart` | `components/Charts/` | ECharts 多指标折线图 |
 | `dashboardStore` | `stores/` | 数据中枢（SSE+fetch+AI评估） |
 | `realtimeStore` | `stores/` | SSE 实时读数缓存 |
@@ -458,7 +456,7 @@ ESP32 固件从 HTTP 直连（v2.3）迁移到纯 MQTT（v3.0）：
 │              agri-server:3001/mqtt                        │
 │              (mqtt_ws.rs WebSocket ↔ MQTT TCP 桥接)       │
 │                     ↓                                    │
-│              rumqttd broker (独立进程, 127.0.0.1:11885)    │
+│              rumqttd broker (独立进程, 127.0.0.1:1883)     │
 │                     ↓                                    │
 │              agri-mqtt handler (QoS 1 订阅)                │
 │                     ↓                                    │
@@ -470,7 +468,7 @@ ESP32 固件从 HTTP 直连（v2.3）迁移到纯 MQTT（v3.0）：
 
 | 组件 | 变更 | 关键文件 |
 |------|------|----------|
-| **独立 broker** | `agri-mqtt/src/bin/broker.rs` — 独立二进制，TCP:11885, WS:11886 | `broker.rs` |
+| **独立 broker** | `agri-mqtt/src/bin/broker.rs` — 独立二进制，TCP:1883, WS:1884 | `broker.rs` |
 | **WebSocket 桥接** | Axum WebSocket → MQTT TCP 代理，Funnel WSS 直达 | `mqtt_ws.rs` |
 | **ESP32 v3.0** | HTTP 全移除，PubSubClient(LAN) + WebSocket MQTT(WAN) | `main.ino` |
 | **去重** | `seq` 字段 + 部分唯一索引 `(device_id, metric, seq)` | `003_dedup.sql`, `telemetry.rs` |
@@ -815,4 +813,26 @@ decision/
 修改: agri-ui/src/components/Layout/Sidebar.tsx     # Agent 菜单
 修改: agri-ui/src/components/Layout/MobileTabBar.tsx
 修改: agri-ui/src/types/index.ts                   # ChatMessage 类型
+```
+
+## 全面体检清理（2026-06-17）
+
+### 已清理
+
+| 问题 | 操作 |
+|------|------|
+| **`jsonwebtoken` / `tower-http` 未使用** | 从 workspace Cargo.toml 删除；server 残留引用一并移除 |
+| **`tslib` npm 未使用** | 从 package.json 删除 |
+| **`.env`/`.env.example` MQTT_BROKER_PORT 旧值** | 删除 `11883`（已由 `MQTT_BROKER_ADDR` 替代） |
+| **`main.rs` broker 端口 fallback 不一致** | `11883` → `1883`（`mqtt_ws.rs:15` 已正确但 `main.rs:203-204` 遗留） |
+| **`.gitignore` 无效条目** | `和风天气API.md`/`数字孪生.md` 是已 tracked 文件，.gitignore 无效；加 `/logs/` |
+| **`和风天气API.md` / `数字孪生.md`** | `git rm --cached` + 物理删除（与 `API-INTEGRATION-PLAN.md` 重叠/已过时） |
+| **`deploy/run.sh`** | 删除（已被 `scripts/init.sh` 取代） |
+| **前端组件扁平→子目录** | `components/AIAnalysisReport/` 等旧路径删除，迁移到 `ai/`/`dashboard/`/`zone/` 子目录 |
+| **`deploy/run.sh` 已删除** | 由 `scripts/init.sh` 接管 |
+
+### 变更文件清单
+
+```commit 6fefd2c
+73 files changed, 2393 insertions(+), 1677 deletions(-)
 ```

@@ -204,11 +204,12 @@ agri-mqtt/src/          # MQTT 通信
 └── handler.rs          # 遥测/状态处理（QoS 1 + 通道解耦 + seq 去重）
 
 agri-ui/                # React SPA (TypeScript + Ant Design + ECharts)
-├── src/pages/          # 页面组件（含 AgentChat 对话页面）
-├── src/components/     # 通用组件
+├── src/pages/          # 页面组件（AI/ | Dashboard/ | DataQuery/ | Settings/ ...）
+├── src/components/     # 通用组件（ai/ | dashboard/ | zone/ | Layout/ | Charts/）
+├── src/config/         # 配置（metrics.ts 指标名/颜色/标签）
 ├── src/services/       # API 服务封装（含 apiLong 120s 超时）
-├── src/stores/         # Zustand 状态管理（dashboardStore + realtimeStore）
-├── src/theme/          # ECharts 主题配置
+├── src/stores/         # Zustand 状态管理（dashboardStore + realtimeStore + weatherStore）
+├── src/theme/          # ECharts 主题配置 + Ant Design 主题
 └── build → agri-server/static/
 
 esp32-firmware/src/     # ESP32 固件
@@ -235,7 +236,8 @@ agri-core/migrations/   # 数据库迁移（单一来源）
 ├── 004_boot_id.sql     # boot_id 列
 ├── 005_fix_dedup_index.sql
 ├── 006_entity_relations.sql
-└── 007_decision_engine.sql  # decision_log 表
+├── 007_decision_engine.sql  # decision_log 表
+└── 008_embedding.sql   # embedding 向量索引
 ```
 
 ## 设备模型
