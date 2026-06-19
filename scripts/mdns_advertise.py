@@ -10,7 +10,7 @@ import time
 
 MDNS_ADDR = "224.0.0.251"
 MDNS_PORT = 5353
-LOCAL_IP = "172.20.10.6"
+LOCAL_IP = "172.20.10.2"
 
 def get_wlan_ip():
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)

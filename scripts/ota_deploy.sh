@@ -16,10 +16,10 @@ ENV="esp32-${TARGET}"
 FW_BIN=".pio/build/${ENV}/firmware.bin"
 FW_VER=$(date +%Y%m%d-%H%M%S)
 SSH_TARGET="zero"
-PROJ_DIR="~/Agri-lot/esp32-firmware"
+PROJ_DIR="~/Agri-Iot/esp32-firmware"
 LOCAL_FW_DIR="/root/agri-iot/agri-server/static/firmware"
 PRIVATE_KEY="/root/agri-iot/esp32-firmware/keys/ota_private.pem"
-STATIC_URL="https://zero-1.taile2b316.ts.net/firmware"
+STATIC_URL="https://debian.taile2b316.ts.net/firmware"
 
 NODE_ID=""
 case "$TARGET" in

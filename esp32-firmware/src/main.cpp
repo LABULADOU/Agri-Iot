@@ -45,7 +45,7 @@ unsigned long lastLanResolve = 0;
 #define LAN_RESOLVE_INTERVAL 60000
 
 // 公网 Funnel WebSocket 配置（Tailscale Funnel → agri-server → MQTT broker）
-const char* FUNNEL_HOST = "zero-1.taile2b316.ts.net";
+const char* FUNNEL_HOST = "debian.taile2b316.ts.net";
 const int FUNNEL_PORT = 443;
 const char* FUNNEL_PATH = "/mqtt";
 
@@ -896,7 +896,7 @@ void resolveLanHost() {
         snprintf(LAN_HOST, sizeof(LAN_HOST), "%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
         Serial.printf("mDNS: agri-server.local → %s\n", LAN_HOST);
     } else {
-        strncpy(LAN_HOST, "172.20.10.13", sizeof(LAN_HOST));
+        strncpy(LAN_HOST, "172.20.10.2", sizeof(LAN_HOST));
         LAN_HOST[sizeof(LAN_HOST)-1] = '\0';
         Serial.printf("mDNS: agri-server.local 未找到, 使用 %s\n", LAN_HOST);
     }
