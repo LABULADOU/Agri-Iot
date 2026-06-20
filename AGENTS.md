@@ -836,3 +836,63 @@ decision/
 ```commit 6fefd2c
 73 files changed, 2393 insertions(+), 1677 deletions(-)
 ```
+
+## 硬件设计：太阳能 LoRa 传感器节点（2026-06-19）
+
+### 背景
+新硬件将替代现有的 ESP32+DHT22+RS485 节点（esp32-firmware v3.0）。设计为太阳能供电、LoRa 470MHz 远传、隔离 RS485、多传感器融合的独立节点。
+
+### 规格
+- PCB：80mm × 60mm，2 层
+- 供电：6V/5W 太阳能板 + CN3791 MPPT + 18650 2S
+- 主控：ESP32-WROOM-32
+- 远传：WH-L101-L-H20 (LoRa 470MHz)
+- 近传：MAX485 + ADuM1201 隔离 RS485
+- 传感器：SHT30 (温湿度) + BH1750 (光照) + MH-Z19B (CO₂) + DS3231 (RTC) + MB85RC256V (FRAM)
+- 隔离 12V 输出：B0512XT-1W + AO3401 P-MOS (GPIO14 → TLP185 光耦控制)
+
+### 电源树
+```
+太阳能板 6V/5W → CN3791 (MPPT) → 18650 2S (8.4V)
+                                  ├→ MP2307 → 5V → ME3116 → 3.3V
+                                  ├→ B0512XT-1W → 隔离12V (RS485/输出)
+                                  └→ USB-C (CP2102 调试)
+```
+
+### 引脚分配
+| 功能 | ESP32 引脚 |
+|------|-----------|
+| I²C (SHT30/BH1750/DS3231/FRAM) | GPIO21(SDA), GPIO22(SCL) |
+| UART1 (MH-Z19B CO₂) | GPIO1(TX), GPIO3(RX) |
+| UART2 (WH-L101 LoRa) | GPIO17(TX), GPIO16(RX) |
+| 隔离 RS485 (ADuM1201) | GPIO27(VIA), GPIO26(VIB) |
+| 12V 输出 (TLP185→AO3401) | GPIO14 |
+
+### KiCad 项目文件
+
+```bash
+esp32-hardware/
+├── esp32-solar-node.kicad_pro    # KiCad 8 项目
+├── esp32-solar-node.kicad_sym    # 符号库 (19 个自定义符号)
+├── esp32-solar-node.kicad_sch    # 单页自包含原理图
+└── generate_kicad.py             # S-表达式生成器
+```
+
+- 原理图为 Python 生成，19 个符号全部嵌入，（标准库无对应符号的有 CN3791、WH-L101-L-H20、B0512XT-1W、MB85RC256V、ME3116）
+- 含元件放置 + 网标，打开后需在 KiCad 中补画导线和被动元件
+
+### 与现有项目的关联
+新硬件将运行全新的固件（esp32-firmware v4.0+），支持：
+- LoRa 470MHz 远距离数据回传（替代现有 MQTT/Tailscale）
+- 太阳能供电下的 Deep Sleep 低功耗模式（目标 <10μA）
+- RS485 土壤三合一传感器（兼容现有 Modbus 协议）
+- 离线 FRAM 缓存（替代现有 LittleFS）
+
+### 变更文件清单
+```
+新增: esp32-hardware/esp32-solar-node.kicad_pro   # KiCad 项目文件
+新增: esp32-hardware/esp32-solar-node.kicad_sym   # 符号库
+新增: esp32-hardware/esp32-solar-node.kicad_sch   # 原理图
+新增: esp32-hardware/generate_kicad.py            # 生成器脚本
+文档: AGENTS.md, README.md                        # 硬件设计记录
+```

@@ -1,0 +1,40 @@
+(kicad_project (version 20230124)
+	(title_block
+		(title "ESP32 Solar LoRa Sensor Node")
+		(company "Agri-IoT")
+		(comment 1 "Replaces existing DHT22+RS485 ESP32 node")
+		(comment 2 "Solar powered, LoRa 470MHz, Isolated RS485, I2C sensors")
+	)
+	(board
+		(board_thickness 1.6)
+		(edge_connector_visible no)
+	)
+	(schematic
+		(ucd_import_timestamp 0)
+	)
+	(pcb
+		(page_layout "A4")
+		(plot
+			(plot_sheet_reference uom)
+		)
+	)
+	(libraries
+		(library
+			(logical "esp32-solar-node")
+			(type "Sym")
+			(uri "${KIPRJMOD}/esp32-solar-node.kicad_sym")
+		)
+	)
+	(design_settings
+		(defaults
+			(board_outline_line_width 0.1)
+			(track_min_width 0.2)
+			(via_min_size 0.4)
+			(via_min_drill 0.3)
+			(clearance_min 0.2)
+			(edge_clearance 0.2)
+			(text_std_size 1.0)
+			(text_table_line_width 0.15)
+		)
+	)
+)

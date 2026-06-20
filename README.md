@@ -34,6 +34,7 @@
 | **agri-mqtt**      | Rust + rumqttd/rumqttc  | MQTT Broker（独立进程）和客户端     |
 | **agri-ui**        | React + TypeScript + Ant Design + ECharts | 前端 SPA（预构建到 static/） |
 | **esp32-firmware** | Arduino + ESP32         | 传感器采集 + 纯 MQTT（v4.0，C++）      |
+| **esp32-hardware** | KiCad 8                 | 太阳能 LoRa 传感器节点原理图（替代现有硬件） |
 | **serial_bridge**  | Python                  | ESP32 串口数据 → HTTP 桥接 |
 
 ## 快速启动
@@ -217,6 +218,12 @@ esp32-firmware/src/     # ESP32 固件
 ├── ota_public.h        # OTA 验证公钥
 keys/                   # OTA 签名密钥
 partitions/             # OTA 分区表
+
+esp32-hardware/         # 硬件设计（KiCad 8 原理图）
+├── esp32-solar-node.kicad_pro  # 项目文件
+├── esp32-solar-node.kicad_sym  # 符号库（19 个自定义符号）
+├── esp32-solar-node.kicad_sch  # 单页原理图
+└── generate_kicad.py           # S-表达式生成器（Python）
 
 scripts/                # 工具脚本
 ├── init.sh             # 进程管理器（托管 broker + server）
