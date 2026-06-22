@@ -4,6 +4,7 @@ import type {
   WeatherData, WeatherForecastDay, WeatherWarning, MinutelyForecast, HourlyPrecip, GeoCity,
   Device, Rule, QueryParams,
   EmergencyStatusResponse, KnowledgeSearchResult, ControlCaseRecord, AgentResponse, KnowledgeNoteMeta,
+  VarietyResponse,
 } from '../types';
 
 const api = axios.create({
@@ -107,6 +108,8 @@ export const aiApi = {
     api.get<{ notes: KnowledgeNoteMeta[] }>('/ai/knowledge/obsidian/list').then(res => res.data),
   readNote: (path: string) =>
     api.get<{ path: string; content: string }>('/ai/knowledge/obsidian/note', { params: { path } }).then(res => res.data),
+  chrysanthemumVarieties: () =>
+    api.get<VarietyResponse>('/ai/knowledge/chrysanthemum').then(res => res.data),
   agentQuery: (query: string, history?: { role: string; content: string }[]) =>
     apiLong.post<AgentResponse>('/ai/agent/query', { query, history }).then(res => res.data),
   agentQueryStream: async (query: string, onChunk: (text: string) => void, onDone: (resp: AgentResponse) => void, signal?: AbortSignal, history?: { role: string; content: string }[]) => {

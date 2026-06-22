@@ -896,3 +896,51 @@ esp32-hardware/
 新增: esp32-hardware/generate_kicad.py            # 生成器脚本
 文档: AGENTS.md, README.md                        # 硬件设计记录
 ```
+
+## 实时数据修复 + 品种特性表（2026-06-22）
+
+### DataQuery 实时数据修复
+
+| # | 问题 | 修复 | 文件 |
+|---|------|------|------|
+| 1 | **WS 新读数被 `dateRange[1]` 过滤** — `filteredReadings` 的时间上限用 `dateRange[1]`（组件挂载时冻结），WS 推送的新 CSV 读数时间戳大于该值被丢弃 | 改为 `dayjs().valueOf()` 动态计算 | `useRealtimeReadings.ts` |
+| 2 | **Table 整体闪烁** — `key={rt-${rawCount}}` 使 Table 每 10 秒拆卸/重建 | 移除 key prop，React 默认 prop diff | `DataQuery.tsx` |
+| 3 | **每 10 秒替换整个 buffer** — `setInterval(fetchInitial, 10000)` 导致频闪 | 移除 poll interval，仅保留初始 fetch | `useRealtimeReadings.ts` |
+| 4 | **`Request aborted` 日志** — Effect 重跑时 in-flight fetch 被取消吐错误日志 | 添加 `cancelled` 守卫，静默忽略 | `useRealtimeReadings.ts` |
+| 5 | **聚合查询时区不一致** — strftime 格式化输出 UTC 字符串，前端 dayjs 无法正确转本地 | 改为返回数值时间戳（`timestamp/3600*3600`） | `routes.rs` |
+
+### 品种特性表（知识库检索）
+
+| # | 变更 | 说明 |
+|---|------|------|
+| 1 | **Obsidian 知识库** | `agri-knowledge/切花菊/00-品种特性表.md` — 142 个菊花品种数据 |
+| 2 | **后端 API** | `GET /api/v1/ai/knowledge/chrysanthemum` — 解析 md 表格为 JSON |
+| 3 | **前端依赖** | 安装 `pinyin-pro` 拼音转换库 |
+| 4 | **`VarietyTable` 组件** | 拼音首字母检索 + 中文字段匹配 + 逐项导航 + 高亮滚动定位 |
+| 5 | **知识库集成** | KnowledgeBase 检测 `00-品种特性表.md` 路径，替换为交互式表格 |
+| 6 | **UI 简化** | 搜索框 `size="middle"`，导航栏字体缩小，紧凑布局 |
+
+### 品种检索交互
+```
+[搜索框: 输入品种名或拼音首字母检索…]
+共 142 个品种  ·  找到 5 个匹配  [上一个]  1/5  [下一个]
+[品种表格 — 无分页，连续滚动，匹配行高亮定位]
+```
+- 支持中文子串 + 拼音首字母 + 拼音全拼模糊匹配
+- 导航按钮逐项跳转，`scrollIntoView` 平滑滚动
+- `antd Table pagination: false`，全部品种在同一滚动容器
+
+### 变更文件清单
+```
+修改: agri-server/src/ai_routes.rs              # chrysanthemum API 端点
+修改: agri-server/src/routes.rs                 # 聚合查询数值时间戳
+修改: agri-ui/src/hooks/useRealtimeReadings.ts  # poll 移除 + dateRange 修复 + cancelled 守卫
+修改: agri-ui/src/pages/DataQuery/DataQuery.tsx # Table key 移除 + tablePage
+修改: agri-ui/src/pages/KnowledgeBase/KnowledgeBase.tsx # VarietyTable 集成
+修改: agri-ui/src/services/api.ts               # chrysanthemumVarieties()
+修改: agri-ui/src/types/index.ts                # ChrysanthemumVariety 类型
+修改: agri-ui/package.json                      # pinyin-pro, tslib
+新增: agri-ui/src/pages/KnowledgeBase/VarietyTable.tsx     # 品种检索组件
+新增: agri-ui/src/pages/KnowledgeBase/VarietyTable.module.css
+新增: agri-knowledge/切花菊/00-品种特性表.md               # 菊花品种数据
+```

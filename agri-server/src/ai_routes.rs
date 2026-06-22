@@ -65,6 +65,23 @@ struct EmergencyResponse {
     night_additional_contact: bool,
 }
 
+#[derive(Debug, Serialize)]
+struct VarietyResponse {
+    varieties: Vec<VarietyItem>,
+}
+
+#[derive(Debug, Serialize)]
+struct VarietyItem {
+    name: String,
+    growth: String,
+    weeks: String,
+    color: String,
+    flower_type: String,
+    cold_tolerant: String,
+    heat_tolerant: String,
+    disease_resistance: String,
+}
+
 // ========== 路由 ==========
 
 pub fn create_router(state: AppState) -> Router {
@@ -77,6 +94,7 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/v1/ai/knowledge/obsidian/note", get(obsidian_read_note))
         .route("/api/v1/ai/knowledge/obsidian/search", get(obsidian_search))
         .route("/api/v1/ai/knowledge/obsidian/case", post(obsidian_add_case))
+        .route("/api/v1/ai/knowledge/chrysanthemum", get(chrysanthemum_varieties))
         .route("/api/v1/ai/ventilation/config/:area_id", get(ventilation_config))
         .route("/api/v1/ai/ventilation/calibrate/:device_id", post(calibrate))
         .route("/api/v1/ai/ec/analyze/:area_id", get(ec_analyze))
@@ -705,6 +723,61 @@ async fn get_vent_device_id(state: &AppState, area_id: &str, vent_type: &str) ->
         .fetch_optional(&state.pool)
         .await;
     result.ok().flatten().and_then(|r| r.0)
+}
+
+/// GET /api/v1/ai/knowledge/chrysanthemum — 品种特性表
+async fn chrysanthemum_varieties(
+    State(state): State<AppState>,
+) -> Result<Json<VarietyResponse>, impl IntoResponse> {
+    let vault_path = match &state.obsidian_vault_path {
+        Some(p) => p.clone(),
+        None => return Err(not_found(Some("OBSIDIAN_VAULT_PATH not set"))),
+    };
+
+    let file_path = std::path::Path::new(&vault_path).join("切花菊/00-品种特性表.md");
+    let content = match tokio::fs::read_to_string(&file_path).await {
+        Ok(c) => c,
+        Err(_) => return Err(not_found(Some("品种特性表未找到"))),
+    };
+
+    let mut varieties = Vec::new();
+    let mut in_table = false;
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("|") && trimmed.ends_with("|") {
+            // Skip header row and separator row
+            if !in_table {
+                in_table = true;
+                continue;
+            }
+            if trimmed.contains("---") {
+                continue;
+            }
+            let cells: Vec<&str> = trimmed
+                .split('|')
+                .filter(|s| !s.trim().is_empty())
+                .map(|s| s.trim())
+                .collect();
+            if cells.len() >= 8 {
+                varieties.push(VarietyItem {
+                    name: cells[0].to_string(),
+                    growth: cells[1].to_string(),
+                    weeks: cells[2].to_string(),
+                    color: cells[3].to_string(),
+                    flower_type: cells[4].to_string(),
+                    cold_tolerant: cells[5].to_string(),
+                    heat_tolerant: cells[6].to_string(),
+                    disease_resistance: cells[7].to_string(),
+                });
+            }
+        } else if in_table {
+            // Table ended
+            break;
+        }
+    }
+
+    Ok(Json(VarietyResponse { varieties }))
 }
 
 #[cfg(test)]

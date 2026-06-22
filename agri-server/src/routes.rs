@@ -208,47 +208,32 @@ async fn readings_aggregate(
     Query(query): Query<AggregateQuery>,
 ) -> impl IntoResponse {
     let period = query.period.as_deref().unwrap_or("hour");
-    let fmt = match period {
-        "month" => "%Y-%m",
-        "week" => "%Y-W%W",
-        "day" => "%Y-%m-%d",
-        "10min" => "",
-        _ => "%Y-%m-%d %H:00:00",
-    };
     let now = chrono::Utc::now().timestamp();
     let start = query.start.unwrap_or(now - 86400);
     let end = query.end.unwrap_or(now);
 
-    let rows = if period == "10min" {
-        sqlx::query_as::<_, (String, String, f64, f64, f64, i64)>(
-            "SELECT strftime('%Y-%m-%d %H:%M', datetime(((timestamp / 600) * 600), 'unixepoch')) as bucket, \
-             metric, MAX(value), MIN(value), AVG(value), COUNT(*) \
-             FROM sensor_readings \
-             WHERE device_id = ? AND metric = ? AND timestamp >= ? AND timestamp <= ? \
-             GROUP BY bucket, metric ORDER BY bucket ASC"
-        )
-        .bind(&query.device_id)
-        .bind(&query.metric)
-        .bind(start)
-        .bind(end)
-        .fetch_all(&state.pool)
-        .await
-    } else {
-        sqlx::query_as::<_, (String, String, f64, f64, f64, i64)>(
-            "SELECT strftime(?, datetime(timestamp, 'unixepoch')) as bucket, \
-             metric, MAX(value), MIN(value), AVG(value), COUNT(*) \
-             FROM sensor_readings \
-             WHERE device_id = ? AND metric = ? AND timestamp >= ? AND timestamp <= ? \
-             GROUP BY bucket, metric ORDER BY bucket ASC"
-        )
-        .bind(fmt)
-        .bind(&query.device_id)
-        .bind(&query.metric)
-        .bind(start)
-        .bind(end)
-        .fetch_all(&state.pool)
-        .await
+    let bucket_expr = match period {
+        "10min" => "CAST(((timestamp / 600) * 600) AS INTEGER)",
+        "hour" => "CAST((timestamp / 3600) * 3600 AS INTEGER)",
+        "day" => "CAST((timestamp / 86400) * 86400 AS INTEGER)",
+        "week" => "CAST((timestamp - ((strftime('%w', datetime(timestamp, 'unixepoch')) + 6) % 7) * 86400) AS INTEGER)",
+        "month" => "CAST(strftime('%s', datetime(timestamp, 'unixepoch', 'start of month')) AS INTEGER)",
+        _ => "CAST((timestamp / 3600) * 3600 AS INTEGER)",
     };
+    let sql = format!(
+        "SELECT {} as bucket, metric, MAX(value), MIN(value), AVG(value), COUNT(*) \
+         FROM sensor_readings \
+         WHERE device_id = ? AND metric = ? AND timestamp >= ? AND timestamp <= ? \
+         GROUP BY bucket, metric ORDER BY bucket ASC",
+        bucket_expr
+    );
+    let rows = sqlx::query_as::<_, (i64, String, f64, f64, f64, i64)>(&sql)
+        .bind(&query.device_id)
+        .bind(&query.metric)
+        .bind(start)
+        .bind(end)
+        .fetch_all(&state.pool)
+        .await;
 
     match rows {
         Ok(rows) => {

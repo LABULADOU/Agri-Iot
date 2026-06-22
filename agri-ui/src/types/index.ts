@@ -327,6 +327,21 @@ export interface KnowledgeNote extends KnowledgeNoteMeta {
   content: string;
 }
 
+export interface ChrysanthemumVariety {
+  name: string;
+  growth: string;
+  weeks: string;
+  color: string;
+  flower_type: string;
+  cold_tolerant: string;
+  heat_tolerant: string;
+  disease_resistance: string;
+}
+
+export interface VarietyResponse {
+  varieties: ChrysanthemumVariety[];
+}
+
 export type TimePeriod = 'hour' | 'day' | 'week' | 'month' | '10min' | 'custom';
 
 export type ViewMode = 'ten_min' | 'daily' | 'realtime';

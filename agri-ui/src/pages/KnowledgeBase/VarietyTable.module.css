@@ -1,0 +1,35 @@
+.container {
+  padding: 16px 0;
+}
+
+.loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 300px;
+}
+
+.searchInput {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  margin-bottom: 2px;
+  background: #fff;
+}
+
+.navBar {
+  position: sticky;
+  top: 36px;
+  z-index: 10;
+  background: #fff;
+  padding: 2px 0 6px;
+  font-size: 13px;
+}
+
+.highlightRow {
+  background-color: #fff9c4 !important;
+}
+
+.normalRow {
+  background-color: transparent;
+}

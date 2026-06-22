@@ -6,10 +6,13 @@ import remarkGfm from 'remark-gfm';
 import type { TreeProps } from 'antd';
 import { aiApi } from '../../services/api';
 import type { KnowledgeNoteMeta, KnowledgeNote } from '../../types';
+import VarietyTable from './VarietyTable';
 import styles from './KnowledgeBase.module.css';
 
 const { Text, Title } = Typography;
 const { Search } = Input;
+
+const VARIETY_TABLE_PATH = '切花菊/00-品种特性表.md';
 
 const TYPE_COLORS: Record<string, string> = {
   '通用知识': 'green',
@@ -445,7 +448,9 @@ const KnowledgeBase: React.FC = () => {
               </div>
             )}
 
-            <Title level={4} className={styles.noteTitle}>{selectedNote.title}</Title>
+            {selectedNote.path !== VARIETY_TABLE_PATH && (
+              <Title level={4} className={styles.noteTitle}>{selectedNote.title}</Title>
+            )}
             {(() => {
               const meta = selectedNote;
               const knowType = meta.knowledge_type;
@@ -462,19 +467,23 @@ const KnowledgeBase: React.FC = () => {
             })()}
 
             <div className={styles.markdownBody}>
-              <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                components={{
-                  h1: ({ children, ...props }) => <HeadingRenderer level={1} {...props}>{children}</HeadingRenderer>,
-                  h2: ({ children, ...props }) => <HeadingRenderer level={2} {...props}>{children}</HeadingRenderer>,
-                  h3: ({ children, ...props }) => <HeadingRenderer level={3} {...props}>{children}</HeadingRenderer>,
-                  h4: ({ children, ...props }) => <HeadingRenderer level={4} {...props}>{children}</HeadingRenderer>,
-                  h5: ({ children, ...props }) => <HeadingRenderer level={5} {...props}>{children}</HeadingRenderer>,
-                  h6: ({ children, ...props }) => <HeadingRenderer level={6} {...props}>{children}</HeadingRenderer>,
-                }}
-              >
-                {selectedNote.content || ''}
-              </ReactMarkdown>
+              {selectedNote.path === VARIETY_TABLE_PATH ? (
+                <VarietyTable />
+              ) : (
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  components={{
+                    h1: ({ children, ...props }) => <HeadingRenderer level={1} {...props}>{children}</HeadingRenderer>,
+                    h2: ({ children, ...props }) => <HeadingRenderer level={2} {...props}>{children}</HeadingRenderer>,
+                    h3: ({ children, ...props }) => <HeadingRenderer level={3} {...props}>{children}</HeadingRenderer>,
+                    h4: ({ children, ...props }) => <HeadingRenderer level={4} {...props}>{children}</HeadingRenderer>,
+                    h5: ({ children, ...props }) => <HeadingRenderer level={5} {...props}>{children}</HeadingRenderer>,
+                    h6: ({ children, ...props }) => <HeadingRenderer level={6} {...props}>{children}</HeadingRenderer>,
+                  }}
+                >
+                  {selectedNote.content || ''}
+                </ReactMarkdown>
+              )}
             </div>
           </div>
         ) : (
