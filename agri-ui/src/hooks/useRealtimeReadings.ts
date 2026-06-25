@@ -99,7 +99,7 @@ export function useRealtimeReadings({
         }
 
         // 2. Fetch raw readings for granular recent data
-        const raw = await nodeApi.getReadings(deviceId, { limit: 5000 });
+        const raw = await nodeApi.getReadings(deviceId, { limit: 2000 });
         if (cancelled) return;
 
         const rawReadings = raw.map(r => ({

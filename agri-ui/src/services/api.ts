@@ -34,7 +34,7 @@ export const nodeApi = {
   update: (id: string, data: Partial<SensorNode>) => api.put<SensorNode>(`/devices/${id}`, data).then(res => res.data),
   delete: (id: string) => api.delete(`/devices/${id}`),
   getReadings: (id: string, params: { metric?: string; start?: string; end?: string; limit?: number }) =>
-    api.get<SensorReading[]>(`/devices/${id}/readings`, { params }).then(res => res.data),
+    apiLong.get<SensorReading[]>(`/devices/${id}/readings`, { params }).then(res => res.data),
 };
 
 // Aggregated Data APIs

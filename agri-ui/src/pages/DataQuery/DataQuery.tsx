@@ -14,7 +14,7 @@ const { RangePicker } = DatePicker;
 const metricOptions = metricSelectOptions;
 
 const viewModes: Record<ViewMode, { period: 'hour' | '10min'; defaultRangeHours: number; isRealtime: boolean }> = {
-  realtime: { period: 'hour',  defaultRangeHours: 24,  isRealtime: true },
+  realtime: { period: 'hour',  defaultRangeHours: 6,   isRealtime: true },
   ten_min:  { period: '10min', defaultRangeHours: 72,  isRealtime: false },
   daily:    { period: 'hour',  defaultRangeHours: 168, isRealtime: false },
 };
@@ -26,7 +26,7 @@ const DataQuery: React.FC = () => {
   const [selectedMetrics, setSelectedMetrics] = useState<string[]>(['temperature', 'humidity']);
   const [viewMode, setViewMode] = useState<ViewMode>('realtime');
   const [dateRange, setDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs]>([
-    dayjs().subtract(24, 'hour'),
+    dayjs().subtract(6, 'hour'),
     dayjs(),
   ]);
 
