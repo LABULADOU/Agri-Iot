@@ -953,6 +953,52 @@ impl EntityRelation {
     }
 }
 
+// ========== 农事操作日志 ==========
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FarmOpStatus {
+    Planned,
+    InProgress,
+    Completed,
+    Cancelled,
+}
+
+impl_sqlx_enum!(FarmOpStatus,
+    Planned => "planned",
+    InProgress => "in_progress",
+    Completed => "completed",
+    Cancelled => "cancelled",
+);
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct FarmOperation {
+    pub id: UuidText,
+    pub area_id: UuidText,
+    pub log_date: String,
+    pub log_time: String,
+    pub category: String,
+    pub content: String,
+    pub operator: String,
+    pub status: FarmOpStatus,
+    pub weather: String,
+    pub crop_status: String,
+    pub notes: String,
+    pub details: JsonValue,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct FarmOpTemplate {
+    pub id: UuidText,
+    pub name: String,
+    pub category: String,
+    pub details: JsonValue,
+    pub sort_order: i32,
+    pub created_at: DateTime<Utc>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -1,14 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { Table, Button, Space, Input, Modal, Form, Select, message, Popconfirm, Tag, Typography, Row, Col } from 'antd';
 import { PlusOutlined, SearchOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
-import { nodeApi } from '../../services/api';
-import type { SensorNode } from '../../types';
+import { zoneApi, nodeApi } from '../../services/api';
+import type { Zone, SensorNode } from '../../types';
 import styles from './NodeList.module.css';
 
 const { Title } = Typography;
 
 const NodeList: React.FC = () => {
   const [nodes, setNodes] = useState<SensorNode[]>([]);
+  const [zones, setZones] = useState<Zone[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [modalVisible, setModalVisible] = useState(false);
@@ -17,7 +18,17 @@ const NodeList: React.FC = () => {
 
   useEffect(() => {
     fetchNodes();
+    fetchZones();
   }, []);
+
+  const fetchZones = async () => {
+    try {
+      const data = await zoneApi.list();
+      setZones(data);
+    } catch {
+      // zones not available, use defaults
+    }
+  };
 
   const fetchNodes = async () => {
     setLoading(true);
@@ -71,7 +82,7 @@ const NodeList: React.FC = () => {
   };
 
   const filteredNodes = nodes.filter(node =>
-    node.name.includes(searchText) || node.id.includes(searchText)
+    !searchText || node.name.includes(searchText) || node.id.includes(searchText)
   );
 
   const columns = [
@@ -131,11 +142,20 @@ const NodeList: React.FC = () => {
               </Form.Item>
             </Col>
             <Col xs={24} sm={12}>
-              <Form.Item name="zoneId" label="所属区域" rules={[{ required: true }]}>
-                <Select>
-                  <Select.Option value="1">A区 - 番茄大棚</Select.Option>
-                  <Select.Option value="2">B区 - 黄瓜大棚</Select.Option>
-                  <Select.Option value="3">C区 - 草莓温室</Select.Option>
+              <Form.Item name="zoneId" label="所属区域" rules={[{ required: true }]}
+                extra={zones.length === 0 ? '请先在设置中添加区域' : undefined}>
+                <Select placeholder="选择区域">
+                  {zones.length > 0 ? (
+                    zones.map(z => (
+                      <Select.Option key={z.id} value={z.id}>{z.name}</Select.Option>
+                    ))
+                  ) : (
+                    <>
+                      <Select.Option value="1">A区 - 番茄大棚</Select.Option>
+                      <Select.Option value="2">B区 - 黄瓜大棚</Select.Option>
+                      <Select.Option value="3">C区 - 草莓温室</Select.Option>
+                    </>
+                  )}
                 </Select>
               </Form.Item>
             </Col>

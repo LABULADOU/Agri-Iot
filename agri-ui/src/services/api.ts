@@ -12,7 +12,7 @@ const api = axios.create({
   timeout: 10000,
 });
 
-const apiLong = axios.create({
+export const apiLong = axios.create({
   baseURL: '/api/v1',
   timeout: 120000,
 });
@@ -65,9 +65,9 @@ export const dataApi = {
 
 // Weather APIs — returns raw QWeather JSON from backend proxy
 export const weatherApi = {
-  getNow: (location: string = '101010100') =>
+  getNow: (location: string = '39.92,116.41') =>
     api.get<{ code: string; now: Record<string, string> }>('/weather/now', { params: { location } }).then(res => res.data),
-  getForecast3d: (location: string = '101010100') =>
+  getForecast3d: (location: string = '39.92,116.41') =>
     api.get<{ code: string; daily: Record<string, string>[] }>('/weather/3d', { params: { location } }).then(res => res.data),
   getMinutely: (location: string = '101010100') =>
     api.get<{ code: string; summary: string; hourly: HourlyPrecip[] }>('/weather/minutely', { params: { location } }).then(res => res.data),
@@ -123,6 +123,29 @@ export const aiApi = {
     onChunk(data.answer);
     onDone(data);
   },
+};
+
+// Farm Log APIs
+export const farmApi = {
+  listOps: (params?: { area_id?: string; date_from?: string; date_to?: string; category?: string; page?: number; limit?: number }) =>
+    api.get<{ operations: import('../types').FarmOperation[]; page: number; limit: number }>('/farm/operations', { params }).then(res => res.data),
+  getOp: (id: string) =>
+    api.get<import('../types').FarmOperation>(`/farm/operations/${id}`).then(res => res.data),
+  createOp: (data: {
+    area_id: string; log_date: string; category: string; content: string;
+    log_time?: string; operator?: string; weather?: string; crop_status?: string;
+    notes?: string; details?: Record<string, unknown>;
+  }) => api.post('/farm/operations', data).then(res => res.data),
+  updateOp: (id: string, data: Record<string, unknown>) =>
+    api.put(`/farm/operations/${id}`, data).then(res => res.data),
+  deleteOp: (id: string) => api.delete(`/farm/operations/${id}`),
+  listTemplates: (category?: string) =>
+    api.get<import('../types').FarmOpTemplate[]>('/farm/templates', { params: { category } }).then(res => res.data),
+  createTemplate: (data: { name: string; category: string; details?: Record<string, unknown>; sort_order?: number }) =>
+    api.post('/farm/templates', data).then(res => res.data),
+  updateTemplate: (id: string, data: Record<string, unknown>) =>
+    api.put(`/farm/templates/${id}`, data).then(res => res.data),
+  deleteTemplate: (id: string) => api.delete(`/farm/templates/${id}`),
 };
 
 export default api;

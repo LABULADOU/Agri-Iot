@@ -62,3 +62,26 @@
   border-radius: 12px;
   padding: var(--space-4, 16px);
 }
+
+/* ========== Empty States ========== */
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 16px;
+  text-align: center;
+}
+
+.emptyIcon {
+  font-size: 48px;
+  color: #D1D5DB;
+  margin-bottom: 12px;
+}
+
+.loadingSpinner {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 200px;
+}

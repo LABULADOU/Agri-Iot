@@ -43,7 +43,7 @@ const VarietyTable: React.FC = () => {
     if (v.name.toLowerCase().includes(q)) return true;
     if (v.color.includes(q)) return true;
     if (v.flower_type.includes(q)) return true;
-    if (match(v.name, q, { precision: 'any', vague: true })) return true;
+    if (match(v.name, q, { precision: 'any', v: true })) return true;
     return false;
   }, []);
 
@@ -192,9 +192,9 @@ const VarietyTable: React.FC = () => {
         rowClassName={(_record, index) => {
           return index === targetIndex ? styles.highlightRow : styles.normalRow;
         }}
-        onRow={(record, index) => ({
+        onRow={(_record, index) => ({
           'data-row-key': index,
-        })}
+        } as React.HTMLAttributes<HTMLElement>)}
       />
     </div>
   );

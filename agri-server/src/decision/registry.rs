@@ -28,6 +28,7 @@ pub enum WindState {
 }
 
 #[derive(Debug, Clone)]
+// TODO(decision): StateRegistry 定义了雨/风状态机，但 start() 中 `let _reg` 丢弃了实例，未接入事件循环
 pub struct DeviceState {
     pub rain: RainState,
     pub wind: WindState,

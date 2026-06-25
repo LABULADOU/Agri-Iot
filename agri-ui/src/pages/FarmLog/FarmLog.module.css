@@ -1,0 +1,177 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3, 12px);
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.toolbarLeft {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex: 1;
+}
+
+.toolbarRight {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.operationList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dateGroup {
+  background: var(--bg-card, #fff);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.dateHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  background: var(--bg-elevated, #f8f9fa);
+  border-bottom: 1px solid var(--border-color, #E5E7EB);
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.opCard {
+  display: grid;
+  grid-template-columns: 60px 70px 1fr auto;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border-color, #E5E7EB);
+  cursor: pointer;
+  transition: background 0.15s;
+  align-items: start;
+}
+
+.opCard:last-child {
+  border-bottom: none;
+}
+
+.opCard:hover {
+  background: var(--bg-elevated, #f8f9fa);
+}
+
+.opTime {
+  font-size: 12px;
+  color: var(--text-secondary, #6B7280);
+  white-space: nowrap;
+}
+
+.opCategory {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.categoryPesticide { background: #fff1f0; color: #cf1322; }
+.categoryFertilizer { background: #f6ffed; color: #389e0d; }
+.categoryIrrigation { background: #e6f7ff; color: #096dd9; }
+.categoryPruning { background: #fff7e6; color: #d46b08; }
+.categoryHarvest { background: #fffbe6; color: #d4b106; }
+.categoryOther { background: #f5f5f5; color: #595959; }
+
+.opContent {
+  font-size: 13px;
+  line-height: 1.4;
+  min-width: 0;
+}
+
+.opContent .contentText {
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
+.opMeta {
+  font-size: 11px;
+  color: var(--text-tertiary, #9CA3AF);
+  white-space: nowrap;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  color: var(--text-tertiary, #9CA3AF);
+}
+
+.emptyIcon {
+  font-size: 48px;
+  margin-bottom: 12px;
+  opacity: 0.3;
+}
+
+.fullWidth {
+  width: 100%;
+}
+
+.detailGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 16px;
+}
+
+.detailLabel {
+  font-size: 12px;
+  color: var(--text-tertiary, #9CA3AF);
+}
+
+.detailValue {
+  font-size: 13px;
+}
+
+.detailSection {
+  margin-bottom: 12px;
+}
+
+.detailSectionTitle {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary, #6B7280);
+  margin-bottom: 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border-color, #E5E7EB);
+}
+
+.detailTable {
+  width: 100%;
+  font-size: 12px;
+  border-collapse: collapse;
+}
+
+.detailTable th {
+  text-align: left;
+  padding: 4px 8px;
+  background: var(--bg-elevated, #f8f9fa);
+  border-bottom: 1px solid var(--border-color, #E5E7EB);
+  font-weight: 600;
+  font-size: 11px;
+  color: var(--text-tertiary, #9CA3AF);
+}
+
+.detailTable td {
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border-color, #E5E7EB);
+}

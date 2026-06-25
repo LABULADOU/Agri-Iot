@@ -134,7 +134,7 @@ ESP32 → POST /api/v1/telemetry → process_telemetry() → DB写入
 
 ### 天气面板
 - TopBar 内嵌双行布局（row1 状态栏 + row2 天气信息）
-- 数据源：和风天气免费套餐（5分钟轮询）
+- 数据源：Open-Meteo 免费（10,000请求/天，5分钟轮询，无需 API Key）
 - 推荐策略：`/weather/now` + `/weather/3d` + `/weather/24h`(代替minutely)
 - `safe_proxy()` 处理免费套餐 403 → 200+空数据（minutely/warning）
 - 天气刷新时间显示在 row1 左侧
@@ -228,7 +228,7 @@ Tailscale Funnel: https://zero-1.taile2b316.ts.net
 - 内存仅 1.8GB，并行 rustc 进程容易 OOM，编译需单线程或低并行度
 - `ObsidianKnowledge::safe_path()` 需要 vault 路径存在才能 canonicalize，否则回退到字符串过滤
 - 前端 metric 名须与 DB 一致（`temperature` vs `air_temp`），`dataApi.query()` 已不传 metric 参数，由前端 `useMemo` 过滤
-- QWeather 免费套餐不支持 `/weather/minutely` 和 `/weather/warning`，后端 `safe_proxy()` 返回 200+空数据
+- Open-Meteo 不支持 `weather/warning` 和 `weather/air`，后端返回空数据；`geo` 用 Open-Meteo Geocoding API
 - `dashboard/node-readings` 每次返回24h全量数据会 OOM，已修复为只返回最新值
 
 ## 审查修复记录（2026-05-19）
@@ -289,7 +289,7 @@ Tailscale Funnel: https://zero-1.taile2b316.ts.net
 | 1 | **SSE 事件携带 readings** | `telemetry.rs` 广播包含 `readings: [{metric,value,unit}]` |
 | 2 | **dashboardStore SSE 订阅** | `fetchAll()` 启动 SSE 监听，`type:"telemetry"` 事件原地 patch `nodeReadings` |
 | 3 | **TopBar 天气面板重写** | 双行布局：row1=时间+SSE状态，row2=实况+3天预报+逐时降水+预警 |
-| 4 | **QWeather 免费套餐兼容** | `safe_proxy()` 返回 200+空数据代替 502；minutely 替换为 24h 接口 |
+| 4 | **和风天气→Open-Meteo 迁移** | `weather.rs` 重写为 Open-Meteo API；WMO 码→中文天气映射；`lat,lon` 替代 QWeather ID；默认北京 `39.92,116.41` |
 | 5 | **ZoneDetail 实时数据** | 订阅 `useRealtimeStore.readings`，SSE 推送时自动合并最新值 |
 | 6 | **DataQuery 指标名修正** | `air_temp→temperature` 等与 DB 对齐，图表不再空白 |
 | 7 | **DataQuery 折线图切换** | `key` + `notMerge: true`，取消勾选时正确隐藏折线 |
@@ -913,7 +913,7 @@ esp32-hardware/
 
 | # | 变更 | 说明 |
 |---|------|------|
-| 1 | **Obsidian 知识库** | `agri-knowledge/切花菊/00-品种特性表.md` — 142 个菊花品种数据 |
+| 1 | **Obsidian 知识库** | `agri-knowledge/切花菊/01-品种选择与特性解析.md` — 142 个菊花品种数据 |
 | 2 | **后端 API** | `GET /api/v1/ai/knowledge/chrysanthemum` — 解析 md 表格为 JSON |
 | 3 | **前端依赖** | 安装 `pinyin-pro` 拼音转换库 |
 | 4 | **`VarietyTable` 组件** | 拼音首字母检索 + 中文字段匹配 + 逐项导航 + 高亮滚动定位 |
@@ -942,5 +942,58 @@ esp32-hardware/
 修改: agri-ui/package.json                      # pinyin-pro, tslib
 新增: agri-ui/src/pages/KnowledgeBase/VarietyTable.tsx     # 品种检索组件
 新增: agri-ui/src/pages/KnowledgeBase/VarietyTable.module.css
-新增: agri-knowledge/切花菊/00-品种特性表.md               # 菊花品种数据
+新增: agri-knowledge/切花菊/01-品种选择与特性解析.md               # 菊花品种数据
 ```
+
+## 环境配置（2026-06-24）
+
+### 安装的工具
+| 工具 | 版本 | 位置 |
+|------|------|------|
+| Obscura (headless browser) | v0.1.8 | `~/.local/bin/obscura`，CDP on `:9222` |
+| scrcpy (phone mirror) | v4.0 | `~/.local/bin/scrcpy`，Honor LYN-AN00 |
+| Obsidian | v1.12.7 | `~/.local/lib/obsidian/` (AppImage extract) |
+
+### Tavily MCP
+- 配置于 `~/.config/opencode/opencode.jsonc`（`type: "remote"`）
+- API Key: `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`
+- **限额：1000 免费请求/月** — 用完后通知用户续期
+
+### 已知限制
+- 无 sudo，软件安装到 `~/.local/bin/`
+- GitHub 网络慢，用 `ghproxy.net` 镜像
+- 系统内存 3.8GB，构建需低并行度防 OOM
+- iPhone 热点 Tailscale IP: `100.73.168.61`（scrcpy 连接）
+
+## Decision 模块 TODO 标记 + 编译 warning 修复（2026-06-25）
+
+### 背景
+审查 `agri-server/src/decision/` 模块时发现，2026-06-11 提交的三阶段决策管线框架（Tier 1/2/3 + 审批 + 通知）**骨架完整但从未接入主流程**：
+
+| 组件 | 状态 |
+|------|------|
+| `DecisionEngine` | 定义完整，`register()`/`state_registry()` 可用 |
+| `DecisionFlow` + Builder + Trigger | 类型正确，`mod.rs:start()` 创建了 3 个 flow 但全被 `let _` 丢弃 |
+| `LlmStage` | **唯一完整可用的实现**，`create_llm_stage()` 正确创建 Stage，但无人调用 `process()` |
+| `ApprovalGate` / `ApprovalPolicy` | 审批模型定义完整，未实例化 |
+| `NotificationDispatch` / `Notifier` trait | 调度框架完整，无具体 Notifier 实现 |
+| `ShiftRouter` | 排班路由逻辑完整，`slots` 为空 |
+| `EscalationChain` | 升级链定义完整，`run_escalation()` 只打日志 |
+| `StateRegistry` (雨/风状态机) | `start()` 中 `let _reg` 丢弃 |
+| `decision_log` CRUD | `write_log()`/`query_log()` 无人调用 |
+| 事件循环（`mod.rs:82-100`） | 空壳 — 收到 telemetry 只取 `node_id` 什么都不干 |
+
+### 修复
+
+| 文件 | 变更 |
+|------|------|
+| `decision/mod.rs` | 文件级 TODO + 3 处内联 TODO（flows 丢弃、事件循环空转） |
+| `decision/engine.rs` | 类型 TODO：缺运行时调度器 |
+| `decision/approval.rs` | ApprovalGate TODO：未实例化 |
+| `decision/registry.rs` | StateRegistry TODO：`_reg` 丢弃未用 |
+| `decision/log.rs` | CRUD TODO：无人调用 |
+| `decision/notification/mod.rs` | Dispatch TODO：无 Notifier 实现 |
+| `decision/notification/router.rs` | ShiftRouter TODO：无 Contact 数据 |
+| `decision/notification/escalator.rs` | escalation TODO：只打日志不通知 |
+| `decision/stages/llm_stage.rs` | TODO：实现完整，缺触发器 |
+| `rule_engine/mod.rs:73` | `let _ =` 显式忽略无用的 Result（`chain_timer::process_async`） |

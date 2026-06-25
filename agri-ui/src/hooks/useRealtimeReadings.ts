@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import dayjs from 'dayjs';
-import { nodeApi } from '../services/api';
+import { nodeApi, apiLong } from '../services/api';
 import { wsService } from '../services/ws';
 import type { SensorReading, AggregatedReading } from '../types';
 
@@ -35,6 +35,10 @@ export function useRealtimeReadings({
 
   const bufferRef = useRef<SensorReading[]>([]);
   const seenKeysRef = useRef<Set<string>>(new Set());
+  const metricsRef = useRef(metrics);
+  const dateRangeRef = useRef(dateRange);
+  metricsRef.current = metrics;
+  dateRangeRef.current = dateRange;
 
   const bump = useCallback(() => setTick(t => t + 1), []);
 
@@ -55,17 +59,62 @@ export function useRealtimeReadings({
       if (!deviceId) return;
       setLoading(true);
       try {
+        // 1. Fetch aggregated hourly data for the full date range (covers 24h+)
+        //    Use apiLong (120s timeout) for aggregate queries which can be slow
+        const currentMetrics = metricsRef.current;
+        const startTs = Math.floor(dateRangeRef.current[0].valueOf() / 1000);
+        const endTs = Math.floor(Date.now() / 1000);
+        const aggPromises = currentMetrics.map(m =>
+          apiLong.get<AggregatedReading[]>('/readings/aggregate', {
+            params: {
+              device_id: deviceId,
+              metric: m,
+              period: 'hour',
+              start: startTs,
+              end: endTs,
+            },
+          }).then(res => res.data)
+          .catch(() => [] as AggregatedReading[])
+        );
+        const aggResults = await Promise.all(aggPromises);
+        if (cancelled) return;
+
+        const aggReadings: SensorReading[] = [];
+        const aggKeySet = new Set<string>();
+        for (const results of aggResults) {
+          for (const a of results) {
+            const ts = dayjs(a.timestamp).valueOf();
+            const key = `agg:${a.metric}:${Math.floor(ts / 3600000)}`;
+            if (aggKeySet.has(key)) continue;
+            aggKeySet.add(key);
+            aggReadings.push({
+              id: Date.now() + Math.floor(Math.random() * 100000),
+              device_id: deviceId,
+              metric: a.metric,
+              value: a.avg,
+              unit: '',
+              timestamp: ts,
+            });
+          }
+        }
+
+        // 2. Fetch raw readings for granular recent data
         const raw = await nodeApi.getReadings(deviceId, { limit: 5000 });
         if (cancelled) return;
-        const mapped = raw.map(r => ({
+
+        const rawReadings = raw.map(r => ({
           ...r,
-          device_id: r.device_id,
+          device_id: deviceId,
           timestamp: typeof r.timestamp === 'number'
             ? (r.timestamp as number) * 1000
             : r.timestamp,
         }));
-        bufferRef.current = mapped.reverse();
-        mapped.forEach(r => seenKeysRef.current.add(`${r.metric}:${r.id}`));
+
+        // 3. Merge: aggregate data first (coarse, covers full range),
+        //    then raw data (granular, overwrites aggregates at same time)
+        const merged = [...aggReadings, ...rawReadings.reverse()];
+        bufferRef.current = merged;
+        merged.forEach(r => seenKeysRef.current.add(`${r.metric}:${r.id}`));
         setLastUpdate(Date.now());
         bump();
       } catch (e) {

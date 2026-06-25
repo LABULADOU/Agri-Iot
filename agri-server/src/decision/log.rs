@@ -13,6 +13,7 @@ pub struct DecisionLogEntry {
     pub created_at: i64,
 }
 
+// TODO(decision): decision_log CRUD 已实现，但无人调用。接入时机：Stage::process() 输出决策后记录
 pub async fn write_log(pool: &SqlitePool, entry: &DecisionLogEntry) -> Result<i64> {
     let result = sqlx::query(
         "INSERT INTO decision_log (flow_name, node_id, trigger, outcome, detail, created_at) VALUES (?, ?, ?, ?, ?, ?)"

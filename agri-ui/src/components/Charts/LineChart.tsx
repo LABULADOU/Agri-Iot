@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import ReactECharts from 'echarts-for-react';
 import type { EChartsOption } from 'echarts';
 import type { AggregatedReading } from '../../types';
@@ -11,7 +11,26 @@ interface LineChartProps {
   showLegend?: boolean;
 }
 
-const LineChart: React.FC<LineChartProps> = ({ data, height = 400, showLegend = true }) => {
+const LineChart: React.FC<LineChartProps> = ({ data, height, showLegend = true }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [chartHeight, setChartHeight] = useState(height ?? 400);
+
+  useEffect(() => {
+    if (height) {
+      setChartHeight(height);
+      return;
+    }
+    // Responsive: calculate height based on container width
+    const updateHeight = () => {
+      if (containerRef.current) {
+        const width = containerRef.current.offsetWidth;
+        setChartHeight(width < 768 ? 220 : 400);
+      }
+    };
+    updateHeight();
+    window.addEventListener('resize', updateHeight);
+    return () => window.removeEventListener('resize', updateHeight);
+  }, [height]);
   const metrics = [...new Set(data.map(d => d.metric))];
   const timestamps = [...new Set(data.map(d => d.timestamp))].sort();
 
@@ -72,12 +91,14 @@ const LineChart: React.FC<LineChartProps> = ({ data, height = 400, showLegend = 
   };
 
   return (
-    <ReactECharts
-      option={option}
-      style={{ height }}
-      opts={{ renderer: 'canvas' }}
-      notMerge={true}
-    />
+    <div ref={containerRef}>
+      <ReactECharts
+        option={option}
+        style={{ height: chartHeight }}
+        opts={{ renderer: 'canvas' }}
+        notMerge={true}
+      />
+    </div>
   );
 };
 

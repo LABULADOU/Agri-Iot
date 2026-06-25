@@ -70,7 +70,7 @@ pub async fn start(state: AppState) -> Result<()> {
                 tracing::warn!("Timer check error: {}", e);
             }
             let tick_msg = TbMsg::new("system", TbMsgType::TimerTick, serde_json::json!({"tick": Utc::now().timestamp()}));
-            chain_timer.lock().await.process_async(tick_msg).await;
+            let _ = chain_timer.lock().await.process_async(tick_msg).await;
         }
     });
 

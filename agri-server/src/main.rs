@@ -34,6 +34,7 @@ mod response;
 mod mqtt_ws;
 mod rate_limiter;
 mod decision;
+mod farm_log;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -132,7 +133,8 @@ async fn main() -> Result<()> {
         .merge(areas::create_router(app_state.clone()))
         .merge(weather_router)
         .route("/mqtt", axum::routing::get(mqtt_ws::ws_handler))
-        .merge(ai_routes::create_router(app_state));
+        .merge(ai_routes::create_router(app_state.clone()))
+        .merge(farm_log::create_router(app_state));
 
     let static_dir = std::path::PathBuf::from("agri-server/static")
         .canonicalize()

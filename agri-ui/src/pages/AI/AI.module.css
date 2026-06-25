@@ -54,9 +54,18 @@
 .chatContainer {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 260px);
+  height: calc(100vh - var(--topbar-height, 80px) - 32px);
   max-width: 900px;
   margin: 0 auto;
+  width: 100%;
+  min-height: 300px;
+}
+
+@media (max-width: 767px) {
+  .chatContainer {
+    height: calc(100vh - var(--topbar-height, 80px) - var(--tabbar-height, 56px) - 24px);
+    margin: 0;
+  }
 }
 
 .header {
@@ -264,6 +273,10 @@
   }
 
   .messageRow {
-    max-width: 95%;
+    max-width: 90%;
+  }
+
+  .chatContainer {
+    padding: 0 8px;
   }
 }

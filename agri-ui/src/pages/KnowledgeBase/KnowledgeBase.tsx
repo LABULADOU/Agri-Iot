@@ -1,9 +1,13 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Input, Tree, Typography, Tag, Empty, Spin, Alert, Button, Tooltip, Drawer } from 'antd';
-import { BookOutlined, FolderOutlined, FileOutlined, SearchOutlined, VerticalAlignTopOutlined, CloseOutlined, RightOutlined, MenuOutlined, UnorderedListOutlined } from '@ant-design/icons';
+import { Input, Typography, Tag, Spin, Button, Tooltip, Drawer, Card, Empty, Space, Collapse } from 'antd';
+import {
+  BookOutlined, SearchOutlined, VerticalAlignTopOutlined,
+  UnorderedListOutlined, CloseOutlined,
+  RightOutlined, LeftOutlined, FileTextOutlined,
+  FolderOutlined, ArrowLeftOutlined,
+} from '@ant-design/icons';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import type { TreeProps } from 'antd';
 import { aiApi } from '../../services/api';
 import type { KnowledgeNoteMeta, KnowledgeNote } from '../../types';
 import VarietyTable from './VarietyTable';
@@ -11,25 +15,23 @@ import styles from './KnowledgeBase.module.css';
 
 const { Text, Title } = Typography;
 const { Search } = Input;
+const { Panel } = Collapse;
 
-const VARIETY_TABLE_PATH = '切花菊/00-品种特性表.md';
+const VARIETY_TABLE_PATH = '切花菊/01-品种选择与特性解析.md';
 
 const TYPE_COLORS: Record<string, string> = {
   '通用知识': 'green',
   '单一作物': 'blue',
   '品种差异': 'purple',
+  '病虫害防治': 'red',
+  '施肥管理': 'orange',
+  '环境控制': 'cyan',
 };
 
-const TOC_MIN_HEADINGS = 3;
-
-interface TreeNode {
-  key: string;
-  title: string;
-  isLeaf: boolean;
-  icon: React.ReactNode;
-  children?: TreeNode[];
-  count?: number;
-}
+const CROP_ICONS: Record<string, React.ReactNode> = {
+  '切花菊': <BookOutlined />,
+  '洋桔梗': <FolderOutlined />,
+};
 
 interface HeadingItem {
   id: string;
@@ -57,225 +59,81 @@ function extractHeadings(content: string): HeadingItem[] {
   return headings;
 }
 
-function countNotes(nodes: TreeNode[]): number {
-  let count = 0;
-  for (const node of nodes) {
-    if (node.isLeaf) count++;
-    if (node.children) count += countNotes(node.children);
-  }
-  return count;
-}
-
-function buildTree(notes: KnowledgeNoteMeta[]): TreeNode[] {
-  const root: TreeNode[] = [];
-
+function groupByCrop(notes: KnowledgeNoteMeta[]): Record<string, KnowledgeNoteMeta[]> {
+  const groups: Record<string, KnowledgeNoteMeta[]> = {};
   for (const note of notes) {
-    const parts = note.path.split('/');
-    let currentChildren = root;
-
-    for (let i = 0; i < parts.length; i++) {
-      const isFile = i === parts.length - 1;
-      const key = parts.slice(0, i + 1).join('/');
-
-      if (isFile) {
-        currentChildren.push({
-          key,
-          title: note.title || parts[i].replace('.md', ''),
-          isLeaf: true,
-          icon: <FileOutlined />,
-        });
-      } else {
-        let existing = currentChildren.find(n => n.key === key);
-        if (!existing) {
-          existing = {
-            key,
-            title: parts[i],
-            isLeaf: false,
-            icon: <FolderOutlined />,
-            children: [],
-          };
-          currentChildren.push(existing);
-        }
-        currentChildren = existing.children!;
-      }
-    }
+    const crop = note.path.split('/')[0];
+    if (!groups[crop]) groups[crop] = [];
+    groups[crop].push(note);
   }
-
-  for (const node of root) {
-    if (!node.isLeaf && node.children) {
-      node.count = countNotes(node.children);
-    }
-  }
-
-  return root;
+  return groups;
 }
-
-function getDefaultExpandedKeys(tree: TreeNode[]): string[] {
-  return tree.filter(n => !n.isLeaf).map(n => n.key);
-}
-
-function getBreadcrumb(path: string): string[] {
-  return path.split('/');
-}
-
-const SidebarContent: React.FC<{
-  notes: KnowledgeNoteMeta[];
-  treeData: TreeNode[];
-  expandedKeys: React.Key[];
-  loading: boolean;
-  error: string | null;
-  searchMode: boolean;
-  searchQuery: string;
-  searchResults: KnowledgeNoteMeta[];
-  selectedKey: string | null;
-  onSearch: (value: string) => void;
-  onSearchResultClick: (meta: KnowledgeNoteMeta) => void;
-  onTreeSelect: TreeProps['onSelect'];
-  onLoadNote: (path: string) => void;
-  onExpand: (keys: React.Key[]) => void;
-}> = ({
-  notes, treeData, expandedKeys, loading, error,
-  searchMode, searchQuery, searchResults, selectedKey,
-  onSearch, onSearchResultClick, onTreeSelect, onLoadNote,
-  onExpand,
-}) => (
-  <>
-    <div className={styles.sidebarHeader}>
-      <Title level={5} className={styles.title}>
-        <BookOutlined /> 知识库
-      </Title>
-      <Search
-        placeholder="搜索笔记..."
-        allowClear
-        value={searchQuery}
-        onChange={e => onSearch(e.target.value)}
-        prefix={<SearchOutlined />}
-        className={styles.searchInput}
-      />
-    </div>
-
-    <div className={styles.treeArea}>
-      {loading ? (
-        <div className={styles.loadingCenter}><Spin /></div>
-      ) : error ? (
-        <Alert message={error} type="error" showIcon />
-      ) : searchMode ? (
-        searchResults.length > 0 ? (
-          <div className={styles.searchResultList}>
-            <Text type="secondary" className={styles.searchResultCount}>
-              找到 {searchResults.length} 篇笔记
-            </Text>
-            {searchResults.map(n => (
-              <div
-                key={n.path}
-                className={styles.searchResultItem}
-                onClick={() => onSearchResultClick(n)}
-              >
-                <Text strong className={styles.searchResultTitle}>{n.title}</Text>
-                <Text type="secondary" ellipsis className={styles.searchResultPath}>{n.path}</Text>
-                <div className={styles.searchResultTags}>
-                  {n.knowledge_type && <Tag color={TYPE_COLORS[n.knowledge_type] || 'default'} style={{ fontSize: 11, lineHeight: '18px', height: 20 }}>{n.knowledge_type}</Tag>}
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <Empty description="无匹配结果" image={Empty.PRESENTED_IMAGE_SIMPLE} />
-        )
-      ) : treeData.length === 0 ? (
-        <Empty description="无笔记" image={Empty.PRESENTED_IMAGE_SIMPLE} />
-      ) : (
-        <Tree
-          treeData={treeData}
-          onSelect={onTreeSelect}
-          selectedKeys={selectedKey ? [selectedKey] : []}
-          expandedKeys={expandedKeys}
-          onExpand={onExpand}
-          showIcon
-          className={styles.tree}
-          titleRender={(node: any) => (
-            <span
-              className={styles.treeNodeLabel}
-              onClick={node.isLeaf ? undefined : (e: React.MouseEvent) => {
-                e.stopPropagation();
-                const isExpanded = expandedKeys.includes(node.key);
-                if (isExpanded) {
-                  onExpand(expandedKeys.filter(k => k !== node.key));
-                } else {
-                  onExpand([...expandedKeys, node.key]);
-                }
-              }}
-            >
-              <span className={styles.treeNodeTitle}>{node.title}</span>
-              {!node.isLeaf && node.count != null && (
-                <span className={styles.treeNodeCount}>{node.count}</span>
-              )}
-            </span>
-          )}
-        />
-      )}
-    </div>
-  </>
-);
 
 const KnowledgeBase: React.FC = () => {
   const [notes, setNotes] = useState<KnowledgeNoteMeta[]>([]);
-  const [treeData, setTreeData] = useState<TreeNode[]>([]);
-  const [defaultExpandedKeys, setDefaultExpandedKeys] = useState<React.Key[]>([]);
-  const [expandedKeys, setExpandedKeys] = useState<React.Key[]>([]);
-  const [selectedNote, setSelectedNote] = useState<KnowledgeNote | null>(null);
-  const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [noteLoading, setNoteLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchMode, setSearchMode] = useState(false);
-  const [searchResults, setSearchResults] = useState<KnowledgeNoteMeta[]>([]);
+
+  const [view, setView] = useState<'home' | 'list' | 'read'>('home');
+  const [selectedCrop, setSelectedCrop] = useState<string>('');
+  const [selectedNote, setSelectedNote] = useState<KnowledgeNote | null>(null);
+
+  const [noteLoading, setNoteLoading] = useState(false);
   const [tocHeadings, setTocHeadings] = useState<HeadingItem[]>([]);
   const [activeHeadingId, setActiveHeadingId] = useState('');
   const [tocVisible, setTocVisible] = useState(true);
   const [backToTopVisible, setBackToTopVisible] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [tocDrawerOpen, setTocDrawerOpen] = useState(false);
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<KnowledgeNoteMeta[]>([]);
+
   const contentRef = useRef<HTMLDivElement>(null);
   const observerRef = useRef<IntersectionObserver | null>(null);
 
+  const cropGroups = useMemo(() => groupByCrop(notes), [notes]);
+  const crops = useMemo(() => Object.keys(cropGroups), [cropGroups]);
+
+  // Load notes
   useEffect(() => {
     setLoading(true);
     aiApi.listKnowledgeBase()
-      .then(data => {
-        setNotes(data.notes);
-        const tree = buildTree(data.notes);
-        setTreeData(tree);
-        const keys = getDefaultExpandedKeys(tree);
-        setDefaultExpandedKeys(keys);
-        setExpandedKeys(keys);
-      })
+      .then(data => setNotes(data.notes))
       .catch(() => setError('加载知识库失败'))
       .finally(() => setLoading(false));
   }, []);
 
+  // Search
+  const handleSearch = useCallback((value: string) => {
+    setSearchQuery(value);
+    if (!value.trim()) {
+      setSearchResults([]);
+      return;
+    }
+    const lower = value.toLowerCase();
+    setSearchResults(notes.filter(n =>
+      n.path.toLowerCase().includes(lower) || n.title.toLowerCase().includes(lower)
+    ));
+  }, [notes]);
+
+  // Load note
   const loadNote = useCallback(async (path: string) => {
     setNoteLoading(true);
-    setSidebarOpen(false);
+    setSearchQuery('');
+    setSearchResults([]);
     try {
       const data = await aiApi.readNote(path);
       const meta = notes.find(n => n.path === path);
-      const note: KnowledgeNote = {
-        ...meta,
+      setSelectedNote({
+        ...meta!,
         path: data.path,
         content: data.content || '',
         title: meta?.title || path.split('/').pop()?.replace('.md', '') || path,
-      };
-      setSelectedNote(note);
-      setSelectedKey(path);
-      const headings = extractHeadings(note.content || '');
-      setTocHeadings(headings);
+      });
+      setTocHeadings(extractHeadings(data.content || ''));
       setActiveHeadingId('');
-
-      if (contentRef.current) {
-        contentRef.current.scrollTop = 0;
-      }
+      setView('read');
+      if (contentRef.current) contentRef.current.scrollTop = 0;
     } catch {
       setSelectedNote(null);
     } finally {
@@ -283,223 +141,304 @@ const KnowledgeBase: React.FC = () => {
     }
   }, [notes]);
 
+  // TOC intersection observer
   useEffect(() => {
-    if (!tocHeadings.length) return;
-    const ids = tocHeadings.map(h => h.id);
+    if (!tocHeadings.length || view !== 'read') return;
     observerRef.current = new IntersectionObserver((entries) => {
       for (const entry of entries) {
-        if (entry.isIntersecting) {
-          setActiveHeadingId(entry.target.id);
-        }
+        if (entry.isIntersecting) setActiveHeadingId(entry.target.id);
       }
     }, { root: contentRef.current, rootMargin: '-80px 0px -60% 0px' });
 
-    for (const id of ids) {
+    for (const id of tocHeadings.map(h => h.id)) {
       const el = contentRef.current?.querySelector(`#${CSS.escape(id)}`);
       if (el) observerRef.current.observe(el);
     }
-
     return () => observerRef.current?.disconnect();
-  }, [tocHeadings, selectedNote]);
+  }, [tocHeadings, view]);
 
+  // Scroll listener
   useEffect(() => {
     const el = contentRef.current;
     if (!el) return;
-    const onScroll = () => {
-      setBackToTopVisible(el.scrollTop > 400);
-    };
+    const onScroll = () => setBackToTopVisible(el.scrollTop > 400);
     el.addEventListener('scroll', onScroll);
     return () => el.removeEventListener('scroll', onScroll);
   }, []);
 
-  const handleTreeSelect: TreeProps['onSelect'] = useCallback((selectedKeys) => {
-    if (selectedKeys.length > 0) {
-      const key = selectedKeys[0] as string;
-      const meta = notes.find(n => n.path === key);
-      if (meta) {
-        setSearchMode(false);
-        loadNote(key);
-      }
-    }
-  }, [notes, loadNote]);
-
-  const handleSearch = useCallback((value: string) => {
-    setSearchQuery(value);
-    if (!value.trim()) {
-      setSearchMode(false);
-      setSearchResults([]);
-      return;
-    }
-    setSearchMode(true);
-    setSelectedNote(null);
-    setSelectedKey(null);
-    const lower = value.toLowerCase();
-    const filtered = notes.filter(n =>
-      n.path.toLowerCase().includes(lower) ||
-      n.title.toLowerCase().includes(lower)
-    );
-    setSearchResults(filtered);
-  }, [notes]);
-
-  const handleSearchResultClick = useCallback((meta: KnowledgeNoteMeta) => {
-    setSearchQuery('');
-    setSearchMode(false);
-    setSearchResults([]);
-    loadNote(meta.path);
-  }, [loadNote]);
-
   const handleBackToTop = useCallback(() => {
-    if (contentRef.current) {
-      contentRef.current.scrollTo({ top: 0, behavior: 'smooth' });
-    }
+    if (contentRef.current) contentRef.current.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
 
   const handleTocClick = useCallback((id: string) => {
     setTocDrawerOpen(false);
     const el = contentRef.current?.querySelector(`#${CSS.escape(id)}`);
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, []);
 
-  const handleExpand = useCallback((keys: React.Key[]) => {
-    setExpandedKeys(keys);
+  const goHome = useCallback(() => {
+    setView('home'); setSelectedNote(null); setSelectedCrop('');
+    setSearchQuery(''); setSearchResults([]);
   }, []);
 
-  const breadcrumb = useMemo(() => {
-    if (!selectedNote) return [];
-    return getBreadcrumb(selectedNote.path);
-  }, [selectedNote]);
+  const goToCrop = useCallback((crop: string) => {
+    setSelectedCrop(crop); setView('list');
+    setSearchQuery(''); setSearchResults([]);
+  }, []);
 
   const HeadingRenderer = useCallback(({ level, children }: { level: number; children: React.ReactNode }) => {
     const text = React.Children.toArray(children).join('');
     const id = slugify(text);
-    switch (level) {
-      case 1: return <h1 id={id} className={styles.markdownHeading}>{children}</h1>;
-      case 2: return <h2 id={id} className={styles.markdownHeading}>{children}</h2>;
-      case 3: return <h3 id={id} className={styles.markdownHeading}>{children}</h3>;
-      case 4: return <h4 id={id} className={styles.markdownHeading}>{children}</h4>;
-      default: return <h5 id={id} className={styles.markdownHeading}>{children}</h5>;
-    }
+    const TagName = `h${level}` as keyof React.JSX.IntrinsicElements;
+    return <TagName id={id} className={styles.markdownHeading}>{children}</TagName>;
   }, []);
 
-  const sidebarProps = {
-    notes, treeData, expandedKeys, loading, error,
-    searchMode, searchQuery, searchResults, selectedKey,
-    onSearch: handleSearch,
-    onSearchResultClick: handleSearchResultClick,
-    onTreeSelect: handleTreeSelect,
-    onLoadNote: loadNote,
-    onExpand: handleExpand,
-  };
-
-  return (
-    <div className={styles.container}>
-      <div className={styles.sidebar}>
-        <SidebarContent {...sidebarProps} />
-      </div>
-
-      <div className={styles.mobileHeader}>
-        <Button
-          type="text"
-          icon={<MenuOutlined />}
-          onClick={() => setSidebarOpen(true)}
-          className={styles.menuBtn}
+  // ===== HOME VIEW =====
+  const renderHome = () => (
+    <div className={styles.homeView}>
+      <div className={styles.searchBarWrapper}>
+        <Search
+          placeholder="搜索知识库...（标题、路径、描述）"
+          size="large"
+          value={searchQuery}
+          onChange={e => handleSearch(e.target.value)}
+          onFocus={() => { if (searchQuery) handleSearch(searchQuery); }}
+          onSearch={handleSearch}
+          prefix={<SearchOutlined />}
+          allowClear
+          autoFocus
+          className={styles.searchBar}
         />
-        <Text strong className={styles.mobileTitle}>
-          {selectedNote ? selectedNote.title : '知识库'}
-        </Text>
-        <Button
-          type="text"
-          icon={<UnorderedListOutlined />}
-          onClick={() => setTocDrawerOpen(true)}
-          className={`${styles.tocBtn} ${tocHeadings.length < TOC_MIN_HEADINGS ? styles.tocBtnHidden : ''}`}
-        />
-      </div>
-
-      <Drawer
-        title={<span><BookOutlined style={{ marginRight: 8 }} />知识库</span>}
-        placement="left"
-        open={sidebarOpen}
-        onClose={() => setSidebarOpen(false)}
-        width={320}
-        className={styles.mobileDrawer}
-        styles={{ body: { padding: 0 } }}
-      >
-        <SidebarContent {...sidebarProps} />
-      </Drawer>
-
-      <div className={styles.content} ref={contentRef}>
-        {noteLoading ? (
-          <div className={styles.loadingCenter}><Spin size="large" /></div>
-        ) : selectedNote ? (
-          <div className={styles.noteView}>
-            {breadcrumb.length > 0 && (
-              <div className={styles.breadcrumb}>
-                <BookOutlined className={styles.breadcrumbIcon} />
-                {breadcrumb.map((part, i) => (
-                  <React.Fragment key={i}>
-                    {i > 0 && <span className={styles.breadcrumbSep}>/</span>}
-                    <span className={i < breadcrumb.length - 1 ? styles.breadcrumbLink : styles.breadcrumbCurrent}>
-                      {part.replace('.md', '')}
-                    </span>
-                  </React.Fragment>
-                ))}
-              </div>
-            )}
-
-            {selectedNote.path !== VARIETY_TABLE_PATH && (
-              <Title level={4} className={styles.noteTitle}>{selectedNote.title}</Title>
-            )}
-            {(() => {
-              const meta = selectedNote;
-              const knowType = meta.knowledge_type;
-              const crop = meta['适用作物'];
-              const field = meta['知识领域'];
-              return (
-                <div className={styles.tags}>
-                  {knowType && <Tag color={TYPE_COLORS[knowType] || 'default'}>{knowType}</Tag>}
-                  {crop && <Tag>{crop}</Tag>}
-                  {field && <Tag color="geekblue">{field}</Tag>}
-                  {meta['置信度'] && <Tag color="orange">{meta['置信度']}</Tag>}
+        {searchResults.length > 0 && (
+          <div className={styles.searchDropdown}>
+            <Text type="secondary" className={styles.searchGroupTitle}>
+              找到 {searchResults.length} 篇笔记
+            </Text>
+            {searchResults.slice(0, 12).map(n => (
+              <div key={n.path} className={styles.searchResultRow} onClick={() => loadNote(n.path)}>
+                <FileTextOutlined className={styles.searchResultIcon} />
+                <div className={styles.searchResultInfo}>
+                  <Text strong className={styles.searchResultName}>{n.title}</Text>
+                  <Text type="secondary" className={styles.searchResultDesc}>{n.path}</Text>
                 </div>
-              );
-            })()}
-
-            <div className={styles.markdownBody}>
-              {selectedNote.path === VARIETY_TABLE_PATH ? (
-                <VarietyTable />
-              ) : (
-                <ReactMarkdown
-                  remarkPlugins={[remarkGfm]}
-                  components={{
-                    h1: ({ children, ...props }) => <HeadingRenderer level={1} {...props}>{children}</HeadingRenderer>,
-                    h2: ({ children, ...props }) => <HeadingRenderer level={2} {...props}>{children}</HeadingRenderer>,
-                    h3: ({ children, ...props }) => <HeadingRenderer level={3} {...props}>{children}</HeadingRenderer>,
-                    h4: ({ children, ...props }) => <HeadingRenderer level={4} {...props}>{children}</HeadingRenderer>,
-                    h5: ({ children, ...props }) => <HeadingRenderer level={5} {...props}>{children}</HeadingRenderer>,
-                    h6: ({ children, ...props }) => <HeadingRenderer level={6} {...props}>{children}</HeadingRenderer>,
-                  }}
-                >
-                  {selectedNote.content || ''}
-                </ReactMarkdown>
-              )}
-            </div>
-          </div>
-        ) : (
-          <div className={styles.emptyState}>
-            <BookOutlined className={styles.emptyIcon} />
-            <Text type="secondary">从左侧选择一篇笔记开始阅读</Text>
+                {n.knowledge_type && (
+                  <Tag color={TYPE_COLORS[n.knowledge_type] || 'default'} style={{ fontSize: 11 }}>
+                    {n.knowledge_type}
+                  </Tag>
+                )}
+              </div>
+            ))}
           </div>
         )}
       </div>
 
-      {selectedNote && tocHeadings.length >= TOC_MIN_HEADINGS && tocVisible && (
-        <div className={styles.tocSidebar}>
-          <div className={styles.tocHeader}>
-            <Text strong className={styles.tocTitle}>目录</Text>
-            <Button type="text" size="small" icon={<CloseOutlined />} onClick={() => setTocVisible(false)} />
+      <div className={styles.cropsSection}>
+        <div className={styles.cropsGrid}>
+          {crops.map(crop => {
+            const cropNotes = cropGroups[crop] || [];
+            return (
+              <Card key={crop} hoverable className={styles.cropCard} onClick={() => goToCrop(crop)}>
+                <div className={styles.cropCardInner}>
+                  <div className={styles.cropCardIcon}>
+                    {CROP_ICONS[crop] || <FolderOutlined />}
+                  </div>
+                  <div className={styles.cropCardContent}>
+                    <Title level={5} className={styles.cropCardTitle}>{crop}</Title>
+                    <Text type="secondary" className={styles.cropCardDesc}>
+                      {cropNotes.length} 篇种植知识
+                    </Text>
+                  </div>
+                  <RightOutlined className={styles.cropCardArrow} />
+                </div>
+              </Card>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+
+  // ===== LIST VIEW =====
+  const renderList = () => {
+    const cropNotes = cropGroups[selectedCrop] || [];
+    const topics = cropNotes.reduce<Record<string, KnowledgeNoteMeta[]>>((acc, note) => {
+      const parts = note.path.split('/');
+      const topic = parts.length > 1 ? parts[0] : '其他';
+      if (!acc[topic]) acc[topic] = [];
+      acc[topic].push(note);
+      return acc;
+    }, {});
+
+    return (
+      <div className={styles.listView}>
+        <div className={styles.listHeader}>
+          <Button type="text" icon={<ArrowLeftOutlined />} onClick={goHome} className={styles.backBtn}>
+            返回
+          </Button>
+          <div className={styles.listTitleArea}>
+            <Title level={4} className={styles.listTitle}>{selectedCrop}</Title>
+            <Text type="secondary">{cropNotes.length} 篇种植知识</Text>
           </div>
+        </div>
+
+        {Object.entries(topics).map(([topic, topicNotes]) => (
+          <div key={topic} className={styles.topicGroup}>
+            <Title level={5} className={styles.topicGroupTitle}>
+              <FolderOutlined /> {topic}
+            </Title>
+            <div className={styles.articleCards}>
+              {topicNotes.sort((a, b) => (a.title || '').localeCompare(b.title || 'zzz')).map(note => (
+                <Card key={note.path} hoverable className={styles.articleCard} onClick={() => loadNote(note.path)}>
+                  <div className={styles.articleCardHeader}>
+                    <FileTextOutlined className={styles.articleCardIcon} />
+                    <Text strong className={styles.articleCardTitle}>
+                      {note.title || note.path.split('/').pop()?.replace('.md', '')}
+                    </Text>
+                  </div>
+                  <div className={styles.articleCardFooter}>
+                    {note.knowledge_type && (
+                      <Tag color={TYPE_COLORS[note.knowledge_type] || 'default'} style={{ fontSize: 11 }}>
+                        {note.knowledge_type}
+                      </Tag>
+                    )}
+                  </div>
+                </Card>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  // ===== READ VIEW =====
+  const renderRead = () => {
+    if (!selectedNote) return null;
+    const breadcrumb = selectedNote.path.split('/');
+
+    return (
+      <div className={styles.readView}>
+        <div className={styles.readHeader}>
+          <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => setView('list')} className={styles.backBtn}>
+            返回目录
+          </Button>
+          <Space>
+            <Button
+              type="text" size="small"
+              icon={tocVisible ? <LeftOutlined /> : <RightOutlined />}
+              onClick={() => setTocVisible(!tocVisible)}
+              className={styles.tocToggle}
+            >
+              目录
+            </Button>
+            <Button
+              type="text" size="small"
+              icon={<UnorderedListOutlined />}
+              onClick={() => setTocDrawerOpen(true)}
+              className={styles.tocDrawerBtn}
+            />
+          </Space>
+        </div>
+
+        <div className={styles.readMain}>
+          <div className={styles.readContent} ref={contentRef}>
+            {noteLoading ? (
+              <div className={styles.loadingCenter}><Spin size="large" /></div>
+            ) : (
+              <div className={styles.noteView}>
+                <div className={styles.breadcrumb}>
+                  <Button type="link" size="small" icon={<ArrowLeftOutlined />} onClick={() => setView('list')}>
+                    {breadcrumb[0]}
+                  </Button>
+                  {breadcrumb.slice(1).map((part: string, i: number) => (
+                    <React.Fragment key={i}>
+                      <span className={styles.breadcrumbSep}>/</span>
+                      <Text type="secondary" style={{ fontSize: 12 }}>{part.replace('.md', '')}</Text>
+                    </React.Fragment>
+                  ))}
+                </div>
+
+                {selectedNote.path !== VARIETY_TABLE_PATH && (
+                  <Title level={2} className={styles.noteTitle}>{selectedNote.title}</Title>
+                )}
+
+                <div className={styles.tags}>
+                  {selectedNote.knowledge_type && (
+                    <Tag color={TYPE_COLORS[selectedNote.knowledge_type] || 'default'}>{selectedNote.knowledge_type}</Tag>
+                  )}
+                  {(selectedNote as any)['适用作物'] && (
+                    <Tag>{(selectedNote as any)['适用作物']}</Tag>
+                  )}
+                  {(selectedNote as any)['知识领域'] && (
+                    <Tag color="geekblue">{(selectedNote as any)['知识领域']}</Tag>
+                  )}
+                </div>
+
+                <div className={styles.markdownBody}>
+                  {selectedNote.path === VARIETY_TABLE_PATH ? (
+                    <VarietyTable />
+                  ) : (
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      components={{
+                        h1: ({ children, ...props }) => <HeadingRenderer level={1} {...props}>{children}</HeadingRenderer>,
+                        h2: ({ children, ...props }) => <HeadingRenderer level={2} {...props}>{children}</HeadingRenderer>,
+                        h3: ({ children, ...props }) => <HeadingRenderer level={3} {...props}>{children}</HeadingRenderer>,
+                        h4: ({ children, ...props }) => <HeadingRenderer level={4} {...props}>{children}</HeadingRenderer>,
+                        h5: ({ children, ...props }) => <HeadingRenderer level={5} {...props}>{children}</HeadingRenderer>,
+                        h6: ({ children, ...props }) => <HeadingRenderer level={6} {...props}>{children}</HeadingRenderer>,
+                      }}
+                    >
+                      {selectedNote.content || ''}
+                    </ReactMarkdown>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {tocVisible && tocHeadings.length >= 3 && (
+            <div className={styles.tocSidebar}>
+              <div className={styles.tocHeader}>
+                <Text strong className={styles.tocTitle}>目录</Text>
+                <Button type="text" size="small" icon={<CloseOutlined />} onClick={() => setTocVisible(false)} />
+              </div>
+              <Collapse
+                size="small" ghost className={styles.tocCollapse}
+                items={tocHeadings.filter(h => h.level <= 3).map(h => ({
+                  key: h.id,
+                  label: <span className={styles.tocItemLabel}>{h.text}</span>,
+                  children: h.level > 1 ? (
+                    <div className={styles.tocSubList}>
+                      {tocHeadings
+                        .filter(sub => sub.level === h.level + 1)
+                        .map(sub => (
+                          <div
+                            key={sub.id}
+                            className={`${styles.tocItem} ${styles.tocLevel3} ${activeHeadingId === sub.id ? styles.tocItemActive : ''}`}
+                            onClick={() => handleTocClick(sub.id)}
+                          >
+                            {sub.text}
+                          </div>
+                        ))}
+                    </div>
+                  ) : null,
+                }))}
+              />
+            </div>
+          )}
+        </div>
+
+        {backToTopVisible && (
+          <Tooltip title="回到顶部" placement="left">
+            <Button className={styles.backToTop} icon={<VerticalAlignTopOutlined />} onClick={handleBackToTop} shape="circle" />
+          </Tooltip>
+        )}
+
+        <Drawer
+          title="目录" placement="bottom" open={tocDrawerOpen}
+          onClose={() => setTocDrawerOpen(false)} height="50%" className={styles.tocDrawer}
+        >
           <div className={styles.tocList}>
             {tocHeadings.map(h => (
               <div
@@ -511,50 +450,28 @@ const KnowledgeBase: React.FC = () => {
               </div>
             ))}
           </div>
+        </Drawer>
+      </div>
+    );
+  };
+
+  // ===== MAIN RENDER =====
+  return (
+    <div className={styles.container}>
+      {loading ? (
+        <div className={styles.loadingCenter}><Spin size="large" /></div>
+      ) : error ? (
+        <div className={styles.errorView}>
+          <Empty description={error} />
+          <Button type="primary" onClick={() => window.location.reload()}>重试</Button>
         </div>
+      ) : (
+        <>
+          {view === 'home' && renderHome()}
+          {view === 'list' && renderList()}
+          {view === 'read' && renderRead()}
+        </>
       )}
-
-      {!tocVisible && tocHeadings.length >= TOC_MIN_HEADINGS && (
-        <Tooltip title="显示目录" placement="left">
-          <Button
-            className={styles.tocToggle}
-            icon={<RightOutlined />}
-            onClick={() => setTocVisible(true)}
-          />
-        </Tooltip>
-      )}
-
-      {backToTopVisible && (
-        <Tooltip title="回到顶部" placement="left">
-          <Button
-            className={styles.backToTop}
-            icon={<VerticalAlignTopOutlined />}
-            onClick={handleBackToTop}
-            shape="circle"
-          />
-        </Tooltip>
-      )}
-
-      <Drawer
-        title="目录"
-        placement="bottom"
-        open={tocDrawerOpen}
-        onClose={() => setTocDrawerOpen(false)}
-        height="50%"
-        className={styles.tocDrawer}
-      >
-        <div className={styles.tocList}>
-          {tocHeadings.map(h => (
-            <div
-              key={h.id}
-              className={`${styles.tocItem} ${styles[`tocLevel${h.level}`]} ${activeHeadingId === h.id ? styles.tocItemActive : ''}`}
-              onClick={() => handleTocClick(h.id)}
-            >
-              {h.text}
-            </div>
-          ))}
-        </div>
-      </Drawer>
     </div>
   );
 };

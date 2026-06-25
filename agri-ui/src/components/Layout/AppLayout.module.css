@@ -6,13 +6,13 @@
   padding: 16px 24px;
   background: var(--bg-page, #F8FAFC);
   overflow-y: auto;
-  height: calc(100vh - 56px);
+  height: calc(100vh - var(--topbar-height, 80px));
 }
 
 @media (max-width: 767px) {
   .content {
     padding: 12px;
-    height: calc(100vh - 56px - 56px);
+    height: calc(100vh - var(--topbar-height, 80px) - var(--tabbar-height, 56px));
     padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
   }
 }

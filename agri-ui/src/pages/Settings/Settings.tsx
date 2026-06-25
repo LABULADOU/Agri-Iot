@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Card, Tabs, Table, Button, Space, Modal, Form, Input, InputNumber, message, Typography, Row, Col, Select, Popconfirm, Switch, Tag } from 'antd';
+import { Card, Tabs, Table, Button, Space, Modal, Form, Input, InputNumber, message, Typography, Row, Col, Select, Popconfirm, Switch, Tag, Divider } from 'antd';
 import { EditOutlined, SettingOutlined, PlusOutlined, SearchOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useSearchParams } from 'react-router-dom';
 import { zoneApi, ruleApi } from '../../services/api';
@@ -223,7 +223,7 @@ const RulesTab: React.FC = () => {
   };
 
   const filteredRules = rules.filter(rule =>
-    rule.name.includes(searchText)
+    !searchText || rule.name.includes(searchText)
   );
 
   const columns = [
@@ -293,41 +293,100 @@ const RulesTab: React.FC = () => {
   );
 };
 
-const SystemTab: React.FC = () => (
-  <Card title="系统参数">
-    <Form layout="vertical">
-      <Row gutter={16}>
-        <Col span={12}>
-          <Form.Item label="数据采集间隔">
-            <Select defaultValue="60">
-              <Select.Option value="30">30秒</Select.Option>
-              <Select.Option value="60">1分钟</Select.Option>
-              <Select.Option value="300">5分钟</Select.Option>
-            </Select>
-          </Form.Item>
-        </Col>
-        <Col span={12}>
-          <Form.Item label="积温计算阈值">
-            <InputNumber defaultValue={10} addonAfter="℃" style={{ width: '100%' }} />
-          </Form.Item>
-        </Col>
-      </Row>
-      <Row gutter={16}>
-        <Col span={12}>
-          <Form.Item label="预警温度偏差">
-            <InputNumber defaultValue={5} addonAfter="℃" style={{ width: '100%' }} />
-          </Form.Item>
-        </Col>
-        <Col span={12}>
-          <Form.Item label="和风天气Key">
-            <Input placeholder="请输入API Key" />
-          </Form.Item>
-        </Col>
-      </Row>
-      <Button type="primary" onClick={() => message.info('系统配置功能开发中')}>保存配置</Button>
-    </Form>
-  </Card>
-);
+const SystemTab: React.FC = () => {
+  const [form] = Form.useForm();
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    // Load saved settings from localStorage
+    try {
+      const saved = JSON.parse(localStorage.getItem('agri_settings') || '{}');
+      if (saved) {
+        form.setFieldsValue(saved);
+      }
+    } catch { /* ignore */ }
+  }, [form]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const values = await form.validateFields();
+      localStorage.setItem('agri_settings', JSON.stringify(values));
+      message.success('系统配置已保存');
+    } catch {
+      message.error('保存失败，请检查输入');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleReset = () => {
+    form.resetFields();
+    localStorage.removeItem('agri_settings');
+    message.info('已恢复默认设置');
+  };
+
+  return (
+    <Card title="系统参数">
+      <Form form={form} layout="vertical">
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item name="collectionInterval" label="数据采集间隔" rules={[{ required: true }]}>
+              <Select>
+                <Select.Option value="30">30秒</Select.Option>
+                <Select.Option value="60">1分钟</Select.Option>
+                <Select.Option value="300">5分钟</Select.Option>
+                <Select.Option value="600">10分钟</Select.Option>
+              </Select>
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item name="accumulationThreshold" label="积温计算阈值" rules={[{ required: true }]}
+              extra="低于此温度的部分计入积温">
+              <InputNumber min={0} max={50} step={0.5} style={{ width: '100%' }} addonAfter="℃" />
+            </Form.Item>
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item name="warningDeviation" label="预警温度偏差" rules={[{ required: true }]}>
+              <InputNumber min={0} max={20} style={{ width: '100%' }} addonAfter="℃" />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item name="weatherApiKey" label="和风天气 Key"
+              extra="用于获取实时天气数据，可在 https://dev.qweather.com/ 申请">
+              <Input.Password placeholder="请输入API Key" />
+            </Form.Item>
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item name="chartRefreshRate" label="图表刷新频率" rules={[{ required: true }]}>
+              <Select>
+                <Select.Option value="5000">5秒</Select.Option>
+                <Select.Option value="10000">10秒</Select.Option>
+                <Select.Option value="30000">30秒</Select.Option>
+                <Select.Option value="60000">1分钟</Select.Option>
+              </Select>
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item name="darkMode" label="深色模式" valuePropName="checked" initialValue={false}>
+              <Switch />
+            </Form.Item>
+          </Col>
+        </Row>
+        <Form.Item style={{ marginTop: 8 }}>
+          <Space>
+            <Button type="primary" onClick={handleSave} loading={saving}>保存配置</Button>
+            <Button onClick={handleReset}>恢复默认</Button>
+          </Space>
+        </Form.Item>
+      </Form>
+    </Card>
+  );
+};
 
 const Settings: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();

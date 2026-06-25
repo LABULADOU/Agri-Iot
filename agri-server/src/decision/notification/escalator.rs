@@ -52,6 +52,7 @@ impl EscalationChain {
     }
 }
 
+// TODO(decision): run_escalation 打印了日志但没有真正发送通知。需接入实际 Notifier 实现（Push/SMS/VoiceCall）
 pub async fn run_escalation(chain: &EscalationChain, msg: &NotificationMsg) {
     let urgent = matches!(msg.urgency, Urgency::Critical | Urgency::High);
 

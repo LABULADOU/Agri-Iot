@@ -734,7 +734,7 @@ async fn chrysanthemum_varieties(
         None => return Err(not_found(Some("OBSIDIAN_VAULT_PATH not set"))),
     };
 
-    let file_path = std::path::Path::new(&vault_path).join("切花菊/00-品种特性表.md");
+    let file_path = std::path::Path::new(&vault_path).join("切花菊/01-品种选择与特性解析.md");
     let content = match tokio::fs::read_to_string(&file_path).await {
         Ok(c) => c,
         Err(_) => return Err(not_found(Some("品种特性表未找到"))),

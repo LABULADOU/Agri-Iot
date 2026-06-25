@@ -6,6 +6,7 @@ import {
   SettingOutlined,
   RobotOutlined,
   ReadOutlined,
+  FileTextOutlined,
 } from '@ant-design/icons';
 import styles from './MobileTabBar.module.css';
 
@@ -14,6 +15,7 @@ const tabs = [
   { key: '/query', icon: <DatabaseOutlined />, label: '数据' },
   { key: '/ai', icon: <RobotOutlined />, label: 'AI' },
   { key: '/knowledge', icon: <ReadOutlined />, label: '知识' },
+  { key: '/farm-logs', icon: <FileTextOutlined />, label: '日志' },
   { key: '/settings', icon: <SettingOutlined />, label: '设置' },
 ];
 

@@ -13,7 +13,7 @@ function loadLocation(): GeoCity {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) return JSON.parse(raw);
   } catch { /* ignore */ }
-  return { id: '101010100', name: '北京', adm1: '北京市', adm2: '' };
+  return { id: '39.92,116.41', name: '北京', adm1: '北京市', adm2: '' };
 }
 
 export const useWeatherStore = create<WeatherStore>((set) => ({

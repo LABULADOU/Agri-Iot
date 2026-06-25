@@ -250,7 +250,8 @@ pub struct NoteMetadata {
 impl ObsidianKnowledge {
     /// 列出 vault 内所有笔记及其元数据
     pub fn list_notes_metadata(&self) -> Result<Vec<NoteMetadata>, KnowledgeError> {
-        let files = self.list_markdown_files()?;
+        let mut files = self.list_markdown_files()?;
+        files.sort();
         let mut notes = Vec::new();
         for f in &files {
             match self.read_note(f) {

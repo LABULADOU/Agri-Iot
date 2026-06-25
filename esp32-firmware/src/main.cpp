@@ -85,6 +85,7 @@ const unsigned long MQTT_RECONNECT_INTERVAL = 5000;
 #define BUFFER_FILE "/buffer.dat"
 #define BUFFER_TMP "/buffer.tmp"
 // 256KB SPIFFS: 每行 ~300B, 800 行 ≈ 240KB (留 ~16KB 给临时文件)
+// 断线后采集间隔逐步降低(10s→60s→300s)，有效覆盖时间远超 2 小时
 #define BUFFER_MAX_LINES 800
 #define BUFFER_FLUSH_BATCH 20
 #define MQTT_BUF_SIZE 512
@@ -102,6 +103,8 @@ unsigned long lastRead = 0;
 unsigned long lastMqttReconnect = 0;
 char bootId[12] = {0};
 bool relayState = false;
+wl_status_t lastWifiStatus = WL_CONNECTED;  // loop() 启动时 WiFi 已连接
+unsigned long lastWifiOnline = 0;           // 上次 WiFi 在线的时间戳
 unsigned long mqttSeq = 0;
 const char* lastCmdResult = "";  // OTA/命令执行结果反馈
 
@@ -685,6 +688,37 @@ void disconnectMqtt() {
     activeTransport = TRANSPORT_NONE;
 }
 
+// 尝试 WiFi 重连（非阻塞，带指数退避）
+// 阶段 | 间隔 | 累计时长
+// 快速 |  10s | 0~1 分钟（6 次）
+// 中速 |  60s | 1~5 分钟（4 次）
+// 慢速 | 300s | 5~35 分钟（6 次）
+// 保守 | 600s | 35 分钟后
+void ensureWiFi() {
+    static int failCount = 0;
+    static unsigned long lastAttempt = 0;
+
+    if (WiFi.status() == WL_CONNECTED) {
+        failCount = 0;  // 重连成功，重置计数
+        return;
+    }
+
+    unsigned long now = millis();
+    unsigned long interval;
+    if (failCount < 6)          interval = 10000;
+    else if (failCount < 10)    interval = 60000;
+    else if (failCount < 16)    interval = 300000;
+    else                        interval = 600000;
+
+    if (now - lastAttempt < interval) return;
+    lastAttempt = now;
+    failCount++;
+
+    Serial.printf("[WiFi] 断线(%d), 尝试 %d, 间隔 %lus\n",
+                  WiFi.status(), failCount, interval / 1000);
+    WiFi.reconnect();
+}
+
 // 确保 MQTT 已连接（自动重连，优先 LAN）
 void ensureMqttConnected() {
     // 检查当前连接是否存活
@@ -748,8 +782,8 @@ void publishMqttTelemetry(const char* jsonPayload) {
 }
 
 void publishTelemetry() {
-    if (WiFi.status() != WL_CONNECTED) return;
-    
+    // 无论 WiFi 状态如何，都采集传感器数据；WiFi 离线时数据缓存到 LittleFS
+
     // Do NOT call ensureMqttConnected() here — TLS handshake on the 10s
     // sensor-read path blows the loopTask stack (4KB default).
     // Connection is maintained by loop() every 5s.
@@ -1072,8 +1106,26 @@ void setup() {
 void loop() {
     unsigned long now = millis();
     
-    // 保持 MQTT 连接
-    if (WiFi.status() == WL_CONNECTED) {
+    // 检测 WiFi 重新连接 → 强制 MQTT 重连（防止 TCP 客户端撒谎说还连着）
+    wl_status_t curWifi = WiFi.status();
+    if (curWifi == WL_CONNECTED && lastWifiStatus != WL_CONNECTED) {
+        Serial.println("WiFi 重连，强制断开旧 MQTT");
+        activeTransport = TRANSPORT_NONE;
+        lanTcp.stop();
+        wanWsConnected = false;
+        wanMqttConnected = false;
+        lastMqttReconnect = 0;
+        LAN_HOST[0] = '\0';  // 服务器 IP 可能已变，下次连接重新 mDNS 解析
+    }
+    // 记录 WiFi 在线时间戳（用于断线时降频省电）
+    if (curWifi == WL_CONNECTED) lastWifiOnline = millis();
+    lastWifiStatus = curWifi;
+    
+    // 主动重连 WiFi（断线时按指数退避尝试）
+    if (curWifi != WL_CONNECTED) {
+        ensureWiFi();
+    } else {
+        // 保持 MQTT 连接
         if (activeTransport == TRANSPORT_LAN_TCP) {
             mqtt.loop();
         } else if (activeTransport == TRANSPORT_WAN_WS) {
@@ -1084,7 +1136,15 @@ void loop() {
         }
     }
     
-    if (now - lastRead >= READ_INTERVAL) {
+    // 传感器采集间隔：WiFi 在线时 10s，断线时逐步降频省电
+    unsigned long readInterval = READ_INTERVAL;
+    if (curWifi != WL_CONNECTED && lastWifiOnline > 0) {
+        unsigned long offlineDuration = (millis() - lastWifiOnline) / 1000;
+        if (offlineDuration > 300)          readInterval = 300000;   // >5min → 5分钟
+        else if (offlineDuration > 60)      readInterval = 60000;    // >1min → 1分钟
+        // 否则保持 10 秒（前 1 分钟快速采样，积极等待重连）
+    }
+    if (now - lastRead >= readInterval) {
         lastRead = now;
         publishTelemetry();
     }

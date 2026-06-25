@@ -1,18 +1,16 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Input, Button, Typography, Card, Spin, Tag, Empty, Tabs } from 'antd';
+import { Input, Button, Typography, Card, Spin, Empty, Tabs, Tag } from 'antd';
 import { ClockCircleOutlined, SendOutlined, RobotOutlined, UserOutlined, ClearOutlined } from '@ant-design/icons';
 import { useSearchParams } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import AISystemStatus from '../../components/ai/AISystemStatus';
 import EmergencyRules from '../../components/ai/EmergencyRules';
-import KnowledgeStats from '../../components/ai/KnowledgeStats';
 import { aiApi } from '../../services/api';
-import type { ChatMessage, AgentResponse, EmergencyRuleResponse, KnowledgeSearchResult, ControlCaseRecord } from '../../types';
+import type { ChatMessage, AgentResponse, EmergencyRuleResponse, ControlCaseRecord } from '../../types';
 import styles from './AI.module.css';
 
 const { Title, Text } = Typography;
-const { Search } = Input;
 const { TextArea } = Input;
 
 const EMERGENCY_RULE_DEFS = [
@@ -63,8 +61,6 @@ const AIDecisionsTab: React.FC = () => {
     pausesAuto: boolean;
   } | null>(null);
   const [cases, setCases] = useState<ControlCaseRecord[]>([]);
-  const [searchResults, setSearchResults] = useState<KnowledgeSearchResult[]>([]);
-  const [searching, setSearching] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -79,22 +75,6 @@ const AIDecisionsTab: React.FC = () => {
       });
       setCases(caseList);
     }).finally(() => setLoading(false));
-  }, []);
-
-  const handleSearch = useCallback(async (value: string) => {
-    if (!value.trim()) {
-      setSearchResults([]);
-      return;
-    }
-    setSearching(true);
-    try {
-      const results = await aiApi.knowledgeSearch(value);
-      setSearchResults(results);
-    } catch {
-      setSearchResults([]);
-    } finally {
-      setSearching(false);
-    }
   }, []);
 
   const rules = EMERGENCY_RULE_DEFS.map(def => ({
@@ -114,13 +94,6 @@ const AIDecisionsTab: React.FC = () => {
     return <Spin style={{ display: 'block', margin: '40px auto' }} />;
   }
 
-  const caseCount = cases.length;
-  const thisMonthNew = cases.filter(c => {
-    const d = new Date(c.timestamp * 1000);
-    const now = new Date();
-    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
-  }).length;
-
   return (
     <>
       <div className={styles.statsRow}>
@@ -136,38 +109,7 @@ const AIDecisionsTab: React.FC = () => {
           <Text type="secondary" className={styles.statLabel}>紧急规则状态</Text>
           <EmergencyRules rules={rules} />
         </Card>
-        <Card size="small" className={styles.statCard}>
-          <Text type="secondary" className={styles.statLabel}>知识库统计</Text>
-          <KnowledgeStats cropCount={12} pestCount={8} caseCount={caseCount} thisMonthNew={thisMonthNew} />
-        </Card>
       </div>
-
-      <Card size="small" className={styles.section}>
-        <Title level={5}>知识库检索</Title>
-        <Search
-          placeholder="搜索作物、病虫害、调控案例..."
-          allowClear
-          enterButton="搜索"
-          onSearch={handleSearch}
-          loading={searching}
-          className={styles.search}
-        />
-        {searchResults.length > 0 && (
-          <div className={styles.results}>
-            {searchResults.map((r) => (
-              <div key={r.id} className={styles.resultItem}>
-                <Tag color={r.type === 'crop_profile' ? 'green' : r.type === 'pest_knowledge' ? 'red' : 'blue'}>
-                  {r.type === 'crop_profile' ? '作物' : r.type === 'pest_knowledge' ? '病虫害' : '气象'}
-                </Tag>
-                <Text>{r.name || r.condition_type}</Text>
-              </div>
-            ))}
-          </div>
-        )}
-        {searchResults.length === 0 && !searching && (
-          <Text type="secondary">输入关键词搜索知识库</Text>
-        )}
-      </Card>
 
       <Card size="small" className={styles.section}>
         <Title level={5}>调控案例记录</Title>

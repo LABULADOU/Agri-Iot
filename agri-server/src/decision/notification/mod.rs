@@ -1,3 +1,5 @@
+// TODO(decision): NotificationDispatch 框架 + Notifier trait + 升级链已定义，未实例化也未注册具体 Notifier 实现。
+//   待接线: ApprovalGate 超时 → NotificationDispatch → EscalationChain → ShiftRouter
 pub mod router;
 pub mod escalator;
 

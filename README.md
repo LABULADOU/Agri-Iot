@@ -52,8 +52,7 @@
 cp .env.example .env
 # 编辑 .env，配置以下环境变量：
 
-# 和风天气 API（免费套餐）
-WEATHER_API_KEY=your_key_here
+# Open-Meteo（免费，无需 API Key）
 
 # LLM（NVIDIA 或其他 OpenAI 兼容 API）
 LLM_API_KEY=nvapi-...
@@ -151,7 +150,8 @@ http://172.20.10.13:3001 (container)
 | GET            | `/api/v1/weather/geo`             | 城市查找            |
 
 > SSE 事件由 `POST /api/v1/telemetry` 触发，通过 `broadcast::Sender` 推送到所有 SSE 客户端。
-> 天气接口为和风天气 API 的反向代理，`safe_proxy()` 对免费套餐不支持的端点返回空数据而非 502。
+> 天气接口使用 Open-Meteo 免费 API（10,000 请求/天），通过 `lat,lon` 坐标定位，无需 API Key。
+> 位置参数从 QWeather ID（如 `101010100`）改为 `lat,lon` 格式（如 `39.92,116.41`），前端存储自动迁移。
 
 ## 项目结构
 
@@ -190,7 +190,7 @@ agri-server/src/        # 后端服务
 │       ├── mod.rs      # Notifier trait + NotificationDispatch
 │       ├── router.rs   # ShiftRouter 排班路由
 │       └── escalator.rs # EscalationChain 逐级升维
-├── weather.rs          # 天气 API 代理 (和风天气)
+├── weather.rs          # 天气 API 代理 (Open-Meteo)
 ├── ai_routes.rs        # AI 决策 API 路由
 ├── mqtt_ws.rs          # WebSocket ↔ MQTT TCP 桥接
 ├── ws_handler.rs       # WebSocket 事件推送（telemetry + status_change）

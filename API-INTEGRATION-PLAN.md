@@ -21,7 +21,7 @@
 
 | API | 终端 | 接入方式 |
 |-----|------|----------|
-| **和风天气 (QWeather)** | `WEATHER_API_KEY` .env 配置 | `agri-server/src/weather.rs` 透明代理，前端 TopBar 展示 |
+| **Open-Meteo** | 免费，无需 API Key | `agri-server/src/weather.rs` 透明代理，前端 TopBar 展示 |
 
 **已实现的功能：**
 - `GET /api/v1/weather/now` — 实时天气（温度、湿度、风向风力、天气现象）
@@ -32,7 +32,12 @@
 - `GET /api/v1/weather/air` — 空气质量
 - `GET /api/v1/weather/indices` — 生活指数
 
-**限制：** 免费订阅（开发者版）不支持 minutely 和 warning 两个端点。
+**变更 (2026-06-25)：** 从 和风天气 切换到 Open-Meteo（API Key 过期），使用 `lat,lon` 坐标定位。
+- Open-Meteo 免费额度：10,000 请求/天
+- 定位方式：`lat,lon`（如 `39.92,116.41`）替代 QWeather 城市 ID（如 `101010100`）
+- WMO 天气代码映射为中文字段（晴/多云/雨/雪等）
+- `warning` 和 `air` 端点 Open-Meteo 不覆盖，返回空数据
+- 前端 location 存储自动迁移，用户无需手动操作
 
 ---
 
@@ -154,9 +159,11 @@ Body: {
 - 提供历史数据回溯（十年级），用于 AI 模型训练
 - 蒸散量(ET)数据可辅助灌溉决策（与 EC 值联动）
 
-### 4.2 和风天气（已有）
+### 4.2 Open-Meteo（当前）
 
-当前已在使用的天气 API，功能清单见[第 1 节](#1-已集成的-api)。
+当前使用的天气 API（2026-06-25 从和风天气迁移），功能清单见[第 1 节](#1-已集成的-api)。
+- 10,000 请求/天，无 API Key
+- 不覆盖灾害预警（warning）和空气质量（air）
 
 ---
 

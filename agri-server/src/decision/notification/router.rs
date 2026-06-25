@@ -32,6 +32,7 @@ pub struct RouteResult {
     pub backup: Vec<Contact>,
 }
 
+// TODO(decision): ShiftRouter 定义了排班路由逻辑，但无实际 Contact 数据（slots 为空），也无实例注入 DecisionEngine
 pub struct ShiftRouter {
     slots: Vec<ShiftSlot>,
 }

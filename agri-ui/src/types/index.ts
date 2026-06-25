@@ -353,3 +353,73 @@ export interface QueryParams {
   start?: string;
   end?: string;
 }
+
+// ====== 农事操作日志 ======
+
+export type FarmOpCategory = '打药' | '施肥' | '灌溉' | '修剪' | '采收' | '设备维护' | '定植' | '育苗' | '巡棚' | '其他';
+
+export type FarmOpStatus = 'planned' | 'in_progress' | 'completed' | 'cancelled';
+
+export interface PesticideItem {
+  formulation: string;
+  ingredient: string;
+  brand: string;
+  reg_no: string;
+  dosage: string;
+  dosage_per_unit: string;
+}
+
+export interface PesticideDetails {
+  items: PesticideItem[];
+  water_volume: string;
+  target_pest: string;
+  application_method: string;
+}
+
+export interface FertilizerItem {
+  name: string;
+  amount: string;
+  n: string;
+  p: string;
+  k: string;
+}
+
+export interface FertilizerDetails {
+  items: FertilizerItem[];
+  method: string;
+  total_volume: string;
+  ec: string;
+  ph: string;
+}
+
+export interface FarmOperation {
+  id: string;
+  area_id: string;
+  log_date: string;
+  log_time: string;
+  category: FarmOpCategory;
+  content: string;
+  operator: string;
+  status: FarmOpStatus;
+  weather: string;
+  crop_status: string;
+  notes: string;
+  details: PesticideDetails | FertilizerDetails | Record<string, unknown>;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface FarmOpTemplate {
+  id: string;
+  name: string;
+  category: FarmOpCategory;
+  details: PesticideDetails | FertilizerDetails | Record<string, unknown>;
+  sort_order: number;
+  created_at: number;
+}
+
+export interface FarmOperationsListResponse {
+  operations: FarmOperation[];
+  page: number;
+  limit: number;
+}

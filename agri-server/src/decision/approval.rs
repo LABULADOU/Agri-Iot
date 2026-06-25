@@ -58,6 +58,7 @@ impl ApprovalPolicy {
     }
 }
 
+// TODO(decision): ApprovalGate 已定义，尚未在 start() 中实例化并接入决策管线
 pub struct ApprovalGate {
     pub policy: ApprovalPolicy,
     pub escalation_chain: Option<crate::decision::notification::escalator::EscalationChain>,

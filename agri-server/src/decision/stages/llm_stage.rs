@@ -1,3 +1,4 @@
+// TODO(decision): LlmStage 实现完整且可用，但需要 mod.rs 的调度循环触发 process()
 use crate::decision::engine::{FlowContext, Stage, StageOut};
 use crate::state::AppState;
 use agri_core::ai::llm::{LlmDecision, LlmProvider, SYSTEM_PROMPT_ASSESS};

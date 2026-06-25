@@ -7,6 +7,7 @@ import {
   SettingOutlined,
   RobotOutlined,
   ReadOutlined,
+  FileTextOutlined,
 } from '@ant-design/icons';
 import styles from './Sidebar.module.css';
 
@@ -23,6 +24,7 @@ const menuItems: MenuItem[] = [
   { key: '/query', icon: <DatabaseOutlined />, label: '数据' },
   { key: '/ai', icon: <RobotOutlined />, label: 'AI' },
   { key: '/knowledge', icon: <ReadOutlined />, label: '知识库' },
+  { key: '/farm-logs', icon: <FileTextOutlined />, label: '农事日志' },
   { key: '/settings', icon: <SettingOutlined />, label: '设置' },
 ];
 

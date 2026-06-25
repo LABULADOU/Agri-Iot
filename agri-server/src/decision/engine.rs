@@ -1,3 +1,5 @@
+// TODO(decision): Trigger/Stage/DecisionFlow 类型已正确定义，但缺少运行时调度器。
+//   需补充: 1) 按 Trigger 分派事件的调度循环; 2) Stage 管线的顺序执行; 3) ApprovalGate 阻塞/超时
 use crate::decision::approval::{ApprovalLevel, ApprovalPolicy, TimeoutAction};
 use crate::decision::notification::escalator::EscalationChain;
 

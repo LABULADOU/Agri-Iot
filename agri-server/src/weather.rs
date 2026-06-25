@@ -1,4 +1,4 @@
-use axum::{extract::Query, http::StatusCode, response::IntoResponse, Json};
+use axum::{extract::Query, Json};
 use serde::Deserialize;
 use std::sync::OnceLock;
 
@@ -12,22 +12,9 @@ fn http_client() -> &'static reqwest::Client {
     })
 }
 
-const WEATHER: &str = "https://ku36x9fh3j.re.qweatherapi.com/v7/weather";
-const AIR: &str = "https://ku36x9fh3j.re.qweatherapi.com/v7/air";
-const INDICES: &str = "https://ku36x9fh3j.re.qweatherapi.com/v7/indices";
-const WARNING: &str = "https://ku36x9fh3j.re.qweatherapi.com/v7/warning";
-const GEO: &str = "https://ku36x9fh3j.re.qweatherapi.com/geo/v2/city";
-
 #[derive(Deserialize)]
 pub struct WeatherParams {
     location: String,
-}
-
-#[derive(Deserialize)]
-pub struct IndicesParams {
-    location: String,
-    #[serde(rename = "type")]
-    type_: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -36,120 +23,289 @@ pub struct GeoParams {
     number: Option<u32>,
 }
 
-fn api_key() -> String {
-    std::env::var("WEATHER_API_KEY").unwrap_or_default()
-}
-
-async fn proxy(url: &str) -> axum::response::Response {
-    let key = api_key();
-    if key.is_empty() {
-        return (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": "WEATHER_API_KEY not set"}))).into_response();
-    }
-    match http_client().get(url).send().await {
-        Ok(resp) => {
-            let status = resp.status();
-            match resp.bytes().await {
-                Ok(body) => {
-                    if !status.is_success() {
-                        return (StatusCode::BAD_GATEWAY, Json(serde_json::json!({"error": "upstream error", "status": status.as_u16(), "raw": format!("{:?}", &body[..body.len().min(200)])}))).into_response();
-                    }
-                    match serde_json::from_slice::<serde_json::Value>(&body) {
-                        Ok(json) => Json(json).into_response(),
-                        Err(_) => (StatusCode::BAD_GATEWAY, Json(serde_json::json!({"error": "parse failed", "raw": format!("{:?}", &body[..body.len().min(200)])}))).into_response(),
-                    }
-                }
-                Err(e) => (StatusCode::BAD_GATEWAY, Json(serde_json::json!({"error": e.to_string()}))).into_response(),
-            }
+fn parse_location(loc: &str) -> (f64, f64) {
+    if let Some((lat_str, lon_str)) = loc.split_once(',') {
+        if let (Ok(lat), Ok(lon)) = (lat_str.trim().parse::<f64>(), lon_str.trim().parse::<f64>()) {
+            return (lat, lon);
         }
-        Err(e) => (StatusCode::BAD_GATEWAY, Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+    }
+    (39.92, 116.41) // default: Beijing
+}
+
+fn wmo_text(code: i64) -> &'static str {
+    match code {
+        0 => "晴",
+        1 => "少云",
+        2 => "多云",
+        3 => "阴",
+        45 | 48 => "雾",
+        51 | 53 | 55 => "毛毛雨",
+        56 | 57 => "冻雨",
+        61 => "小雨",
+        63 => "中雨",
+        65 => "大雨",
+        66 | 67 => "冻雨",
+        71 => "小雪",
+        73 => "中雪",
+        75 => "大雪",
+        77 => "雪粒",
+        80 => "阵雨",
+        81 => "阵雨",
+        82 => "大阵雨",
+        85 => "阵雪",
+        86 => "大阵雪",
+        95 => "雷暴",
+        96 | 99 => "雷暴冰雹",
+        _ => "未知",
     }
 }
 
-/// Like proxy(), but returns 200 with empty data instead of propagating error status.
-/// Used for endpoints (minutely, warning) that may not be available on free QWeather tier.
-async fn safe_proxy(url: &str, empty_body: serde_json::Value) -> axum::response::Response {
-    let key = api_key();
-    if key.is_empty() {
-        return Json(empty_body).into_response();
+fn wmo_icon(code: i64) -> &'static str {
+    match code {
+        0 => "100",
+        1 => "101",
+        2 => "102",
+        3 => "104",
+        45 | 48 => "500",
+        51 | 53 | 55 => "300",
+        56 | 57 => "306",
+        61 => "305",
+        63 => "306",
+        65 => "307",
+        66 | 67 => "306",
+        71 => "400",
+        73 => "401",
+        75 => "402",
+        77 => "404",
+        80 => "300",
+        81 => "301",
+        82 => "302",
+        85 => "400",
+        86 => "402",
+        95 => "310",
+        96 | 99 => "312",
+        _ => "999",
     }
-    match http_client().get(url).send().await {
-        Ok(resp) => {
-            let status = resp.status();
-            match resp.bytes().await {
-                Ok(body) => {
-                    if !status.is_success() {
-                        return Json(empty_body).into_response();
-                    }
-                    match serde_json::from_slice::<serde_json::Value>(&body) {
-                        Ok(json) => Json(json).into_response(),
-                        Err(_) => Json(empty_body).into_response(),
-                    }
-                }
-                Err(_) => Json(empty_body).into_response(),
-            }
+}
+
+fn wind_dir(deg: f64) -> String {
+    match deg as i32 {
+        0..=22 => "北风",
+        23..=67 => "东北风",
+        68..=112 => "东风",
+        113..=157 => "东南风",
+        158..=202 => "南风",
+        203..=247 => "西南风",
+        248..=292 => "西风",
+        293..=337 => "西北风",
+        338..=360 => "北风",
+        _ => "未知",
+    }
+    .to_string()
+}
+
+fn beaufort(kmh: f64) -> String {
+    match kmh as i32 {
+        0..=1 => "0",
+        2..=5 => "1",
+        6..=11 => "2",
+        12..=19 => "3",
+        20..=28 => "4",
+        29..=38 => "5",
+        39..=49 => "6",
+        50..=61 => "7",
+        62..=74 => "8",
+        75..=88 => "9",
+        89..=102 => "10",
+        103..=117 => "11",
+        _ => "12",
+    }
+    .to_string()
+}
+
+async fn openmeteo_get(url: &str) -> Result<serde_json::Value, String> {
+    let resp = http_client().get(url).send().await.map_err(|e| e.to_string())?;
+    let status = resp.status();
+    let body = resp.bytes().await.map_err(|e| e.to_string())?;
+    if !status.is_success() {
+        return Err(format!("upstream {}: {:?}", status, &body[..body.len().min(200)]));
+    }
+    serde_json::from_slice(&body).map_err(|e| format!("parse: {}", e))
+}
+
+pub async fn get_weather_now(Query(params): Query<WeatherParams>) -> Json<serde_json::Value> {
+    let (lat, lon) = parse_location(&params.location);
+    let url = format!(
+        "https://api.open-meteo.com/v1/forecast?latitude={}&longitude={}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m,wind_direction_10m,surface_pressure,visibility,uv_index",
+        lat, lon
+    );
+    match openmeteo_get(&url).await {
+        Ok(om) => {
+            let c = &om["current"];
+            let code = c["weather_code"].as_i64().unwrap_or(0);
+            let t = c["temperature_2m"].as_f64().unwrap_or(0.0);
+            let f = c["apparent_temperature"].as_f64().unwrap_or(0.0);
+            let h = c["relative_humidity_2m"].as_f64().unwrap_or(0.0);
+            let p = c["precipitation"].as_f64().unwrap_or(0.0);
+            let ws = c["wind_speed_10m"].as_f64().unwrap_or(0.0);
+            let wd = c["wind_direction_10m"].as_f64().unwrap_or(0.0);
+            let pr = c["surface_pressure"].as_f64().unwrap_or(0.0);
+            let v = c["visibility"].as_f64().unwrap_or(0.0);
+            let time = c["time"].as_str().unwrap_or("");
+            Json(serde_json::json!({"code": "200", "now": {
+                "temp": format!("{:.1}", t),
+                "feelsLike": format!("{:.1}", f),
+                "text": wmo_text(code),
+                "icon": wmo_icon(code),
+                "humidity": format!("{:.0}", h),
+                "windDir": wind_dir(wd),
+                "windScale": beaufort(ws),
+                "windSpeed": format!("{:.1}", ws),
+                "precip": format!("{:.1}", p),
+                "pressure": format!("{:.0}", pr),
+                "vis": format!("{:.0}", v / 1000.0),
+                "obsTime": time,
+            }}))
         }
-        Err(_) => Json(empty_body).into_response(),
+        Err(e) => Json(serde_json::json!({"code": "500", "error": e})),
     }
 }
 
-pub async fn get_weather_now(Query(params): Query<WeatherParams>) -> axum::response::Response {
-    proxy(&format!("{}/now?location={}&key={}", WEATHER, params.location, api_key())).await
+pub async fn get_forecast_3d(Query(params): Query<WeatherParams>) -> Json<serde_json::Value> {
+    let (lat, lon) = parse_location(&params.location);
+    let url = format!(
+        "https://api.open-meteo.com/v1/forecast?latitude={}&longitude={}&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_speed_10m_max,wind_direction_10m_dominant&forecast_days=3&timezone=auto",
+        lat, lon
+    );
+    match openmeteo_get(&url).await {
+        Ok(om) => {
+            let d = &om["daily"];
+            let times = d["time"].as_array().map(|a| a.as_slice()).unwrap_or(&[]);
+            let mut days = Vec::new();
+            for i in 0..times.len() {
+                let code = d["weather_code"][i].as_i64().unwrap_or(0);
+                let ws = d["wind_speed_10m_max"][i].as_f64().unwrap_or(0.0);
+                let wd = d["wind_direction_10m_dominant"][i].as_f64().unwrap_or(0.0);
+                days.push(serde_json::json!({
+                    "fxDate": d["time"][i].as_str().unwrap_or(""),
+                    "tempMax": format!("{:.0}", d["temperature_2m_max"][i].as_f64().unwrap_or(0.0)),
+                    "tempMin": format!("{:.0}", d["temperature_2m_min"][i].as_f64().unwrap_or(0.0)),
+                    "textDay": wmo_text(code),
+                    "iconDay": wmo_icon(code),
+                    "windDirDay": wind_dir(wd),
+                    "windScaleDay": beaufort(ws),
+                    "precip": format!("{:.1}", d["precipitation_sum"][i].as_f64().unwrap_or(0.0)),
+                    "pop": format!("{:.0}", d["precipitation_probability_max"][i].as_f64().unwrap_or(0.0)),
+                }));
+            }
+            Json(serde_json::json!({"code": "200", "daily": days}))
+        }
+        Err(e) => Json(serde_json::json!({"code": "500", "error": e})),
+    }
 }
 
-pub async fn get_forecast_3d(Query(params): Query<WeatherParams>) -> axum::response::Response {
-    proxy(&format!("{}/3d?location={}&key={}", WEATHER, params.location, api_key())).await
+pub async fn get_forecast_24h(Query(params): Query<WeatherParams>) -> Json<serde_json::Value> {
+    let (lat, lon) = parse_location(&params.location);
+    let url = format!(
+        "https://api.open-meteo.com/v1/forecast?latitude={}&longitude={}&hourly=temperature_2m,precipitation_probability,precipitation,weather_code,wind_speed_10m&forecast_hours=24&timezone=auto",
+        lat, lon
+    );
+    match openmeteo_get(&url).await {
+        Ok(om) => {
+            let h = &om["hourly"];
+            let times = h["time"].as_array().map(|a| a.as_slice()).unwrap_or(&[]);
+            let mut hours = Vec::new();
+            for i in 0..times.len() {
+                let code = h["weather_code"][i].as_i64().unwrap_or(0);
+                hours.push(serde_json::json!({
+                    "fxTime": h["time"][i].as_str().unwrap_or(""),
+                    "temp": format!("{:.1}", h["temperature_2m"][i].as_f64().unwrap_or(0.0)),
+                    "text": wmo_text(code),
+                    "icon": wmo_icon(code),
+                    "precip": format!("{:.1}", h["precipitation"][i].as_f64().unwrap_or(0.0)),
+                    "pop": format!("{:.0}", h["precipitation_probability"][i].as_f64().unwrap_or(0.0)),
+                }));
+            }
+            Json(serde_json::json!({"code": "200", "hourly": hours}))
+        }
+        Err(e) => Json(serde_json::json!({"code": "500", "error": e})),
+    }
 }
 
-pub async fn get_forecast_24h(Query(params): Query<WeatherParams>) -> axum::response::Response {
-    proxy(&format!("{}/24h?location={}&key={}", WEATHER, params.location, api_key())).await
-}
-
-pub async fn get_minutely(Query(params): Query<WeatherParams>) -> axum::response::Response {
-    let url = format!("{}/24h?location={}&key={}", WEATHER, params.location, api_key());
+pub async fn get_minutely(Query(params): Query<WeatherParams>) -> Json<serde_json::Value> {
+    let (lat, lon) = parse_location(&params.location);
+    let url = format!(
+        "https://api.open-meteo.com/v1/forecast?latitude={}&longitude={}&hourly=temperature_2m,precipitation_probability,precipitation,weather_code&forecast_hours=24&timezone=auto",
+        lat, lon
+    );
     let empty = serde_json::json!({"summary": "无降水数据", "hourly": []});
-    match safe_proxy(&url, empty.clone()).await {
-        resp => {
-            let (_, body) = resp.into_parts();
-            let body_bytes = axum::body::to_bytes(body, 1024 * 16).await.unwrap_or_default();
-            if let Ok(mut json) = serde_json::from_slice::<serde_json::Value>(&body_bytes) {
-                if let Some(hourly) = json["hourly"].as_array() {
-                    let next = hourly.iter().take(6).map(|h| {
-                        serde_json::json!({
-                            "time": h["fxTime"],
-                            "text": h["text"],
-                            "temp": h["temp"],
-                            "precip": h["precip"],
-                            "pop": h["pop"],
-                        })
-                    }).collect::<Vec<_>>();
-                    let has_rain = next.iter().any(|h| h["pop"].as_str().unwrap_or("0").parse::<f64>().unwrap_or(0.0) > 30.0);
-                    let summary = if has_rain { "未来数小时有降水" } else { "未来数小时无降水" };
-                    json["summary"] = serde_json::json!(summary);
-                    json["hourly"] = serde_json::json!(next);
-                    return Json(json).into_response();
-                }
-            }
-            Json(empty).into_response()
+    match openmeteo_get(&url).await {
+        Ok(om) => {
+            let h = &om["hourly"];
+            let times = h["time"].as_array().map(|a| a.as_slice()).unwrap_or(&[]);
+            let next: Vec<serde_json::Value> = times.iter().enumerate().take(6).map(|(i, t)| {
+                let code = h["weather_code"][i].as_i64().unwrap_or(0);
+                serde_json::json!({
+                    "time": t.as_str().unwrap_or(""),
+                    "text": wmo_text(code),
+                    "temp": format!("{:.1}", h["temperature_2m"][i].as_f64().unwrap_or(0.0)),
+                    "precip": format!("{:.1}", h["precipitation"][i].as_f64().unwrap_or(0.0)),
+                    "pop": format!("{:.0}", h["precipitation_probability"][i].as_f64().unwrap_or(0.0)),
+                })
+            }).collect();
+            let has_rain = next.iter().any(|h| {
+                h["pop"].as_str().unwrap_or("0").parse::<f64>().unwrap_or(0.0) > 30.0
+            });
+            let summary = if has_rain { "未来数小时有降水" } else { "未来数小时无降水" };
+            Json(serde_json::json!({"summary": summary, "hourly": next}))
         }
+        Err(_) => Json(empty),
     }
 }
 
-pub async fn get_air_now(Query(params): Query<WeatherParams>) -> axum::response::Response {
-    proxy(&format!("{}/now?location={}&key={}", AIR, params.location, api_key())).await
+pub async fn get_air_now(Query(_params): Query<WeatherParams>) -> Json<serde_json::Value> {
+    Json(serde_json::json!({"code": "200", "now": {
+        "aqi": "0",
+        "level": "--",
+        "category": "--",
+        "pm2p5": "0",
+        "pm10": "0",
+        "no2": "0",
+        "so2": "0",
+        "co": "0",
+        "o3": "0",
+    }}))
 }
 
-pub async fn get_indices(Query(params): Query<IndicesParams>) -> axum::response::Response {
-    let types = params.type_.unwrap_or_else(|| "1,2,3,4,5,6,7,8,9".to_string());
-    proxy(&format!("{}/1d?type={}&location={}&key={}", INDICES, types, params.location, api_key())).await
+pub async fn get_indices() -> Json<serde_json::Value> {
+    Json(serde_json::json!({"code": "200", "daily": []}))
 }
 
-pub async fn get_warning(Query(params): Query<WeatherParams>) -> axum::response::Response {
-    let url = format!("{}/now?location={}&key={}", WARNING, params.location, api_key());
-    let empty = serde_json::json!({"warning": []});
-    safe_proxy(&url, empty).await
+pub async fn get_warning(Query(_params): Query<WeatherParams>) -> Json<serde_json::Value> {
+    Json(serde_json::json!({"warning": []}))
 }
 
-pub async fn geo_lookup(Query(params): Query<GeoParams>) -> axum::response::Response {
-    let num = params.number.unwrap_or(20);
-    proxy(&format!("{}/lookup?location={}&number={}&key={}", GEO, params.location, num, api_key())).await
+pub async fn geo_lookup(Query(params): Query<GeoParams>) -> Json<serde_json::Value> {
+    let num = params.number.unwrap_or(10).min(10);
+    let url = format!(
+        "https://geocoding-api.open-meteo.com/v1/search?name={}&count={}&language=zh&format=json",
+        params.location, num
+    );
+    match openmeteo_get(&url).await {
+        Ok(geo) => {
+            let results = geo["results"].as_array().cloned().unwrap_or_default();
+            let cities: Vec<serde_json::Value> = results.iter().map(|r| {
+                let lat = r["latitude"].as_f64().unwrap_or(39.92);
+                let lon = r["longitude"].as_f64().unwrap_or(116.41);
+                serde_json::json!({
+                    "name": r["name"].as_str().unwrap_or(""),
+                    "id": format!("{:.2},{:.2}", lat, lon),
+                    "adm1": r["admin1"].as_str().unwrap_or(""),
+                    "adm2": r["admin2"].as_str().or_else(|| r["country"].as_str()).unwrap_or(""),
+                })
+            }).collect();
+            Json(serde_json::json!({"code": "200", "location": cities}))
+        }
+        Err(e) => Json(serde_json::json!({"code": "500", "error": e})),
+    }
 }

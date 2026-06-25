@@ -228,7 +228,6 @@ const DataQuery: React.FC = () => {
         <LineChart
           key={`${viewMode}-${selectedMetrics.join(',')}`}
           data={chartData}
-          height={typeof window !== 'undefined' && window.innerWidth < 768 ? 220 : 400}
           showLegend={selectedMetrics.length > 1}
         />
       </div>

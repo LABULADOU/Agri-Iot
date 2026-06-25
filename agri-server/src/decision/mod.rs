@@ -1,3 +1,11 @@
+// TODO(decision): 三阶段决策管线框架 — 骨架已完成，未接入主流程。
+//   - Tier 1 (PerTelemetry): 紧急保护，大风/大雨/下雪即时关通风
+//   - Tier 2 (OnStateChange): 雨/风状态机切换触发评估
+//   - Tier 3 (Timed 30min): LLM + RAG 知识库全面评估
+//   待办:
+//   1. mod.rs:start() 创建 flow 后需存入 DecisionEngine 而非 `let _` 丢弃
+//   2. start() 中的事件循环需改为真实调度: 匹配 Trigger → 执行 Stage 管线 → 走审批 → 发通知
+//   3. ApprovalGate / NotificationDispatch / ShiftRouter 需实例化并接线
 pub mod engine;
 pub mod registry;
 pub mod log;
@@ -48,6 +56,7 @@ impl DecisionEngine {
 pub async fn start(state: AppState) -> Result<()> {
     info!("Decision engine starting");
 
+    // TODO: 以下 flows 需存入 DecisionEngine 实例并启动调度循环
     let _reg = registry::StateRegistry::new();
 
     let _t1 = engine::DecisionFlow::builder("emergency_flow")
@@ -79,6 +88,7 @@ pub async fn start(state: AppState) -> Result<()> {
     let event_tx = state.event_tx.clone();
     let event_rx = event_tx.subscribe();
 
+    // TODO: 这个事件循环只空转了 node_id, 需要改成真实调度器
     tokio::spawn(async move {
         let mut rx = event_rx;
         loop {
