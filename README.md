@@ -266,6 +266,8 @@ agri-core/migrations/   # 数据库迁移（单一来源）
 > 仪表盘同时显示已分配和未分配区域的设备。
 > **断线容错**：handler 使用 `clean_session=false`，agri-server 重启后 broker 自动回放离线期间的 QoS 1 消息（含 LittleFS 本地缓存双重保障）。
 > **设备在线状态**：仪表盘通过 WebSocket 订阅 `status_change` 事件实时更新节点在线/离线状态，无需手动刷新页面。规则引擎每 30s 检测超 5 分钟未上报的设备，自动标记离线并推送通知。
+>
+> **数据异常检测**：5 层检测管线（E1 双零/E2 速率/E3 空间/E4 交叉相关/E5 静默），区分传感器故障与真实环境事件。DHT22 故障时自动从邻居节点填充数据。前端表格新增传感器健康列，`✔` 正常 / `⚠n` 异常。
 
 ## 开发
 
@@ -275,7 +277,7 @@ cargo check -p agri-server -p agri-mqtt -p agri-core
 
 # 运行全部测试
 cargo test -p agri-core   # 92 测试
-cargo test -p agri-server # 32 测试
+cargo test -p agri-server # 33 测试
 cargo test -p agri-mqtt   # 22 测试
 
 # 内存泄漏检测

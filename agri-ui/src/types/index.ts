@@ -423,3 +423,13 @@ export interface FarmOperationsListResponse {
   page: number;
   limit: number;
 }
+
+export interface AnomalyEvent {
+  node_id: string;
+  metric: string;
+  anomaly_type: 'Dht22Fault' | 'MetricSilent' | 'RateAnomaly' | 'SpatialAnomaly';
+  severity: 'Info' | 'Warning' | 'Critical';
+  value_original?: number;
+  message: string;
+  timestamp: number;
+}

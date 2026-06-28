@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Zone, Assessment, Emergency, TodoItem, Device } from '../types';
+import type { Zone, Assessment, Emergency, TodoItem, Device, AnomalyEvent } from '../types';
 import { zoneApi, deviceApi, aiApi } from '../services/api';
 import { wsService } from '../services/ws';
 import { useRealtimeStore } from './realtimeStore';
@@ -19,6 +19,8 @@ export interface ZoneNodeReading {
   nodeName: string;
   readings: LatestReadings;
   status: string;
+  anomalyCount: number;
+  anomalySeverity?: string;
 }
 
 interface DashboardState {
@@ -29,6 +31,7 @@ interface DashboardState {
   healthScore: number;
   healthTrend: number;
   nodeReadings: ZoneNodeReading[];
+  anomalies: Record<string, AnomalyEvent[]>;
 
   fetchAll: () => Promise<void>;
   fetchAssessments: () => Promise<void>;
@@ -40,6 +43,7 @@ interface DashboardState {
   _wsUnsub: (() => void) | null;
   _realtimeUnsub: (() => void) | null;
   _statusUnsub: (() => void) | null;
+  _anomalyUnsub: (() => void) | null;
   _assessTimer: number | undefined;
 }
 
@@ -77,9 +81,11 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
   healthScore: 85,
   healthTrend: 0,
   nodeReadings: [],
+  anomalies: {},
   _wsUnsub: null,
   _realtimeUnsub: null,
   _statusUnsub: null,
+  _anomalyUnsub: null,
   _assessTimer: undefined,
 
   fetchAll: async () => {
@@ -108,6 +114,7 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
             nodeName: deviceNameMap.get(node.node_id) || node.node_id,
             readings,
             status: node.status || 'offline',
+            anomalyCount: 0,
           });
         }
       }
@@ -156,6 +163,7 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
                   nodeName: device.name || device.node_id,
                   readings: newReadings,
                   status: 'online',
+                  anomalyCount: 0,
                 });
               }
             }
@@ -182,6 +190,40 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
           }));
         });
         set({ _statusUnsub: unsubStatus });
+      }
+
+      if (!get()._anomalyUnsub) {
+        const unsubAnomaly = wsService.subscribe('anomaly', [], (data) => {
+          const evt = data as Record<string, unknown>;
+          const nodeId = evt.node_id as string;
+          const severity = evt.severity as string;
+          if (!nodeId) return;
+
+          const anomaly: AnomalyEvent = {
+            node_id: nodeId,
+            metric: evt.metric as string,
+            anomaly_type: evt.anomaly_type as AnomalyEvent['anomaly_type'],
+            severity: severity as AnomalyEvent['severity'],
+            value_original: evt.value_original as number | undefined,
+            message: evt.message as string,
+            timestamp: evt.timestamp as number,
+          };
+
+          set(state => {
+            const existing = state.anomalies[nodeId] || [];
+            const updated = [anomaly, ...existing].slice(0, 50);
+            const anomalyCount = existing.length + 1;
+            return {
+              anomalies: { ...state.anomalies, [nodeId]: updated },
+              nodeReadings: state.nodeReadings.map(nr =>
+                nr.nodeId === nodeId
+                  ? { ...nr, anomalyCount, anomalySeverity: severity !== 'Info' ? severity : nr.anomalySeverity }
+                  : nr
+              ),
+            };
+          });
+        });
+        set({ _anomalyUnsub: unsubAnomaly });
       }
     } catch (e) {
       console.error('Dashboard fetchAll failed:', e);
@@ -249,7 +291,8 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
   stopRealtimeUpdates: () => {
     get()._realtimeUnsub?.();
     get()._statusUnsub?.();
+    get()._anomalyUnsub?.();
     clearTimeout(get()._assessTimer);
-    set({ _realtimeUnsub: null, _statusUnsub: null, _assessTimer: undefined });
+    set({ _realtimeUnsub: null, _statusUnsub: null, _anomalyUnsub: null, _assessTimer: undefined });
   },
 }));

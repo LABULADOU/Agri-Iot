@@ -30,6 +30,7 @@
 #include <mbedtls/sha256.h>
 #include <mbedtls/pk.h>
 #include <mbedtls/base64.h>
+#include <time.h>
 #include "ota_public.h"
 
 // ==================== 配置 ====================
@@ -118,6 +119,9 @@ MqttTransport activeTransport = TRANSPORT_NONE;
 bool wanWsReady = false;
 bool wanWsConnected = false;  // WebSocket-level connected
 bool wanMqttConnected = false; // MQTT-level connected (over WS)
+
+uint8_t dhtFailCount = 0;      // DHT22 consecutive failure counter
+#define DHT_FAIL_THRESHOLD 3   // after 3 consecutive failures, report dht_status="failed"
 
 // 接收缓冲区（WebSocket path 用）
 uint8_t wsRxBuf[256];
@@ -605,9 +609,11 @@ void handleMqttCommand(const char* json) {
         bool ok = otaUpdate(url, sig);
         if (ok) {
             lastCmdResult = "ota:rebooting";
-        } else {
+        } else if (strcmp(lastCmdResult, "ota:started") == 0) {
+            // otaUpdate returned false but didn't set a specific error
             lastCmdResult = "ota:failed";
         }
+        // else: otaUpdate set a specific error (ota:http_err, etc.), keep it
     }
 }
 
@@ -788,11 +794,12 @@ void publishTelemetry() {
     // sensor-read path blows the loopTask stack (4KB default).
     // Connection is maintained by loop() every 5s.
     
-    StaticJsonDocument<384> doc;
+    StaticJsonDocument<448> doc;
     doc["node_id"] = NODE_ID;
     doc["boot_id"] = bootId;
     doc["seq"] = mqttSeq + 1;
     doc["fw_version"] = FW_VERSION;
+    doc["captured_at"] = (long long)time(nullptr);
     doc["ota_status"] = "idle";
     if (strlen(lastCmdResult) > 0) doc["last_cmd"] = lastCmdResult;
     JsonObject metrics = doc["metrics"].to<JsonObject>();
@@ -800,13 +807,21 @@ void publishTelemetry() {
     float airTemp = dht.readTemperature();
     float airHum = dht.readHumidity();
     
-    if (!isnan(airTemp)) {
+    bool dhtOk = !isnan(airTemp) && !isnan(airHum)
+              && airTemp > -40.0f && airTemp < 80.0f
+              && !(airTemp == 0.0f && airHum == 0.0f);  // E1: dual-zero = hardware fault
+    
+    if (dhtOk) {
+        dhtFailCount = 0;
         metrics["air_temp"] = roundf(airTemp * 100.0f) / 100.0f;
-        Serial.printf("气温: %.1f℃ | ", airTemp);
-    }
-    if (!isnan(airHum)) {
         metrics["air_humidity"] = roundf(airHum * 100.0f) / 100.0f;
-        Serial.printf("气湿: %.1f%% | ", airHum);
+        Serial.printf("气温: %.1f℃ | 气湿: %.1f%% | ", airTemp, airHum);
+    } else {
+        dhtFailCount++;
+        Serial.printf("DHT22 异常(连续%d次) | ", dhtFailCount);
+        if (dhtFailCount >= DHT_FAIL_THRESHOLD) {
+            metrics["dht_status"] = "failed";
+        }
     }
     
     float soilTemp, soilMoist, soilEC;
@@ -823,7 +838,7 @@ void publishTelemetry() {
     metrics["relay_state"] = relayState;
     metrics["rssi"] = WiFi.RSSI();
     
-    char json[384];
+    char json[448];
     size_t n = serializeJson(doc, json, sizeof(json));
     if (n >= sizeof(json)) {
         Serial.println("JSON 溢出!");
@@ -833,6 +848,7 @@ void publishTelemetry() {
     if (activeTransport == TRANSPORT_NONE) {
         // No active transport — buffer for later replay
         // (connection attempt from loop() will flush)
+        mqttSeq++;
         appendToBuffer(json);
         Serial.println(" | 离线缓存");
         return;
@@ -967,15 +983,14 @@ void setupWiFi() {
 bool otaUpdate(const char* url, const char* sig_b64) {
     Serial.printf("OTA: 开始升级 %s\n", url);
     bool isHttps = (strncmp(url, "https://", 8) == 0);
-    WiFiClient tcpClient;
-    WiFiClientSecure tlsClient;
-    tlsClient.setInsecure();
     HTTPClient http;
     http.setTimeout(30000);
     if (isHttps) {
-        http.begin(tlsClient, url);
+        WiFiClientSecure* tls = new WiFiClientSecure();
+        tls->setInsecure();
+        http.begin(*tls, url);
     } else {
-        http.begin(tcpClient, url);
+        http.begin(url);
     }
     int code = http.GET();
     if (code != 200) {
@@ -1099,6 +1114,23 @@ void setup() {
     }
 
     setupWiFi();
+
+    // NTP 时间同步（用于 captured_at 采集时间戳）
+    configTime(8 * 3600, 0, "pool.ntp.org", "time.nist.gov");
+    {
+        time_t now = 0;
+        int retries = 0;
+        while (now < 100000 && retries < 20) {
+            delay(500);
+            time(&now);
+            retries++;
+        }
+        if (now >= 100000) {
+            Serial.printf("NTP 同步成功: %s", ctime(&now));
+        } else {
+            Serial.println("NTP 同步超时，将使用服务端时间");
+        }
+    }
 }
 
 // ==================== 主循环 ====================

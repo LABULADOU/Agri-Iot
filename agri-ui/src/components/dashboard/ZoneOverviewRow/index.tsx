@@ -1,5 +1,6 @@
 import React from 'react';
-import { Typography, Badge } from 'antd';
+import { Typography, Badge, Tooltip } from 'antd';
+import { WarningOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import type { Zone } from '../../../types';
 import styles from './ZoneOverviewRow.module.css';
 
@@ -26,6 +27,8 @@ interface ZoneOverviewRowProps {
     ec?: number;
   };
   status?: string;
+  anomalyCount?: number;
+  anomalySeverity?: string;
   onClick?: () => void;
 }
 
@@ -37,6 +40,8 @@ const ZoneOverviewRow: React.FC<ZoneOverviewRowProps> = ({
   totalCount,
   latestReadings = {},
   status = 'optimal',
+  anomalyCount = 0,
+  anomalySeverity,
   onClick,
 }) => {
   const isOffline = totalCount > 0 && onlineCount === 0;
@@ -72,6 +77,18 @@ const ZoneOverviewRow: React.FC<ZoneOverviewRowProps> = ({
       <span className={styles.nodes}>
         <Badge status={isOffline ? 'error' : 'success'} />
         <Text type="secondary">{onlineCount}/{totalCount}</Text>
+      </span>
+      <span className={styles.sensorHealth}>
+        {anomalyCount > 0 ? (
+          <Tooltip title={`${anomalyCount} 个传感器异常 (${anomalySeverity || 'Warning'})`}>
+            <span className={styles.anomalyBadge}>
+              <WarningOutlined style={{ color: anomalySeverity === 'Critical' ? '#EF4444' : '#F59E0B' }} />
+              <Text type="warning" style={{ fontSize: 12, marginLeft: 2 }}>{anomalyCount}</Text>
+            </span>
+          </Tooltip>
+        ) : (
+          <CheckCircleOutlined style={{ color: '#22C55E', fontSize: 14 }} />
+        )}
       </span>
       <span className={styles.suggestion}>
         {assessment && assessment.score < 60 ? (

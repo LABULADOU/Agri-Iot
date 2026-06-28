@@ -61,7 +61,7 @@ pub async fn handle_telemetry(
     auto_register_device(pool, node_id, &["sensor"]).await?;
 
     let inserted = agri_core::telemetry::process_telemetry(
-        pool, &parsed.node_id, &parsed.metrics, event_tx, parsed.seq, parsed.boot_id.as_deref(),
+        pool, &parsed.node_id, &parsed.metrics, event_tx, parsed.seq, parsed.boot_id.as_deref(), parsed.captured_at,
     ).await?;
 
     if inserted > 0 {
@@ -84,7 +84,7 @@ pub async fn handle_gateway_telemetry(
         auto_register_device(pool, &device.node_id, &["sensor"]).await?;
 
         let inserted = agri_core::telemetry::process_telemetry(
-            pool, &device.node_id, &device.metrics, event_tx, device.seq, device.boot_id.as_deref(),
+            pool, &device.node_id, &device.metrics, event_tx, device.seq, device.boot_id.as_deref(), device.captured_at,
         ).await?;
 
         if inserted > 0 {

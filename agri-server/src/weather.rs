@@ -287,23 +287,44 @@ pub async fn get_warning(Query(_params): Query<WeatherParams>) -> Json<serde_jso
 
 pub async fn geo_lookup(Query(params): Query<GeoParams>) -> Json<serde_json::Value> {
     let num = params.number.unwrap_or(10).min(10);
+    let query = params.location.trim().to_string();
     let url = format!(
         "https://geocoding-api.open-meteo.com/v1/search?name={}&count={}&language=zh&format=json",
-        params.location, num
+        query, num
     );
     match openmeteo_get(&url).await {
         Ok(geo) => {
             let results = geo["results"].as_array().cloned().unwrap_or_default();
-            let cities: Vec<serde_json::Value> = results.iter().map(|r| {
-                let lat = r["latitude"].as_f64().unwrap_or(39.92);
-                let lon = r["longitude"].as_f64().unwrap_or(116.41);
-                serde_json::json!({
-                    "name": r["name"].as_str().unwrap_or(""),
-                    "id": format!("{:.2},{:.2}", lat, lon),
-                    "adm1": r["admin1"].as_str().unwrap_or(""),
-                    "adm2": r["admin2"].as_str().or_else(|| r["country"].as_str()).unwrap_or(""),
+            let mut seen = std::collections::HashSet::new();
+            let mut cities: Vec<serde_json::Value> = results.into_iter()
+                .filter(|r| {
+                    let name = r["name"].as_str().unwrap_or("");
+                    let adm1 = r["admin1"].as_str().unwrap_or("");
+                    let country = r["country"].as_str().unwrap_or("");
+                    seen.insert(format!("{}|{}|{}", name, adm1, country))
                 })
-            }).collect();
+                .map(|r| {
+                    let lat = r["latitude"].as_f64().unwrap_or(39.92);
+                    let lon = r["longitude"].as_f64().unwrap_or(116.41);
+                    serde_json::json!({
+                        "name": r["name"].as_str().unwrap_or(""),
+                        "id": format!("{:.2},{:.2}", lat, lon),
+                        "adm1": r["admin1"].as_str().unwrap_or(""),
+                        "adm2": r["admin2"].as_str().or_else(|| r["country"].as_str()).unwrap_or(""),
+                    })
+                })
+                .collect();
+            // 精确匹配优先: 搜索词等于完整名称或名称前缀
+            cities.sort_by(|a, b| {
+                let a_name = a["name"].as_str().unwrap_or("");
+                let b_name = b["name"].as_str().unwrap_or("");
+                let a_exact = a_name == query;
+                let b_exact = b_name == query;
+                let a_prefix = a_name.starts_with(&query);
+                let b_prefix = b_name.starts_with(&query);
+                (b_exact as i8, b_prefix as i8).cmp(&(a_exact as i8, a_prefix as i8))
+            });
+            cities.truncate(5);
             Json(serde_json::json!({"code": "200", "location": cities}))
         }
         Err(e) => Json(serde_json::json!({"code": "500", "error": e})),

@@ -75,6 +75,7 @@ const Dashboard: React.FC = () => {
             <span className={styles.th}>土壤</span>
             <span className={styles.th}>EC</span>
             <span className={styles.th}>状态</span>
+            <span className={styles.thCenter}>传感器</span>
           </div>
 
           <div className={styles.tableBody}>
@@ -91,6 +92,8 @@ const Dashboard: React.FC = () => {
                   onlineCount={isOnline ? 1 : 0}
                   totalCount={1}
                   latestReadings={nr.readings}
+                  anomalyCount={nr.anomalyCount}
+                  anomalySeverity={nr.anomalySeverity}
                   onClick={() => navigate(`/zones/${nr.zoneId}`)}
                 />
               );

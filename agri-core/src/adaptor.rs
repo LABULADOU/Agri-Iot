@@ -7,6 +7,7 @@ pub struct ParsedTelemetry {
     pub metrics: Map<String, serde_json::Value>,
     pub seq: Option<i64>,
     pub boot_id: Option<String>,
+    pub captured_at: Option<i64>,
 }
 
 #[derive(Debug)]
@@ -90,6 +91,7 @@ impl PayloadAdaptor for JsonPayloadAdaptor {
 
         let seq = data.get("seq").and_then(|s| s.as_i64());
         let boot_id = data.get("boot_id").and_then(|s| s.as_str()).map(String::from);
+        let captured_at = data.get("captured_at").and_then(|s| s.as_i64()).filter(|t| *t > 100000);
 
         let metrics = match data.get("metrics").and_then(|m| m.as_object()) {
             Some(m) => m.clone(),
@@ -109,6 +111,7 @@ impl PayloadAdaptor for JsonPayloadAdaptor {
             metrics,
             seq,
             boot_id,
+            captured_at,
         })
     }
 
@@ -127,6 +130,7 @@ impl PayloadAdaptor for JsonPayloadAdaptor {
                 metrics: d.metrics,
                 seq: gw.seq,
                 boot_id: gw.boot_id.clone(),
+                captured_at: None,
             }
         }).collect();
 

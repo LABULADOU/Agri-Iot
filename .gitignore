@@ -11,6 +11,8 @@ Cargo.lock
 # PlatformIO
 esp32-firmware/.pio/
 esp32-firmware/.env
+agri-server/static/firmware/
+*.bin
 
 # IDE
 .idea/

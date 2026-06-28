@@ -1,3 +1,4 @@
+pub mod anomaly;
 pub mod dag;
 pub mod nodes;
 
@@ -232,6 +233,16 @@ async fn run_timer_checks(
                 "message": &emergency.message,
                 "pauses_auto_mode": output.pauses_auto_mode,
             }).to_string());
+        }
+    }
+
+    // Run anomaly detection every other tick (~60s)
+    {
+        use std::sync::atomic::{AtomicU8, Ordering};
+        static ANOMALY_TICK: AtomicU8 = AtomicU8::new(0);
+        let tick = ANOMALY_TICK.fetch_add(1, Ordering::Relaxed);
+        if tick % 2 == 0 {
+            anomaly::run_anomaly_detection(pool, event_tx).await;
         }
     }
 

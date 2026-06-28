@@ -997,3 +997,122 @@ esp32-hardware/
 | `decision/notification/escalator.rs` | escalation TODO：只打日志不通知 |
 | `decision/stages/llm_stage.rs` | TODO：实现完整，缺触发器 |
 | `rule_engine/mod.rs:73` | `let _ =` 显式忽略无用的 Result（`chain_timer::process_async`） |
+
+## 数据异常检测系统（2026-06-27）
+
+### 背景
+ESP32 DHT22 因焊点与金属外壳短路，产生 `temperature=0, humidity=0` 的异常数据。喷灌/灌溉等真实环境事件也引起数据波动。需要一套系统区分传感器故障与真实事件。
+
+### 架构
+```
+E1: 双零检测 (telemetry.rs) ──→ REJECT (传感器故障)
+E2: 速率检测 (anomaly.rs)  ──┐
+E3: 空间校验 (anomaly.rs)  ──┼──→ 邻域一致→ACCEPT (真实事件)
+                              │     邻域偏离→FLAG   (疑似故障)
+E4: 交叉相关 (预留)         ──┘
+E5: 静默检测 (anomaly.rs)  ──→ WARNING (设备离线/传感器失效)
+```
+
+### P0: 服务端验证 + 固件加固
+| 组件 | 变更 | 文件 |
+|------|------|------|
+| 服务端范围收紧 | `temperature`/`soil_temperature`: `-10..60` → `-5..50` | `agri-core/src/telemetry.rs` |
+| 双零检测 | `is_dht22_dual_zero()` — 同帧 temp=0 AND hum=0 → 跳过 DHT22 + `warn!` | `agri-core/src/telemetry.rs` |
+| 验证日志 | `Validation rejected node={} metric={} value={}` 替代静默 `continue` | `agri-core/src/telemetry.rs` |
+| ESP32 DHT22 过滤 | `dhtOk` 拒绝 `isnan`/超范围/双零；连续 3 次失败 → `dht_status:failed` | `esp32-firmware/src/main.cpp` |
+
+### P1: 异常检测引擎
+- **E2 (速率)**: `temperature` ≥2°C/10s, `humidity` ≥5%/10s → 触发检测
+- **E3 (空间)**: 同区域邻域中位数比较，偏差≥1°C/5% → `SpatialAnomaly`
+- **E5 (静默)**: 在线设备 >10 分钟无指标 → `MetricSilent`
+- **去重**: `OnceLock<Mutex<DedupTracker>>`，Info 30min / Warning 10min / Critical 5min
+- **60s 定时扫描**: `run_timer_checks()` 原子 tick 计数器触发 `run_anomaly_detection()`
+- **文件**: `agri-server/src/rule_engine/anomaly.rs`
+
+### P2: 持久化 + SSE
+- `agri-core/migrations/011_anomaly_events.sql` — `device_id, node_id, metric, anomaly_type, severity, value_original, message, created_at`
+- `dispatch()` 写入 DB 后再广播 `"type":"anomaly"` SSE 事件
+
+### P3: 空间插值补充
+- DHT22 双零时查询同区域邻居 2 分钟内最新温湿度
+- 写入 `anomaly_events` 记录填充来源（`filled temperature=... from neighbor ...`）
+- **文件**: `agri-core/src/telemetry.rs`
+
+### P4: 前端传感器健康
+- `AnomalyEvent` 类型 (`types/index.ts`)
+- `dashboardStore` 订阅 `type:'anomaly'` 事件，`nodeReadings` 含 `anomalyCount`
+- `ZoneOverviewRow` 新增传感器健康列：`✔`（正常）/ `⚠n`（异常，Tooltip 详情）
+- **文件**: `agri-ui/src/stores/dashboardStore.ts`, `agri-ui/src/components/dashboard/ZoneOverviewRow/`
+
+### 变更文件清单
+```
+修改: agri-core/src/telemetry.rs           # P0+P3: 范围收紧 + 双零检测 + 填充邻居
+修改: esp32-firmware/src/main.cpp          # P0: DHT22 双零 + 连续失败计数
+新增: agri-server/src/rule_engine/anomaly.rs # P1: 异常检测引擎 E2/E3/E5
+修改: agri-server/src/rule_engine/mod.rs   # P1: 集成 anomaly 模块
+新增: agri-core/migrations/011_anomaly_events.sql # P2: anomaly_events 表
+新增: agri-ui/src/types/index.ts           # P4: AnomalyEvent 类型
+修改: agri-ui/src/stores/dashboardStore.ts # P4: 订阅 anomaly SSE
+修改: agri-ui/src/components/dashboard/ZoneOverviewRow/index.tsx # P4: 传感器健康列
+修改: agri-ui/src/components/dashboard/ZoneOverviewRow/ZoneOverviewRow.module.css # P4: 10列 grid
+修改: agri-ui/src/pages/Dashboard/Dashboard.tsx # P4: 传感器表头 + 传递 anomaly props
+修改: agri-ui/src/pages/Dashboard/Dashboard.module.css # P4: thCenter + 10列 head
+```
+
+### 测试统计
+- `agri-core`: 92 测试（不变）
+- `agri-server`: 33 测试（+1 anomaly 引擎集成）
+- `agri-mqtt`: 22 测试（不变）
+- **总计: 147 测试**（全部通过）
+
+## captured_at + OTA 修复 + 双副本 public key 问题（2026-06-28）
+
+### captured_at 时间戳
+| 组件 | 变更 |
+|------|------|
+| ESP32 固件 | `#include <time.h>` + `configTime` NTP 同步，`captured_at` 字段加入 publishTelemetry JSON（doc size 384→448B，buffer 384→448B） |
+| `agri-core/adaptor.rs` | `ParsedTelemetry.captured_at: Option<i64>` — JSON 解析，值 ≤100000 过滤 |
+| `agri-core/telemetry.rs` | `process_telemetry()` 接受 `captured_at: Option<i64>` → `ts` 用于 `sensor_readings.timestamp`，`now_received` 保持 `devices.updated_at` 和 SSE 时间戳 |
+| `agri-mqtt/handler.rs` | 传递 `parsed.captured_at` |
+| `agri-server/routes.rs` | `IngestTelemetryRequest` / `BatchTelemetryItem` 增加 `captured_at: Option<i64>` |
+
+### OTA 修复
+
+| 问题 | 修复 |
+|------|------|
+| `lastCmdResult` 被泛化覆盖（行613） | 特定错误（`ota:http_err`/`ota:sign_fail`）不再被替换为 `ota:failed` |
+| OTA Heap/Stack：`WiFiClientSecure` 栈分配，HTTP 路径也分配 TLS client 浪费 ~40KB | HTTPS：`WiFiClientSecure` 堆分配；HTTP：`http.begin(url)` 不用自定义 client |
+| **public key 双重副本** — `keys/ota_public.h`（新 key）和 `src/ota_public.h`（旧 key），`#include "ota_public.h"` 优先找到 `src/` 旧版本 | 同步更新 `src/ota_public.h` 为新 key |
+| OTA 验证：node-001 `7844c6cf`→`d792d87a`，node-002 →`9842d34e` | **双节点 OTA 均成功** |
+
+### 数据回放时间正确性验证
+| 测试 | 结果 |
+|------|------|
+| `captured_at=1000000` → DB `timestamp=1000000` | ✅ |
+| 无 `captured_at` → DB `timestamp≈now` | ✅ |
+| Batch 两条不同 `captured_at` → 各自时间戳完整保留 | ✅ |
+| `devices.updated_at` 保持服务器接收时间，不受 `captured_at` 影响 | ✅ |
+| Dashboard API 返回历史 `captured_at` 时间戳 | ✅ |
+
+### `ota_deploy.sh` 更新
+- 默认使用 Tailscale Funnel URL（公网/局域网均可用）
+- `--lan` 参数切换到 `http://172.20.10.2:3001/firmware`（局域网加速）
+- 触发方式从 `mosquitto_pub` 改为 HTTP API（兼容 rumqttd broker）
+- `--no-trigger` 和 `--lan` 双参数支持
+
+### 变更文件清单
+```
+修改: esp32-firmware/src/main.cpp             # captured_at + DHT22 过滤 + OTA 修复
+修改: esp32-firmware/src/ota_public.h         # 同步为新 public key
+修改: agri-core/src/adaptor.rs                # captured_at 解析
+修改: agri-core/src/telemetry.rs              # captured_at 处理 + 验证日志
+修改: agri-mqtt/src/handler.rs                # captured_at 传递
+修改: agri-server/src/routes.rs               # captured_at 接入点 + batch
+修改: scripts/ota_deploy.sh                   # LAN/Funnel 双模式 + HTTP API 触发
+```
+
+### 测试统计
+- `agri-core`: 92 测试（不变）
+- `agri-server`: 33 测试（不变）
+- `agri-mqtt`: 22 测试（不变）
+- **总计: 147 测试**（全部通过）
