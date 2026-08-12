@@ -311,6 +311,7 @@ pub async fn geo_lookup(Query(params): Query<GeoParams>) -> Json<serde_json::Val
                         "id": format!("{:.2},{:.2}", lat, lon),
                         "adm1": r["admin1"].as_str().unwrap_or(""),
                         "adm2": r["admin2"].as_str().or_else(|| r["country"].as_str()).unwrap_or(""),
+                        "country": r["country_code"].as_str().unwrap_or(""),
                     })
                 })
                 .collect();

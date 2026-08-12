@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Layout, Space, Typography, Badge, Spin, AutoComplete, Input } from 'antd';
 import { WarningOutlined, SearchOutlined } from '@ant-design/icons';
+import { pinyin } from 'pinyin-pro';
 import { useRealtimeStore } from '../../stores/realtimeStore';
 import { useWeatherStore } from '../../stores/weatherStore';
 import { weatherApi } from '../../services/api';
@@ -62,7 +63,7 @@ const iconMap: Record<string, string> = {
   '999': '🌤️',
 };
 
-function weatherIcon(icon: string, text: string): string {
+function weatherIcon(icon: string, _text: string): string {
   return iconMap[icon] || iconMap['999'];
 }
 
@@ -75,6 +76,23 @@ function formatDate(dateStr: string): string {
 const levelColors: Record<string, string> = {
   '白色': '#999', '蓝色': '#3b82f6', '黄色': '#eab308', '橙色': '#f97316', '红色': '#ef4444',
 };
+
+function buildPinyinCandidates(q: string): string[] {
+  // Open-Meteo 的 GeoNames 库对中国县级地名覆盖不全（如"富源县"搜不到），
+  // 去掉行政区后缀字后生成拼音候选：整串 → 末词 → 首词
+  const cleaned = q.replace(/[省市区县镇乡村盟旗州]/g, '');
+  if (!cleaned) return [];
+  const arr = pinyin(cleaned, { toneType: 'none', type: 'array', nonZh: 'consecutive' })
+    .map(s => s.toLowerCase());
+  const full = arr.join('');
+  const words = arr.filter(w => /[a-z]/.test(w));
+  const cand = [full];
+  if (words.length > 1) {
+    cand.push(words[words.length - 1]);
+    cand.push(words[0]);
+  }
+  return [...new Set(cand)];
+}
 
 const TopBar: React.FC = () => {
   const { connected, lastUpdate } = useRealtimeStore();
@@ -129,7 +147,34 @@ const TopBar: React.FC = () => {
       setSearching(true);
       try {
         const res = await weatherApi.geoLookup(query.trim(), 10);
-        setSearchResults(res.location || []);
+        let results = res.location || [];
+        // Open-Meteo GeoNames 对中国县级地名覆盖不全（如"富源县"：中文仅命中广东/湖南的
+        // "富源"镇，云南富源县需靠拼音 Fuyuan → 曲靖市中安镇命中，坐标即富源县）。
+        // 只要输入含中文即尝试拼音候选（省名过滤 + 去重合并）
+        if (/[\u4e00-\u9fa5]/.test(query)) {
+          const provMatch = query.match(/([\u4e00-\u9fa5]+)省/);
+          for (const cand of buildPinyinCandidates(query)) {
+            const pyRes = await weatherApi.geoLookup(cand, 10).catch(() => null);
+            if (!pyRes) continue;
+            const pyCities = (pyRes.location || [])
+              .filter(g => {
+                if (g.country !== 'CN') return false;
+                if (provMatch && g.adm1 && !g.adm1.includes(provMatch[1])) return false;
+                return true;
+              })
+              .map(g => ({
+                ...g,
+                name: query.trim(),
+                adm2: g.adm2 || g.adm1,
+              }));
+            if (pyCities.length > 0) {
+              const seenIds = new Set(results.map(g => g.id));
+              results = [...results, ...pyCities.filter(g => !seenIds.has(g.id))];
+              break;
+            }
+          }
+        }
+        setSearchResults(results);
       } catch {
         setSearchResults([]);
       } finally {
