@@ -6,7 +6,7 @@
 - **agri-server**: 后端服务（Axum + SQLx + 响应辅助函数）
 - **agri-mqtt**: MQTT 通信（rumqttd broker + rumqttc client）
 - **agri-ui**: React SPA（TypeScript + Ant Design + ECharts）
-- **esp32-firmware**: ESP32 固件 v2.1（RS485 土壤三合一）
+- **esp32-firmware**: ESP32 固件 v4.0（DHT22 + RS485 土壤三合一，MQTT 双通道）
 
 ## AI 决策系统重构（2026-05-18）
 
@@ -1116,3 +1116,187 @@ E5: 静默检测 (anomaly.rs)  ──→ WARNING (设备离线/传感器失效)
 - `agri-server`: 33 测试（不变）
 - `agri-mqtt`: 22 测试（不变）
 - **总计: 147 测试**（全部通过）
+
+## MQTT OTA 管道修复 + 双节点验证（2026-07-02）
+
+### 背景
+ESP32 固件从 v3.0 (HTTP→MQTT) 迁移后，MQTT OTA 一直失败。`Update.begin()` 返回 `UPDATE_ERROR_BAD_ARGUMENT`(9)，怀疑 OTA 分区问题。USB 重新烧录分区表后 `Update.begin()` 成功，但 OTA 仍无法完成——chunks 被 PubSubClient 静默丢弃。
+
+### 问题排查
+
+| # | 问题 | 根因 | 修复 |
+|---|------|------|------|
+| 1 | **`Update.begin()` 返回错误码 9** | 分区表被旧引导程序破坏（之前 OTA 写了一半复位导致坏分区） | USB 重新烧录 `ota_4mb.csv` 分区表 + 完整 firmware（两个节点） |
+| 2 | **PubSubClient 静默丢弃 OTA chunks** | `MQTT_MAX_PACKET_SIZE` 默认 256 字节，`mqtt.setBufferSize(512)` 仍不够承载 4096 字节 chunk payload | `MQTT_BUF_SIZE` 512 → **5120**；`setBufferSize(512→MQTT_BUF_SIZE)` |
+| 3 | **MQTT LAN TCP 缺少 chunk 处理** | HTTP→MQTT 迁移时 OTA chunk handler 只实现在了 WebSocket 路径 (`handleMqttPacket`)，LAN TCP 回调 (`mqttLanCallback`) 没有对应逻辑 | 复制 WebSocket 的 chunk 处理逻辑到 `mqttLanCallback`（SHA256 + Update.write + signature verify + Update.end） |
+| 4 | **`lastCmdResult` 悬浮指针** | `errBuf` 是局部栈变量，`lastCmdResult = errBuf` 指向栈上已释放内存 | 改为 `static char errBuf[32]` 全局变量 |
+| 5 | **服务端 OTA 触发路径缺失** | 只有 `mqtt_ws.rs` 的 WebSocket 连接能自动注入 OTA，没有独立 REST 触发方式 | `routes.rs` 新增 `POST /api/v1/devices/:id/ota` — 通过 rumqttc 发布 `ota_mqtt` 命令 + 异步发送 4KB chunks (10ms 间隔) |
+
+### 修复流程
+```
+1. 修复 main.cpp 中 MQTT_BUF_SIZE=5120 + LAN TCP chunk handler + 悬浮指针
+2. PlatformIO 编译两个节点固件（esp32-node-001/002）
+3. 生成 ECDSA P-256 签名，更新 routes.rs 中的 FW_VERSION + sig 硬编码
+4. USB 烧录分区表 + 完整固件到 /dev/ttyUSB0 (node-001) 和 /dev/ttyUSB1 (node-002)
+5. 重启 agri-server，触发 OTA
+```
+
+### 验证结果
+
+| 节点 | 触发时间 | `Update.begin()` | chunks | reboot | 恢复 seq |
+|------|----------|-------------------|--------|--------|----------|
+| node-001 | 23:03:48 | ✅ `ota:mqtt_started` | 256 chunks @ 4KB, 3s | ✅ 23:04:21 | seq=1 |
+| node-002 | 23:04:53 | ✅ `ota:mqtt_started` | 256 chunks @ 4KB, 3s | ✅ 23:06:20 | seq=1 |
+
+### 经验教训
+- **PubSubClient 默认缓冲区 256 字节**，接收 >256 字节的 MQTT 消息会静默失败（`readPacket` 返回 false），无日志、无回调
+- `ESP.restart()` 前必须 `delay(100)` 让串口缓冲区排空，否则复位后串口输出会残留
+- USB 烧录（`esptool.py write_flash 0x10000 firmware.bin`）**不覆盖分区表**，需单独烧录 `0x8000 partitions.bin`
+- MQTT OTA pipeline 完整路径：REST API → rumqttc publish (ota_mqtt command) → chunks (QoS 0, 4KB, 10ms pacing) → PubSubClient callback → Update → reboot
+
+### 变更文件清单
+```
+修改: esp32-firmware/src/main.cpp           # MQTT_BUF_SIZE 512→5120, setBufferSize 同步, LAN TCP chunk handler, dangling pointer 修复
+修改: agri-server/src/routes.rs             # trigger_ota 端点 + FW_VERSION + 新签名
+修改: agri-server/src/mqtt_ws.rs            # FW_VERSION 同步更新
+```
+
+## 农场管理平台（farmOS 替代）— 三类新模块（2026-08-12）
+
+### 背景
+项目内已具备 areas（区域）、crops/crop_batches（茬口）、farm_operations（农事日志）轻量农事基础。本次补齐 farmOS 核心能力：库存投入品、产量收益、自动配肥配药。
+
+### 模块架构
+
+| 模块 | 迁移 | 后端 | 前端 | 核心能力 |
+|------|------|------|------|----------|
+| 库存 | `012_inventory.sql` | `agri-server/src/inventory.rs` | `pages/Inventory/` | 物品台账 + 入库/出库/盘点 + 低库存预警 + 流水 |
+| 产量收益 | `013_yield.sql` | `agri-server/src/yield.rs` | `pages/Yield/` | 采收记录 + 产量趋势 + 收入/成本/净利润分析 |
+| 配肥配药 | `014_mixing.sql` | `agri-server/src/mixing.rs` | `pages/Mixing/` | 生长阶段配方引擎 + 知识库配药 + 一键应用 |
+
+### 配肥配药引擎（核心）
+```
+输入: area_id + crop_batch_id(可选) + growth_days
+  ↓
+生长阶段推断 (纯函数 infer_growth_stage)
+  ├─ 苗期(0-15天)      → 20-20-20 平衡肥 5kg/亩  EC 1.2  2500倍
+  ├─ 营养生长期(15-40) → 30-10-20 高氮肥 8kg/亩  EC 1.8  2000倍
+  ├─ 开花期(40-60)     → 10-30-20 高磷肥 6kg/亩  EC 2.0  1800倍
+  └─ 结果期(60+)       → 15-10-35 高钾肥 10kg/亩 EC 2.2  1500倍
+  ↓
+EC 修正（ec_adjustment 纯函数）
+  ├─ 土壤EC > 目标+0.5 → 减量20% + 提示淋洗
+  ├─ 土壤EC < 目标-0.5 → 增量20%
+  └─ 温度 <12°C / >32°C → 吸收差提示
+  ↓
+输出配方（items/稀释/水量/EC目标/推理文本）→ 保存 mixing_recipes(generated)
+  ↓
+POST /mixing/recipes/:id/apply
+  ├─ 生成 farm_operations（planned 状态，operator=系统）
+  ├─ 按投入品名称匹配 inventory_items 自动出库扣减
+  └─ 库存不足 → warnings 数组返回，不出库
+```
+
+### 配药流程
+```
+POST /mixing/pesticide/recommend {target_pest}
+  ├─ 1. 命中 mixing_presets (mix_type=pesticide, name 模糊) → source=preset
+  ├─ 2. 命中 pest_knowledge (name LIKE) → source=knowledge（medication/treatment/severity）
+  └─ 3. 均未命中 → source=fallback + 提示补充知识库（不阻塞）
+```
+
+### API 端点（/api/v1 前缀）
+| 模块 | 端点 |
+|------|------|
+| 库存 | `GET/POST /inventory/items`、`GET/PUT/DELETE /inventory/items/:id`、`GET /inventory/items/:id/transactions`、`POST /inventory/transactions`、`GET /inventory/summary` |
+| 产量 | `GET/POST /yield/harvests`、`GET/PUT/DELETE /yield/harvests/:id`、`GET /yield/analysis` |
+| 配方 | `POST /mixing/fertilizer/recommend`、`POST /mixing/pesticide/recommend`、`GET /mixing/recipes`、`POST /mixing/recipes/:id/apply`、`CRUD /mixing/presets` |
+
+### 关键设计
+- `inventory_transactions` 记录 delta：in/out 记绝对值，adjust 记录差值（正=增负=减）
+- 出库超库存返回 400 + 具体数字（不静默截断）；apply 配方向对 `_` 库存不足时**静默截断并记 warnings**
+- `yield` 是 Rust 关键字，模块声明用 `#[path = "yield.rs"] mod yield_rs;`
+- 投入品成本估算：farm_operations 施肥/打药 details.items 按名称模糊匹配 inventory_items.price 累计
+- `mixing_recipes.status` generated→applied 单向，重复 apply 返回 400
+
+### 测试统计
+- `agri-server`: 45 测试（+12：inventory 3 + yield 2 + mixing 7）
+- `agri-core`: 92 测试（不变）
+- `agri-mqtt`: 22 测试（不变）
+- **总计: 159 测试**（全部通过）
+- **总计: 160 测试**（全部通过，+1 fetch_soil_context 回归测试）
+
+### EC=0 与 NULL 处理修复（2026-08-12 补充）
+
+| # | 问题 | 修复 |
+|---|------|------|
+| 1 | **`try_get::<Option<f64>>` + `.or_else` fallback 把 NULL 变 0.0** — 无传感器区域 `fetch_soil_context` 返回 `Some(0.0)`，配肥输出误报"土壤温度 0.0°C 过低" | 删除有害的 `.or_else(|| try_get::<f64>.ok())` fallback（SQLite NULL 解码为 f64 返回 `Ok(0.0)`），直接用 `try_get::<Option<f64>>` |
+| 2 | **EC=0 触发"增量 20%"** — 传感器短路/未接入时 EC=0 被判为低于目标 | `ec_adjustment` 对 `cur <= 0.0` 视为无效读数，返回 `(1.0, "")` 不调整 |
+
+**经验教训**：sqlx SQLite 中 `try_get::<f64>` 对 NULL 返回 `Ok(0.0)` 而非 Err，`Option<f64>` 才是正确方式；`Option<f64>` 解码失败时 `.ok().flatten()` 后为 None，任何 `.or_else` fallback 都会触发并吞入 0.0。
+
+### 变更文件清单
+```
+新增: agri-core/migrations/012_inventory.sql   # inventory_items + inventory_transactions
+新增: agri-core/migrations/013_yield.sql       # harvests
+新增: agri-core/migrations/014_mixing.sql      # mixing_presets + mixing_recipes
+新增: agri-server/src/inventory.rs             # 库存 CRUD + 事务 + 汇总
+新增: agri-server/src/yield.rs                 # 采收 CRUD + 收益分析
+新增: agri-server/src/mixing.rs                # 配肥配药引擎 + 应用
+新增: agri-ui/src/pages/Inventory/             # 库存页面
+新增: agri-ui/src/pages/Yield/                 # 产量收益页面
+新增: agri-ui/src/pages/Mixing/                # 配肥配药页面
+修改: agri-server/src/main.rs                  # 注册 inventory/yield_rs/mixing 路由
+修改: agri-ui/src/services/api.ts              # inventoryApi/yieldApi/mixingApi
+修改: agri-ui/src/types/index.ts               # InventoryItem/YieldAnalysis/MixingPlan 等类型
+修改: agri-ui/src/App.tsx                      # /inventory /yield /mixing 路由
+修改: agri-ui/src/components/Layout/Sidebar.tsx # 3 个新菜单
+修改: agri-ui/src/components/Layout/MobileTabBar.tsx # 配肥配药 tab
+修改: agri-server/static/                      # 前端构建产物
+
+## 天气城市搜索拼音 Fallback（2026-08-13）
+
+### 问题
+Open-Meteo Geocoding 基于 GeoNames 库，对中国**县级地名覆盖不全**：搜索"富源县"/"富源"时返回空或仅命中广东肇庆/湖南邵阳等同名镇，云南省曲靖市富源县搜不到（GeoNames 中富源县城以镇级名 `Zhong'an/中安` 登记，中文名缺失但拼音 `Fuyuan` 可命中 `中安|云南|曲靖` 25.67,104.23）。
+
+### 修复
+| 层 | 变更 |
+|---|------|
+| 后端 `weather.rs` | `geo_lookup` 响应增加 `country` 字段（取自 `country_code`） |
+| 前端 `TopBar.tsx` | 新增 `buildPinyinCandidates()`：输入含中文时，去掉行政区后缀字（省市区县镇乡村盟旗州）后生成拼音候选（整串→末词→首词），依次用 Open-Meteo 拼音搜索，过滤 `country === 'CN'` + 省名匹配（`云南省富源县` 提取"云南"过滤），合并去重；拼音命中结果 name 显示为原查询词，坐标即目标县 |
+| 前端 `types/index.ts` | `GeoCity` 增加 `country?: string` |
+
+### 验证
+- `GET /weather/geo?location=fuyuan` → `中安 | 云南 | 曲靖市 | CN` ✓
+- 前端逻辑：输入"富源县" → 中文结果无 CN 目标 → 候选 `fuyuan` → 命中云南曲靖 → 显示"富源县"
+- 纯拼音输入（无中文字符）不触发 fallback
+
+### 注意
+- GeoNames 拼音搜索返回的 `name` 是镇级名（中安），前端已替换为原查询词避免困惑
+- 该方案通用：任何 Open-Meteo 缺收录的中国县级地名都能通过拼音+省过滤兜底
+
+## 全功能体检 + 三处 bug 修复（2026-08-13）
+
+### 修复
+| # | 问题 | 修复 |
+|---|------|------|
+| 1 | **HTTP 遥测入口无自动注册** — MQTT handler 有 `auto_register_device`（2026-06-04），但 `routes.rs` 直接调 `process_telemetry`，未知节点 `return Ok(0)` 静默丢弃 | `process_telemetry` 中 devices 为空时自动 INSERT sensor 设备 + **注册后重新查询**（否则下方循环拿不到新 id，inserted 仍为 0）；HTTP/MQTT 两入口行为一致 |
+| 2 | **Obsidian 搜索中文 panic** — `extract_snippet` 用字节偏移切片，`saturating_sub` 后落在多字节 UTF-8 字符中间 → `end byte index is not a char boundary` panic，服务响应 Empty reply | 加 `char_indices` 边界对齐（start 前向、end 后向回退）；新增 `test_snippet_utf8_boundary_no_panic` 回归测试 |
+| 3 | **菊花品种表解析提前退出** — `chrysanthemum_varieties` 遇到文件中第一个表格（"项目\|数值\|依据" 3 列表）结束即 `break`，永远到不了第 130 行的 158 行品种大表，API 返回空 | 表格结束改为 `in_table = false` 继续扫描；新增 vault 集成测试（>100 品种断言） |
+
+### 体检通过项
+- 全部 REST 端点 200：devices/areas/crops/batches/dashboard（3 个）/inventory/yield/mixing/farm/ai/weather（带 location 参数）
+- SSE 心跳（15s `:`）正常；WS 101 正常
+- HTTP 遥测自动注册 + 插入、批量遥测 batch 端点（字段名 `batch`）正常
+- 配肥全链路：推荐（生长阶段正确 20天→营养生长期 8kg/亩）→ apply → 农事日志（category=施肥, status=planned, operator=系统）+ 库存出库扣减（100→90）
+- 配药 fallback 正常（知识库未命中返回 source=fallback 不阻塞）
+- 命令轮询返回 id 字符串（OTA 命令存在）、命令状态更新校验 status 取值
+- 离线检测：node-readings 返回 areas 结构（未分配区域 + ESP32 节点完整读数）
+- 前端静态资产 200（bundle 含拼音 fallback 代码）
+- 测试：agri-core 136（+1 snippet）、agri-server 47（+1 vault 集成）、agri-mqtt 22，全过
+
+### 踩坑记录
+- `pkill -f "scripts/init.sh"` 会匹配到执行命令的 bash 自身 → 自杀 + 命令挂起；重启服务需用 pid 精确 kill 或用 `ps -ef | grep [x]xx` 过滤自匹配
+- init.sh 收到 shutdown 后不会重启（监护进程退出），需重新启动整套
+- yield harvest_date 是**字符串**（"2026-08-13"）非时间戳；crops 必须带 comfort_config；crop-batches plant_date 是 i64 时间戳——三个 CRUD 字段要求各不相同
+- 运行中服务用旧二进制时 restart 无效：`cargo build` 后必须确认静态产物 mtime 晚于启动时间

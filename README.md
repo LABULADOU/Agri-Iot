@@ -33,7 +33,7 @@
 | **agri-server**    | Rust + Axum + SQLx      | HTTP API 服务、规则引擎、WebSocket 桥接 |
 | **agri-mqtt**      | Rust + rumqttd/rumqttc  | MQTT Broker（独立进程）和客户端     |
 | **agri-ui**        | React + TypeScript + Ant Design + ECharts | 前端 SPA（预构建到 static/） |
-| **esp32-firmware** | Arduino + ESP32         | 传感器采集 + 纯 MQTT（v4.0，C++）      |
+| **esp32-firmware** | Arduino + ESP32         | 传感器采集 + 纯 MQTT（v4.0.1，C++）      |
 | **esp32-hardware** | KiCad 8                 | 太阳能 LoRa 传感器节点原理图（替代现有硬件） |
 | **serial_bridge**  | Python                  | ESP32 串口数据 → HTTP 桥接 |
 
