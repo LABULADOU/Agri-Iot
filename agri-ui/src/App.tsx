@@ -14,6 +14,9 @@ import AI from './pages/AI';
 import KnowledgeBase from './pages/KnowledgeBase';
 import Settings from './pages/Settings';
 import FarmLog from './pages/FarmLog';
+import Inventory from './pages/Inventory';
+import Yield from './pages/Yield';
+import Mixing from './pages/Mixing';
 
 const App: React.FC = () => {
   useEffect(() => {
@@ -33,6 +36,9 @@ const App: React.FC = () => {
               <Route path="ai" element={<AI />} />
               <Route path="knowledge" element={<KnowledgeBase />} />
               <Route path="farm-logs" element={<FarmLog />} />
+              <Route path="inventory" element={<Inventory />} />
+              <Route path="yield" element={<Yield />} />
+              <Route path="mixing" element={<Mixing />} />
               <Route path="settings" element={<Settings />} />
               <Route path="automation" element={<Navigate to="/settings?tab=rules" replace />} />
               <Route path="agent" element={<Navigate to="/ai?tab=chat" replace />} />

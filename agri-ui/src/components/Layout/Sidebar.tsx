@@ -8,6 +8,9 @@ import {
   RobotOutlined,
   ReadOutlined,
   FileTextOutlined,
+  InboxOutlined,
+  BarChartOutlined,
+  ExperimentOutlined,
 } from '@ant-design/icons';
 import styles from './Sidebar.module.css';
 
@@ -25,6 +28,9 @@ const menuItems: MenuItem[] = [
   { key: '/ai', icon: <RobotOutlined />, label: 'AI' },
   { key: '/knowledge', icon: <ReadOutlined />, label: '知识库' },
   { key: '/farm-logs', icon: <FileTextOutlined />, label: '农事日志' },
+  { key: '/inventory', icon: <InboxOutlined />, label: '库存' },
+  { key: '/yield', icon: <BarChartOutlined />, label: '产量收益' },
+  { key: '/mixing', icon: <ExperimentOutlined />, label: '配肥配药' },
   { key: '/settings', icon: <SettingOutlined />, label: '设置' },
 ];
 

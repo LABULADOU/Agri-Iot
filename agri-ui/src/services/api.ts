@@ -1,7 +1,7 @@
 import axios from 'axios';
 import type {
   Zone, SensorNode, SensorReading, AggregatedReading,
-  WeatherData, WeatherForecastDay, WeatherWarning, MinutelyForecast, HourlyPrecip, GeoCity,
+  HourlyPrecip, GeoCity,
   Device, Rule, QueryParams,
   EmergencyStatusResponse, KnowledgeSearchResult, ControlCaseRecord, AgentResponse, KnowledgeNoteMeta,
   VarietyResponse,
@@ -146,6 +146,51 @@ export const farmApi = {
   updateTemplate: (id: string, data: Record<string, unknown>) =>
     api.put(`/farm/templates/${id}`, data).then(res => res.data),
   deleteTemplate: (id: string) => api.delete(`/farm/templates/${id}`),
+};
+
+// Inventory APIs
+export const inventoryApi = {
+  listItems: (params?: { category?: string; low_stock?: boolean; search?: string }) =>
+    api.get<{ items: import('../types').InventoryItem[] }>('/inventory/items', { params }).then(res => res.data),
+  getItem: (id: string) =>
+    api.get<import('../types').InventoryItem>(`/inventory/items/${id}`).then(res => res.data),
+  createItem: (data: Record<string, unknown>) => api.post('/inventory/items', data).then(res => res.data),
+  updateItem: (id: string, data: Record<string, unknown>) =>
+    api.put(`/inventory/items/${id}`, data).then(res => res.data),
+  deleteItem: (id: string) => api.delete(`/inventory/items/${id}`),
+  listTransactions: (itemId: string, params?: { limit?: number; offset?: number }) =>
+    api.get<{ transactions: import('../types').InventoryTransaction[] }>(`/inventory/items/${itemId}/transactions`, { params }).then(res => res.data),
+  createTransaction: (data: { item_id: string; txn_type: 'in' | 'out' | 'adjust'; quantity: number; operator?: string; related_type?: string; related_id?: string; note?: string }) =>
+    api.post<{ id: string; new_stock: number }>('/inventory/transactions', data).then(res => res.data),
+  getSummary: () =>
+    api.get<{ summary: { total_items: number; total_value: number; low_stock_count: number }; categories: Array<{ category: string; count: number; total_value: number; low_count: number }> }>('/inventory/summary').then(res => res.data),
+};
+
+// Yield APIs
+export const yieldApi = {
+  listHarvests: (params?: { area_id?: string; crop_batch_id?: string; date_from?: string; date_to?: string; page?: number; limit?: number }) =>
+    api.get<{ harvests: import('../types').Harvest[]; page: number; limit: number }>('/yield/harvests', { params }).then(res => res.data),
+  createHarvest: (data: Record<string, unknown>) => api.post('/yield/harvests', data).then(res => res.data),
+  updateHarvest: (id: string, data: Record<string, unknown>) => api.put(`/yield/harvests/${id}`, data).then(res => res.data),
+  deleteHarvest: (id: string) => api.delete(`/yield/harvests/${id}`),
+  getAnalysis: (params?: { area_id?: string; crop_id?: string; date_from?: string; date_to?: string }) =>
+    api.get<import('../types').YieldAnalysis>('/yield/analysis', { params }).then(res => res.data),
+};
+
+// Mixing (配方) APIs
+export const mixingApi = {
+  recommendFertilizer: (data: { area_id: string; crop_batch_id?: string; growth_days?: number }) =>
+    api.post<import('../types').MixingPlan>('/mixing/fertilizer/recommend', data).then(res => res.data),
+  recommendPesticide: (data: { area_id: string; crop_batch_id?: string; target_pest: string }) =>
+    api.post<import('../types').MixingPlan>('/mixing/pesticide/recommend', data).then(res => res.data),
+  listRecipes: (params?: { area_id?: string; mix_type?: string; page?: number; limit?: number }) =>
+    api.get<{ recipes: import('../types').MixingRecipe[]; page: number; limit: number }>('/mixing/recipes', { params }).then(res => res.data),
+  applyRecipe: (id: string) => api.post<{ farm_op_id: string; warnings: string[] }>(`/mixing/recipes/${id}/apply`).then(res => res.data),
+  listPresets: (mixType?: string) =>
+    api.get<{ presets: import('../types').MixingPreset[] }>('/mixing/presets', { params: { mix_type: mixType } }).then(res => res.data),
+  createPreset: (data: Record<string, unknown>) => api.post('/mixing/presets', data).then(res => res.data),
+  updatePreset: (id: string, data: Record<string, unknown>) => api.put(`/mixing/presets/${id}`, data).then(res => res.data),
+  deletePreset: (id: string) => api.delete(`/mixing/presets/${id}`),
 };
 
 export default api;

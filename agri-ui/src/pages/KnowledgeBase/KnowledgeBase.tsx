@@ -15,7 +15,6 @@ import styles from './KnowledgeBase.module.css';
 
 const { Text, Title } = Typography;
 const { Search } = Input;
-const { Panel } = Collapse;
 
 const VARIETY_TABLE_PATH = '切花菊/01-品种选择与特性解析.md';
 

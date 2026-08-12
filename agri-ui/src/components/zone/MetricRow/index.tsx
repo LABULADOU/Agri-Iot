@@ -13,6 +13,7 @@ interface MetricRowProps {
   maxScale?: number;
   aiRecommendation?: string;
   onExecuteRecommendation?: () => void;
+  capturedAt?: number;
 }
 
 const statusColors: Record<string, string> = {
@@ -30,6 +31,7 @@ const MetricRow: React.FC<MetricRowProps> = ({
   maxScale,
   aiRecommendation,
   onExecuteRecommendation,
+  capturedAt,
 }) => {
   const scaleMax = maxScale ?? range.max * 2;
   const pct = Math.min(Math.max((value / scaleMax) * 100, 0), 100);
@@ -37,7 +39,14 @@ const MetricRow: React.FC<MetricRowProps> = ({
 
   return (
     <div className={`${styles.row} ${isAlert ? styles.alert : ''}`}>
-      <Text className={styles.label}>{label}</Text>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+        <Text className={styles.label}>{label}</Text>
+        {capturedAt ? (
+          <Text style={{ fontSize: 10, color: 'var(--text-secondary, #888)' }}>
+            {new Date(capturedAt * 1000).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
+          </Text>
+        ) : null}
+      </div>
       <Text className={styles.value} style={{ color: statusColors[status] }}>
         {value.toFixed(1)}{unit}
       </Text>

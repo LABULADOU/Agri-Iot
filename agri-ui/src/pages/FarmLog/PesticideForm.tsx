@@ -2,8 +2,6 @@ import React from 'react';
 import { Form, Input, Select, Button, Space } from 'antd';
 import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 
-const { TextArea } = Input;
-
 interface PesticideItem {
   formulation: string;
   ingredient: string;

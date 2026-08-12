@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Button, Slider, Typography, message } from 'antd';
+import { Button, Typography, message } from 'antd';
 import { deviceApi } from '../../../services/api';
 import type { SensorNode } from '../../../types';
 import styles from './ControlPanel.module.css';
@@ -12,13 +12,7 @@ interface ControlPanelProps {
 }
 
 const ControlPanel: React.FC<ControlPanelProps> = ({ node, onStatusChange }) => {
-  const [ventValues, setVentValues] = useState<Record<string, number>>({
-    side: 50,
-    roof: 50,
-  });
   const [loading, setLoading] = useState<string | null>(null);
-
-  const caps = node.capabilities ?? [];
 
   const sendCommand = async (deviceId: string, command: string, params?: Record<string, unknown>) => {
     setLoading(command);
@@ -32,8 +26,6 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ node, onStatusChange }) => 
       setLoading(null);
     }
   };
-
-  const hasControl = caps.includes('actuator');
 
   return (
     <div className={styles.panel}>

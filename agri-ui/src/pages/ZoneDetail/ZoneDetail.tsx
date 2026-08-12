@@ -20,6 +20,7 @@ interface DisplayReading {
   min?: number;
   max?: number;
   maxScale?: number;
+  capturedAt?: number;
 }
 
 const METRIC_KEYS = Object.keys(METRIC_CONFIG);
@@ -44,14 +45,14 @@ const ZoneDetail: React.FC = () => {
   const realtimeReadings = useRealtimeStore(s => s.readings);
 
   const readingsMap = useMemo(() => {
-    if (!selectedNode) return new Map<string, number>();
+    if (!selectedNode) return new Map<string, { value: number; timestamp?: number }>();
     const nodeId = selectedNode.node_id;
-    if (!nodeId) return new Map<string, number>();
+    if (!nodeId) return new Map<string, { value: number; timestamp?: number }>();
     const nodeData = realtimeReadings.get(nodeId);
-    if (!nodeData) return new Map<string, number>();
-    const map = new Map<string, number>();
+    if (!nodeData) return new Map<string, { value: number; timestamp?: number }>();
+    const map = new Map<string, { value: number; timestamp?: number }>();
     for (const r of nodeData) {
-      map.set(r.metric, r.value);
+      map.set(r.metric, { value: r.value, timestamp: r.timestamp ? Number(r.timestamp) : undefined });
     }
     return map;
   }, [realtimeReadings, selectedNode]);
@@ -104,6 +105,7 @@ const ZoneDetail: React.FC = () => {
           min: cfg.min,
           max: cfg.max,
           maxScale: cfg.maxScale,
+          capturedAt: reading?.timestamp !== undefined ? Number(reading.timestamp) : undefined,
         };
       });
       setReadings(display);
@@ -128,7 +130,7 @@ const ZoneDetail: React.FC = () => {
     if (readings.length === 0) return [];
     return readings.map(r => {
       const v = readingsMap.get(r.key);
-      return v !== undefined ? { ...r, value: v } : r;
+      return v !== undefined ? { ...r, value: v.value, capturedAt: v.timestamp ?? r.capturedAt } : r;
     });
   }, [readings, readingsMap]);
 
@@ -184,6 +186,7 @@ const ZoneDetail: React.FC = () => {
                   unit={r.unit}
                   status={getStatus(r.value, r.min ?? 0, r.max ?? 100)}
                   range={{ min: r.min ?? 0, max: r.max ?? 100 }}
+                  capturedAt={r.capturedAt}
                   maxScale={r.maxScale}
                 />
               ))

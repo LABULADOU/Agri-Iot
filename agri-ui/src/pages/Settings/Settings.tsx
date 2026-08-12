@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Card, Tabs, Table, Button, Space, Modal, Form, Input, InputNumber, message, Typography, Row, Col, Select, Popconfirm, Switch, Tag, Divider } from 'antd';
+import { Card, Tabs, Table, Button, Space, Modal, Form, Input, InputNumber, message, Typography, Row, Col, Select, Popconfirm, Switch, Tag } from 'antd';
 import { EditOutlined, SettingOutlined, PlusOutlined, SearchOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useSearchParams } from 'react-router-dom';
 import { zoneApi, ruleApi } from '../../services/api';
