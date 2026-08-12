@@ -1,0 +1,2120 @@
+[
+  {
+    "file": "P1_2_完成度检查报告.md",
+    "chunk_index": 0,
+    "total_chunks": 12,
+    "frontmatter": {
+      "作物": "硬件设计",
+      "主题": "P1_2 原理图完成度检查报告",
+      "置信度": "high",
+      "来源": "网表分析 + 开发文档对照"
+    },
+    "text": "# P1_2 原理图完成度检查报告\n## 总体状态\n**完成度: 54%** (113/211 引脚已连接)\n| 状态 | 数量 | 元件 |\n|------|------|------|\n| OK (100%) | 4 个 | U3 ME6209, U9 BH1750, U10 ADuM1301, U12 B0509XT |\n| W (50-99%) | 6 个 | U1 CS5383C, U2 MP2307, U4 ESP32, U6 DS3231, U8 SHT30, U13 TPS3820 |\n| X (<50%) | 4 个 | **U5 WH-L101-L**, **U11 MAX3485**, **U14 CP2102N**, **U15 CH224K** |\n## 需要重点完成的元件（X 级）\n### 1. U15 CH224K (42%) — 7 个引脚悬空"
+  },
+  {
+    "file": "P1_2_完成度检查报告.md",
+    "chunk_index": 1,
+    "total_chunks": 12,
+    "frontmatter": {
+      "作物": "硬件设计",
+      "主题": "P1_2 原理图完成度检查报告",
+      "置信度": "high",
+      "来源": "网表分析 + 开发文档对照"
+    },
+    "text": "| 引脚 | 名称 | 需要连接 |\n|------|------|----------|\n| Pin 6 | CC2 | 接 USB1 B5 (CC2 网络) |\n| Pin 7 | CC1 | 接 USB1 A5 (CC1 网络) |\n| Pin 8 | VBUS | 接 VDD 网络（直接连，不要电阻！） |\n| Pin 9 | CFG1 | 经 R21 (24kΩ) → GND |\n| Pin 10 | PG | 悬空（可选接 LED 指示） |\n| Pin 11 | GND | 接 GND 网络 |\n| Pin 0 | 底板 | 接 GND 网络 |\n### 2. U14 CP2102N (38%) — 18 个引脚悬空"
+  },
+  {
+    "file": "P1_2_完成度检查报告.md",
+    "chunk_index": 2,
+    "total_chunks": 12,
+    "frontmatter": {
+      "作物": "硬件设计",
+      "主题": "P1_2 原理图完成度检查报告",
+      "置信度": "high",
+      "来源": "网表分析 + 开发文档对照"
+    },
+    "text": "| 引脚 | 名称 | 需要连接 |\n|------|------|----------|\n| Pin 1 | VBUS | 接 USB1 VBUS |\n| Pin 2 | D- | 接 USB1 D- |\n| Pin 3 | D+ | 接 USB1 D+ |\n| Pin 4 | NC | 悬空（不接） |\n| Pin 5 | GND | 接 GND |\n| Pin 6 | GND | 接 GND |\n| Pin 7 | GND | 接 GND |\n| Pin 8 | GND | 接 GND |\n| Pin 9 | SUSPEND | 接 +5V（或通过电阻上拉） |\n| Pin 10 | NC | 悬空 |\n| Pin 11 | VREGIN | 接 1μF → GND |\n| Pin 12 | C-/C-XRES | 接 10kΩ → GND |\n| Pin 13 | C+/C-RES | 接 10kΩ → VBUS |\n| Pin 14 | NC | 悬空 |\n| Pin 15 | GPIO.0/TXT | 接 GPIO1 (UART0 TX) |\n| Pin 16 | GPIO"
+  },
+  {
+    "file": "P1_2_完成度检查报告.md",
+    "chunk_index": 3,
+    "total_chunks": 12,
+    "frontmatter": {
+      "作物": "硬件设计",
+      "主题": "P1_2 原理图完成度检查报告",
+      "置信度": "high",
+      "来源": "网表分析 + 开发文档对照"
+    },
+    "text": " | 接 10kΩ → VBUS |\n| Pin 14 | NC | 悬空 |\n| Pin 15 | GPIO.0/TXT | 接 GPIO1 (UART0 TX) |\n| Pin 16 | GPIO.1/RXT | 接 GPIO3 (UART0 RX) |\n| Pin 17 | GPIO.2/RS485 | 接 GPIO15 (CP2102 电源控制) |\n| Pin 18 | GPIO.3/WAKEUP | 接 GPIO4 (HOST_WAKE) |\n| Pin 19 | GPIO.4 | 接 GPIO12 |\n| Pin 20 | GPIO.5 | 接 GPIO13 |\n| Pin 21 | GPIO.6 | 接 GPIO14 |\n| Pin 22 | RTS | 接 RTS |\n| Pin 23 | CTS | 接 CTS |\n| Pin 24 | VDD | 接 3.3V |\n| Pin 25 | VCP | 接 1μF → GND |\n| Pin 26 | VCAP | 接 1μF → GND |\n| Pin 27 | XRST | 接 10kΩ → VDD |\n| Pin"
+  },
+  {
+    "file": "P1_2_完成度检查报告.md",
+    "chunk_index": 4,
+    "total_chunks": 12,
+    "frontmatter": {
+      "作物": "硬件设计",
+      "主题": "P1_2 原理图完成度检查报告",
+      "置信度": "high",
+      "来源": "网表分析 + 开发文档对照"
+    },
+    "text": " Pin 25 | VCP | 接 1μF → GND |\n| Pin 26 | VCAP | 接 1μF → GND |\n| Pin 27 | XRST | 接 10kΩ → VDD |\n| Pin 28 | XTAL1 | 接 32.768kHz 晶振 |\n| Pin 29 | XTAL2 | 接 32.768kHz 晶振 |"
+  },
+  {
+    "file": "P1_2_完成度检查报告.md",
+    "chunk_index": 5,
+    "total_chunks": 12,
+    "frontmatter": {
+      "作物": "硬件设计",
+      "主题": "P1_2 原理图完成度检查报告",
+      "置信度": "high",
+      "来源": "网表分析 + 开发文档对照"
+    },
+    "text": "### 3. U5 WH-L101-L (39%) — 27 个引脚悬空"
+  },
+  {
+    "file": "P1_2_完成度检查报告.md",
+    "chunk_index": 6,
+    "total_chunks": 12,
+    "frontmatter": {
+      "作物": "硬件设计",
+      "主题": "P1_2 原理图完成度检查报告",
+      "置信度": "high",
+      "来源": "网表分析 + 开发文档对照"
+    },
+    "text": "| 已连接 | 需要连接 |\n|--------|----------|\n| Pin 1 (VDD) | Pin 6 (NC) |\n| Pin 2 (GND) | Pin 7 (NC) |\n| Pin 3 (GND) | Pin 8 (NC) |\n| Pin 4 (GND) | Pin 9 (NC) |\n| Pin 5 (NC) | Pin 10 (NC) |\n| Pin 11 (TX) | Pin 15 (RX) |\n| Pin 12 (RX) | Pin 16 (CTS) |\n| Pin 13 (CTS) | Pin 18 (RTS) |\n| Pin 14 (RTS) | Pin 21 (NC) |\n| Pin 17 (HOST_WAKE) | Pin 22 (NC) |\n| Pin 19 (RST) | Pin 25 (NC) |\n| Pin 20 (EN) | Pin 26 (NC) |\n| Pin 23 (NC) | Pin 27 (NC) |\n| Pin 24 (NC) | Pin 30-43 (NC) |\n| Pin 28 (GND) | |\n| Pin 29 (GND)"
+  },
+  {
+    "file": "P1_2_完成度检查报告.md",
+    "chunk_index": 7,
+    "total_chunks": 12,
+    "frontmatter": {
+      "作物": "硬件设计",
+      "主题": "P1_2 原理图完成度检查报告",
+      "置信度": "high",
+      "来源": "网表分析 + 开发文档对照"
+    },
+    "text": ") |\n| Pin 23 (NC) | Pin 27 (NC) |\n| Pin 24 (NC) | Pin 30-43 (NC) |\n| Pin 28 (GND) | |\n| Pin 29 (GND) | |\n| Pin 44 (GND) | |"
+  },
+  {
+    "file": "P1_2_完成度检查报告.md",
+    "chunk_index": 8,
+    "total_chunks": 12,
+    "frontmatter": {
+      "作物": "硬件设计",
+      "主题": "P1_2 原理图完成度检查报告",
+      "置信度": "high",
+      "来源": "网表分析 + 开发文档对照"
+    },
+    "text": "### 4. U11 MAX3485 (19%) — 13 个引脚悬空\n| 已连接 | 需要连接 |\n|--------|----------|\n| Pin 12 (DE) | Pin 1 (VCC) |\n| Pin 13 (RE) | Pin 2 (GND) |\n| Pin 14 (RO) | Pin 3 (DI) |\n| | Pin 4 (GND) |\n| | Pin 5 (A) |\n| | Pin 6 (B) |\n| | Pin 7 (GND) |\n| | Pin 8 (V+) |\n| | Pin 9 (GND) |\n| | Pin 10 (GND) |\n| | Pin 11 (GND) |\n| | Pin 15 (NC) |\n| | Pin 16 (NC) |\n## 建议完成顺序"
+  },
+  {
+    "file": "P1_2_完成度检查报告.md",
+    "chunk_index": 9,
+    "total_chunks": 12,
+    "frontmatter": {
+      "作物": "硬件设计",
+      "主题": "P1_2 原理图完成度检查报告",
+      "置信度": "high",
+      "来源": "网表分析 + 开发文档对照"
+    },
+    "text": "1. **U15 CH224K** — 先完成 PD 诱骗电路（已画了大部分）\n2. **U13 TPS3820** — 复位电路（基本完成）\n3. **U11 MAX3485** — RS485 隔离收发器\n4. **U14 CP2102N** — USB 转 UART\n5. **U5 WH-L101-L** — LoRa 通信模组\n6. **U4 ESP32** — 主控 MCU（大量 GPIO 悬空）\n---\n## 完成度演进记录\n> 每次检查追加一条记录，跟踪原理图完成度变化。\n---\n### 2026-07-16 基线记录"
+  },
+  {
+    "file": "P1_2_完成度检查报告.md",
+    "chunk_index": 10,
+    "total_chunks": 12,
+    "frontmatter": {
+      "作物": "硬件设计",
+      "主题": "P1_2 原理图完成度检查报告",
+      "置信度": "high",
+      "来源": "网表分析 + 开发文档对照"
+    },
+    "text": "- **总完成度**：54%（113/211 引脚已连接）\n- **OK 元件**（4 个）：U3 ME6209, U9 BH1750, U10 ADuM1301, U12 B0509XT\n- **W 元件**（6 个）：U1 CS5383C, U2 MP2307, U4 ESP32, U6 DS3231, U8 SHT30, U13 TPS3820\n- **X 元件**（4 个）：U5 WH-L101-L(39%), U11 MAX3485(19%), U14 CP2102N(38%), U15 CH224K(42%)\n**本次操作**：首次全面审查，建立基线数据。未修改原理图，仅记录当前状态。\n**待完成**（按优先级排序）："
+  },
+  {
+    "file": "P1_2_完成度检查报告.md",
+    "chunk_index": 11,
+    "total_chunks": 12,
+    "frontmatter": {
+      "作物": "硬件设计",
+      "主题": "P1_2 原理图完成度检查报告",
+      "置信度": "high",
+      "来源": "网表分析 + 开发文档对照"
+    },
+    "text": "| 优先级 | 元件 | 待连接引脚数 | 关键连接 |\n|--------|------|-------------|----------|\n| 1 | U15 CH224K | 7 | CC1/CC2→Type-C, VBUS, CFG1→24k, GND |\n| 2 | U14 CP2102N | 18 | USB D±, UART TX/RX, 去耦电容, 晶振 |\n| 3 | U11 MAX3485 | 13 | VCC, GND, DI, A/B, 浪涌保护 |\n| 4 | U5 WH-L101-L | 27 | 大部分 NC，关键: VCC/GND/TX/RX/WAKE/HOST_WAKE |\n| 5 | U4 ESP32 | 部分 GPIO | 外设连接（GPIO→各模块） |\n**下一步**：补齐 U15 CH224K 和 U14 CP2102N（Type-C 调试通路），完成后重新检查。"
+  },
+  {
+    "file": "kicad_project/AGRI_NODE_NETLIST.md",
+    "chunk_index": 0,
+    "total_chunks": 25,
+    "frontmatter": {},
+    "text": "# agri_node 网络标签命名规范 V1.0\n> 本文档定义全项目所有 global_label（跨页标签）和 local label（页内标签）的标准命名。\n> 所有原理图必须严格按此文档标注，不得自创标签名。\n---\n## 一、命名原则\n| 规则 | 示例 | 说明 |\n|------|------|------|\n| 全大写 + 下划线 | `LORA_CS` | 禁止小写、驼峰 |\n| 前缀标识外设类别 | `LORA_`, `I2C_`, `UART_`, `ADC_` | 一眼看出归属 |\n| 引脚功能名优先于GPIO编号 | `LORA_CS` 而非 `GPIO13` | 可读性 |\n| 电源用 `PWR_` 前缀 | `PWR_5V`, `PWR_3V3` | 不用 `VCC`, `VDD` |\n| 地用 `GND` 或 `GND_ISO` | - | 隔离地加 `_ISO` 后缀 |\n| 模拟信号用 `ADC_` 前缀 | `ADC_SOIL` | |\n---\n## 二、电源网络（Global）"
+  },
+  {
+    "file": "kicad_project/AGRI_NODE_NETLIST.md",
+    "chunk_index": 1,
+    "total_chunks": 25,
+    "frontmatter": {},
+    "text": "| 网络名 | 电压 | 来源Sheet | 说明 |\n|--------|------|-----------|------|\n| `VBUS` | 5V | Sheet5 TypeC | USB-C PD 5V输出（主供电入口） |\n| `VBAT` | 8.2V | Sheet1 InputProtection | 电池充电电压（MPPT输出） |\n| `PWR_5V` | 5V | Sheet2 PowerSystem | MP2307降压后的5V总线 |\n| `PWR_3V3` | 3.3V | Sheet2 PowerSystem | ME6209 LDO输出，ESP32主供电 |\n| `PWR_ISO_3V3` | 3.3V | Sheet2 PowerSystem | B0509XT隔离3.3V，RS485/LoRa供电 |\n| `PWR_ISO_5V` | 5V | Sheet2 PowerSystem | B0509XT隔离5V（如需要） |\n| `GND` | 0V | - | 数字地 |\n| `GND_ISO` | 0V | - | 隔离地（RS485/LoRa"
+  },
+  {
+    "file": "kicad_project/AGRI_NODE_NETLIST.md",
+    "chunk_index": 2,
+    "total_chunks": 25,
+    "frontmatter": {},
+    "text": "eet2 PowerSystem | B0509XT隔离5V（如需要） |\n| `GND` | 0V | - | 数字地 |\n| `GND_ISO` | 0V | - | 隔离地（RS485/LoRa电源侧） |"
+  },
+  {
+    "file": "kicad_project/AGRI_NODE_NETLIST.md",
+    "chunk_index": 3,
+    "total_chunks": 25,
+    "frontmatter": {},
+    "text": "---\n## 三、MCU→充电管理（Sheet1↔Sheet2/Sheet3）\n| 网络名 | 方向 | 连接 | 说明 |\n|--------|------|------|------|\n| `VBAT_SENSE` | InputProtection→MCU | R分压→ESP32 IO34 (ADC) | 电池电压检测 |\n| `PWR_WDI` | MCU→PowerSystem | ESP32 IO33 → TPS3820 WDI | 看门狗输入 |\n> CS5383C EN 引脚直接接高电平（VCC），不需要MCU控制。\n> CS5383C STAT1/STAT2 直接驱动LED指示灯，不占用GPIO。\n---\n## 四、ESP32 引脚分配与标签\n### 4.1 SPI总线（连接 LoRa模块）"
+  },
+  {
+    "file": "kicad_project/AGRI_NODE_NETLIST.md",
+    "chunk_index": 4,
+    "total_chunks": 25,
+    "frontmatter": {},
+    "text": "| 网络名 | ESP32引脚 | ESP32 Pin# | 连接到 | 说明 |\n|--------|-----------|------------|--------|------|\n| `SPI_LORA_CS` | IO13 | 16 | LoRa NSS | SPI片选（LoRa专用） |\n| `SPI_LORA_SCK` | IO18 | 30 | LoRa SCK | SPI时钟 |\n| `SPI_LORA_MISO` | IO19 | 31 | LoRa MISO | SPI主入从出 |\n| `SPI_LORA_MOSI` | IO23 | 37 | LoRa MOSI | SPI主出从入 |\n| `LORA_RST` | IO5 | 29 | LoRa RESET | LoRa复位（低有效） |\n| `LORA_DIO0` | IO14 | 13 | LoRa DIO0 | LoRa中断引脚 |\n### 4.2 I2C总线（连接 DS3231 + SHT31）"
+  },
+  {
+    "file": "kicad_project/AGRI_NODE_NETLIST.md",
+    "chunk_index": 5,
+    "total_chunks": 25,
+    "frontmatter": {},
+    "text": "| 网络名 | ESP32引脚 | ESP32 Pin# | 连接到 | 说明 |\n|--------|-----------|------------|--------|------|\n| `I2C_SDA` | IO21 | 33 | DS3231 SDA, SHT31 SDA | I2C数据线 |\n| `I2C_SCL` | IO22 | 36 | DS3231 SCL, SHT31 SCL | I2C时钟线 |\n### 4.3 UART（预留）\n| 网络名 | ESP32引脚 | ESP32 Pin# | 连接到 | 说明 |\n|--------|-----------|------------|--------|------|\n| `UART2_TX` | IO17 | 28 | 预留扩展接口 | UART2发送 |\n| `UART2_RX` | IO16 | 27 | 预留扩展接口 | UART2接收 |\n### 4.4 RS485（连接 MAX485）"
+  },
+  {
+    "file": "kicad_project/AGRI_NODE_NETLIST.md",
+    "chunk_index": 6,
+    "total_chunks": 25,
+    "frontmatter": {},
+    "text": "| 网络名 | ESP32引脚 | ESP32 Pin# | 连接到 | 说明 |\n|--------|-----------|------------|--------|------|\n| `RS485_DI` | IO25 | 10 | MAX485 DI (pin4) | RS485数据输入 |\n| `RS485_DE` | IO26 | 11 | MAX485 DE (pin2) | RS485驱动使能 |\n| `RS485_RO` | IO27 | 12 | MAX485 RO (pin1) | RS485数据输出 |\n> 注：DE/RE 可合并由一个GPIO控制，合并后用 `RS485_DE_RE`\n### 4.5 ADC（模拟传感器）"
+  },
+  {
+    "file": "kicad_project/AGRI_NODE_NETLIST.md",
+    "chunk_index": 7,
+    "total_chunks": 25,
+    "frontmatter": {},
+    "text": "| 网络名 | ESP32引脚 | ESP32 Pin# | 连接到 | 说明 |\n|--------|-----------|------------|--------|------|\n| `ADC_SOIL` | SENSOR_VP (IO36) | 4 | 土壤湿度传感器输出 | ADC1_CH0 |\n| `ADC_LIGHT` | SENSOR_VN (IO39) | 5 | 光照传感器输出 | ADC1_CH3 |\n### 4.6 控制信号"
+  },
+  {
+    "file": "kicad_project/AGRI_NODE_NETLIST.md",
+    "chunk_index": 8,
+    "total_chunks": 25,
+    "frontmatter": {},
+    "text": "| 网络名 | ESP32引脚 | ESP32 Pin# | 连接到 | 说明 |\n|--------|-----------|------------|--------|------|\n| `PWR_EN` | EN (Pin3) | 3 | R上拉+复位按钮 | 使能/复位 |\n| `LED_STATUS` | IO4 | 26 | LED1 (状态灯) | 充电/运行指示 |\n| `LED_DATA` | IO2 | 24 | LED2 (数据灯) | 数据活动指示 |\n| `VBAT_SENSE` | IO34 | 6 | R分压中点 | 电池电压ADC |\n| `PWR_WDI` | IO33 | 9 | TPS3820 WDI | 看门狗喂狗 |\n### 4.7 Strapping引脚配置"
+  },
+  {
+    "file": "kicad_project/AGRI_NODE_NETLIST.md",
+    "chunk_index": 9,
+    "total_chunks": 25,
+    "frontmatter": {},
+    "text": "| 网络名 | ESP32引脚 | 要求 | 当前连接 | 说明 |\n|--------|-----------|------|----------|------|\n| `STRAP_IO0` | IO0 (Pin25) | HIGH=运行 LOW=下载 | 上拉+BOOT按钮 | 启动模式 |\n| `STRAP_IO2` | IO2 (Pin24) | LOW | 默认 | vpp选通 |\n| `STRAP_IO12` | IO12 (Pin14) | LOW | 下拉10K | MTDI (Flash电压) |\n| `STRAP_IO15` | IO15 (Pin23) | LOW | 下拉10K | Flash模式 |\n> Strapping引脚如果同时连接外设，需确保外设不影响启动状态。\n---\n## 五、各Sheet跨页标签汇总\n### Sheet1 InputProtection（充电管理）"
+  },
+  {
+    "file": "kicad_project/AGRI_NODE_NETLIST.md",
+    "chunk_index": 10,
+    "total_chunks": 25,
+    "frontmatter": {},
+    "text": "| 类型 | 标签名 | 方向 | 说明 |\n|------|--------|------|------|\n| Global Out | `VBAT` | → Sheet2 | 充电电压输出 |\n| Global In | `VBUS` | ← Sheet5 | USB输入电压 |\n| Global Out | `VBAT_SENSE` | → Sheet3 | 电池分压检测 |\n> STAT1/STAT2 直接驱动板载LED，CHG_EN 接高电平，均不占GPIO。\n### Sheet2 PowerSystem（电源系统）"
+  },
+  {
+    "file": "kicad_project/AGRI_NODE_NETLIST.md",
+    "chunk_index": 11,
+    "total_chunks": 25,
+    "frontmatter": {},
+    "text": "| 类型 | 标签名 | 方向 | 说明 |\n|------|--------|------|------|\n| Global In | `VBAT` | ← Sheet1 | 电池输入 |\n| Global Out | `PWR_5V` | → 各Sheet | 5V总线 |\n| Global Out | `PWR_3V3` | → Sheet3 | 3.3V主电源 |\n| Global Out | `PWR_ISO_3V3` | → Sheet4,7 | 隔离3.3V |\n| Global Out | `PWR_WDI` | → Sheet3 | 看门狗 |\n| Global In | `PWR_EN` | ← Sheet3 | 看门狗控制 |\n### Sheet3 ESP32（MCU核心）"
+  },
+  {
+    "file": "kicad_project/AGRI_NODE_NETLIST.md",
+    "chunk_index": 12,
+    "total_chunks": 25,
+    "frontmatter": {},
+    "text": "| 类型 | 标签名 | 方向 | 说明 |\n|------|--------|------|------|\n| Global In | `PWR_3V3` | ← Sheet2 | 主电源 |\n| Global In | `VBAT_SENSE` | ← Sheet1 | 电池检测 |\n| Global Out | `PWR_WDI` | → Sheet2 | 看门狗 |\n| Global Out | `SPI_LORA_CS` | → Sheet4 | LoRa |\n| Global Out | `SPI_LORA_SCK` | → Sheet4 | LoRa |\n| Global In | `SPI_LORA_MISO` | ← Sheet4 | LoRa |\n| Global Out | `SPI_LORA_MOSI` | → Sheet4 | LoRa |\n| Global Out | `LORA_RST` | → Sheet4 | LoRa |\n| Global In | `LORA_DIO0` | ← Sheet4 | LoRa |\n| Bidir | `I2C_SDA`"
+  },
+  {
+    "file": "kicad_project/AGRI_NODE_NETLIST.md",
+    "chunk_index": 13,
+    "total_chunks": 25,
+    "frontmatter": {},
+    "text": "t | `LORA_RST` | → Sheet4 | LoRa |\n| Global In | `LORA_DIO0` | ← Sheet4 | LoRa |\n| Bidir | `I2C_SDA` | → Sheet6,8 | I2C |\n| Global Out | `I2C_SCL` | → Sheet6,8 | I2C |\n| Global Out | `RS485_DI` | → Sheet7 | RS485 |\n| Global Out | `RS485_DE` | → Sheet7 | RS485 |\n| Global In | `RS485_RO` | ← Sheet7 | RS485 |\n| Global Out | `UART2_TX` | → 预留 | |\n| Global In | `UART2_RX` | ← 预留 | |\n| Global Out | `ADC_SOIL` | → Sheet8 | 土壤 |\n| Global In | `ADC_LIGHT` | ← Sheet8 | 光照 |\n| Global Out | `LED_STATUS` | →"
+  },
+  {
+    "file": "kicad_project/AGRI_NODE_NETLIST.md",
+    "chunk_index": 14,
+    "total_chunks": 25,
+    "frontmatter": {},
+    "text": "_SOIL` | → Sheet8 | 土壤 |\n| Global In | `ADC_LIGHT` | ← Sheet8 | 光照 |\n| Global Out | `LED_STATUS` | → LED1 | |\n| Global Out | `LED_DATA` | → LED2 | |"
+  },
+  {
+    "file": "kicad_project/AGRI_NODE_NETLIST.md",
+    "chunk_index": 15,
+    "total_chunks": 25,
+    "frontmatter": {},
+    "text": "### Sheet4 LoRa（SX1276/SX1262）\n| 类型 | 标签名 | 方向 | 说明 |\n|------|--------|------|------|\n| Global In | `SPI_LORA_CS` | ← Sheet3 | |\n| Global In | `SPI_LORA_SCK` | ← Sheet3 | |\n| Global Out | `SPI_LORA_MISO` | → Sheet3 | |\n| Global In | `SPI_LORA_MOSI` | ← Sheet3 | |\n| Global In | `LORA_RST` | ← Sheet3 | |\n| Global Out | `LORA_DIO0` | → Sheet3 | |\n| Global In | `PWR_ISO_3V3` | ← Sheet2 | 隔离供电 |\n### Sheet5 TypeC（USB-C PD）"
+  },
+  {
+    "file": "kicad_project/AGRI_NODE_NETLIST.md",
+    "chunk_index": 16,
+    "total_chunks": 25,
+    "frontmatter": {},
+    "text": "| 类型 | 标签名 | 方向 | 说明 |\n|------|--------|------|------|\n| Global Out | `VBUS` | → Sheet1 | USB 5V |\n### Sheet6 RTC（DS3231）\n| 类型 | 标签名 | 方向 | 说明 |\n|------|--------|------|------|\n| Bidir | `I2C_SDA` | ← Sheet3 | |\n| Global In | `I2C_SCL` | ← Sheet3 | |\n| Global In | `PWR_3V3` | ← Sheet2 | |\n### Sheet7 RS485（MAX485/SP3485）"
+  },
+  {
+    "file": "kicad_project/AGRI_NODE_NETLIST.md",
+    "chunk_index": 17,
+    "total_chunks": 25,
+    "frontmatter": {},
+    "text": "| 类型 | 标签名 | 方向 | 说明 |\n|------|--------|------|------|\n| Global In | `RS485_DI` | ← Sheet3 | |\n| Global In | `RS485_DE` | ← Sheet3 | |\n| Global Out | `RS485_RO` | → Sheet3 | |\n| Global In | `PWR_ISO_3V3` | ← Sheet2 | 隔离供电 |\n### Sheet8 Sensor（SHT31 + 土壤 + 光照）"
+  },
+  {
+    "file": "kicad_project/AGRI_NODE_NETLIST.md",
+    "chunk_index": 18,
+    "total_chunks": 25,
+    "frontmatter": {},
+    "text": "| 类型 | 标签名 | 方向 | 说明 |\n|------|--------|------|------|\n| Bidir | `I2C_SDA` | ← Sheet3 | SHT31 |\n| Global In | `I2C_SCL` | ← Sheet3 | SHT31 |\n| Global In | `ADC_SOIL` | ← Sheet3 | 土壤传感器 |\n| Global Out | `ADC_LIGHT` | → Sheet3 | 光照传感器 |\n| Global In | `PWR_3V3` | ← Sheet2 | 供电 |\n---\n## 六、标签命名变更对照表"
+  },
+  {
+    "file": "kicad_project/AGRI_NODE_NETLIST.md",
+    "chunk_index": 19,
+    "total_chunks": 25,
+    "frontmatter": {},
+    "text": "| 旧名称（废弃） | 新名称（标准） | 原因 |\n|----------------|---------------|------|\n| `GPIO13` | `SPI_LORA_CS` | 功能明确 |\n| `GPIO18` | `SPI_LORA_SCK` | 功能明确 |\n| `GPIO19` | `SPI_LORA_MISO` | 功能明确 |\n| `GPIO23` | `SPI_LORA_MOSI` | 功能明确 |\n| `GPIO25` | `RS485_DI` | 功能明确 |\n| `GPIO26` | `RS485_DE` | 功能明确 |\n| `GPIO27` | `RS485_RO` | 功能明确 |\n| `GPIO21` | `I2C_SDA` | 功能明确 |\n| `GPIO22` | `I2C_SCL` | 功能明确 |\n| `GPIO36` | `ADC_SOIL` | 功能明确 |\n| `GPIO39` | `ADC_LIGHT` | 功能明确 |\n| `GPIO34` | `VBAT_SENSE` | 功能明确 |\n| `GPIO33` | `PWR"
+  },
+  {
+    "file": "kicad_project/AGRI_NODE_NETLIST.md",
+    "chunk_index": 20,
+    "total_chunks": 25,
+    "frontmatter": {},
+    "text": "OIL` | 功能明确 |\n| `GPIO39` | `ADC_LIGHT` | 功能明确 |\n| `GPIO34` | `VBAT_SENSE` | 功能明确 |\n| `GPIO33` | `PWR_WDI` | 功能明确 |\n| `GPIO4` | `LED_STATUS` | 功能明确 |\n| `GPIO14` | `LORA_DIO0` | 功能明确 |\n| `GPIO5` | `LORA_RST` | 功能明确 |\n| `GPIO16` | `UART2_RX` | 功能明确 |\n| `GPIO17` | `UART2_TX` | 功能明确 |\n| `LORA_CS` | `SPI_LORA_CS` | 统一SPI前缀 |\n| `LORA_SCK` | `SPI_LORA_SCK` | 统一SPI前缀 |\n| `LORA_MISO` | `SPI_LORA_MISO` | 统一SPI前缀 |\n| `LORA_MOSI` | `SPI_LORA_MOSI` | 统一SPI前缀 |\n| `MCU_EN` | `PWR_EN` | 统一电源前缀 |\n| `WDI` | `PWR_W"
+  },
+  {
+    "file": "kicad_project/AGRI_NODE_NETLIST.md",
+    "chunk_index": 21,
+    "total_chunks": 25,
+    "frontmatter": {},
+    "text": "PI前缀 |\n| `LORA_MOSI` | `SPI_LORA_MOSI` | 统一SPI前缀 |\n| `MCU_EN` | `PWR_EN` | 统一电源前缀 |\n| `WDI` | `PWR_WDI` | 统一电源前缀 |\n| `8.2V` | `VBAT` | 统一电池前缀 |"
+  },
+  {
+    "file": "kicad_project/AGRI_NODE_NETLIST.md",
+    "chunk_index": 22,
+    "total_chunks": 25,
+    "frontmatter": {},
+    "text": "---\n## 七、命名前缀速查"
+  },
+  {
+    "file": "kicad_project/AGRI_NODE_NETLIST.md",
+    "chunk_index": 23,
+    "total_chunks": 25,
+    "frontmatter": {},
+    "text": "| 前缀 | 含义 | 示例 |\n|------|------|------|\n| `PWR_` | 电源/控制 | `PWR_3V3`, `PWR_5V`, `PWR_EN`, `PWR_WDI` |\n| `SPI_` | SPI总线 | `SPI_LORA_CS`, `SPI_LORA_SCK` |\n| `I2C_` | I2C总线 | `I2C_SDA`, `I2C_SCL` |\n| `UART_` | UART总线 | `UART2_TX`, `UART2_RX` |\n| `LORA_` | LoRa专用控制 | `LORA_RST`, `LORA_DIO0` |\n| `RS485_` | RS485专用 | `RS485_DI`, `RS485_DE`, `RS485_RO` |\n| `ADC_` | 模拟信号 | `ADC_SOIL`, `ADC_LIGHT`, `VBAT_SENSE` |\n| `CHG_` | 充电管理 | `CHG_STAT1`（仅LED指示，不占GPIO） |\n| `LED_` | LED指示 | `LED_STATUS`, `LED_DATA` |"
+  },
+  {
+    "file": "kicad_project/AGRI_NODE_NETLIST.md",
+    "chunk_index": 24,
+    "total_chunks": 25,
+    "frontmatter": {},
+    "text": "ENSE` |\n| `CHG_` | 充电管理 | `CHG_STAT1`（仅LED指示，不占GPIO） |\n| `LED_` | LED指示 | `LED_STATUS`, `LED_DATA` |\n| `STRAP_` | Strapping配置 | `STRAP_IO0`, `STRAP_IO12` |\n| `VBAT` | 电池电压 | `VBAT`, `VBAT_SENSE` |\n| `VBUS` | USB总线 | `VBUS` |"
+  },
+  {
+    "file": "原理图设计/00-索引.md",
+    "chunk_index": 0,
+    "total_chunks": 4,
+    "frontmatter": {},
+    "text": "# 采集节点原理图设计\n> 项目：ESP32-WROOM-32E 太阳能低功耗采集节点\n> 版本：V4.2.7 | EDA：KiCad / 立创EDA / OrCAD\n---\n## 原理图分页（电源 / 数字 / 模拟）\n### ⚡ 电源域\n| 页码 | 模块 | 核心器件 | 文件 |\n|------|------|---------|------|\n| Sheet 1 | 输入保护 + CS5383C MPPT 充电 | Q0(AO3401), Si2301 OVP, TL431, CS5383C, SMBJ20A | [[Sheet1-输入保护与充电]] |\n| Sheet 2 | DC-DC + LDO + 隔离电源 | MP2307, ME6209, B0509XT, 隔离 ME6209, AO3401×5 | [[Sheet2-电源系统]] |"
+  },
+  {
+    "file": "原理图设计/00-索引.md",
+    "chunk_index": 1,
+    "total_chunks": 4,
+    "frontmatter": {},
+    "text": "### 🔵 数字域\n| 页码 | 模块 | 核心器件 | 文件 |\n|------|------|---------|------|\n| Sheet 3 | ESP32 主控 | ESP32-WROOM-32E, TPS3820 | [[Sheet3-ESP32主控]] |\n| Sheet 4 | LoRa 通信 | WH-L101-L, SMA, RCLAMP0521P | [[Sheet4-LoRa通信]] |\n| Sheet 5 | Type-C + 调试 | Type-C, CH224K, CP2102N | [[Sheet5-TypeC与调试]] |\n| Sheet 6 | RTC + 存储 | DS3231, MB85RC256V | [[Sheet6-RTC与存储]] |"
+  },
+  {
+    "file": "原理图设计/00-索引.md",
+    "chunk_index": 2,
+    "total_chunks": 4,
+    "frontmatter": {},
+    "text": "### 🟢 模拟域\n| 页码 | 模块 | 核心器件 | 文件 |\n|------|------|---------|------|\n| Sheet 7 | RS485 隔离 | ADuM1301, MAX3485, SMBJ6.5CA, GDT | [[Sheet7-RS485隔离]] |\n| Sheet 8 | 传感器接口 | SHT30, BH1750, 电池分压 | [[Sheet8-传感器接口]] |\n---\n## 快速查阅\n- **网络表**：[[Netlist-网络表]] — 按网络名查所有连接点\n- **BOM**：[[BOM-物料清单]] — 全部元器件清单\n- **检查清单**：[[检查清单]] — 画完原理图后逐项校验\n---\n## 标签索引\n- `#power` — 电源相关\n- `#digital` — 数字信号相关\n- `#analog` — 模拟信号相关\n- `#i2c` — I²C 总线\n- `#uart` — UART 串口\n- `#protection` — 保护器件\n- `#strapping` — ESP32 启动配置\n---\n## 电源轨总览"
+  },
+  {
+    "file": "原理图设计/00-索引.md",
+    "chunk_index": 3,
+    "total_chunks": 4,
+    "frontmatter": {},
+    "text": "```\nV_BAT (7.4V 2S)\n├── MP2307 ──→ NET_5V_RAIL (5V)\n│   ├── B0509XT ──→ 9V_ISO ──→ 隔离 ME6209 ──→ NET_ISO_3V3 (3.3V 隔离)\n│   └── (其他 5V 负载)\n├── ME6209 ──→ NET_3V3 (3.3V 常供电)\n│   ├── ESP32, WH-L101-L, DS3231, MB85RC256V, TPS3820\n│   └── ADuM1301 VDD1, 各上拉电阻\nV_IN_OVP (光伏/Type-C 12V)\n└── CS5383C ──→ V_BAT (充电)\n```"
+  },
+  {
+    "file": "原理图设计/BOM-物料清单.md",
+    "chunk_index": 0,
+    "total_chunks": 22,
+    "frontmatter": {},
+    "text": "# BOM 物料清单\n> 完整元器件清单 | 回到索引：[[00-索引]]\n---\n## IC 芯片"
+  },
+  {
+    "file": "原理图设计/BOM-物料清单.md",
+    "chunk_index": 1,
+    "total_chunks": 22,
+    "frontmatter": {},
+    "text": "| # | 位号 | 型号 | 封装 | 数量 | 说明 | 详见 |\n|---|------|------|------|------|------|------|\n| 1 | U1 | CS5383C | TSSOP20L-PP | 1 | MPPT 同步充电 IC | [[Sheet1-输入保护与充电]] |\n| 2 | U2 | ESP32-WROOM-32E | SMD-38 | 1 | 主控 MCU | [[Sheet3-ESP32主控]] |\n| 3 | U3 | ME6209-3.3 | SOT-23-5 | 1 | 3.3V LDO | [[Sheet2-电源系统]] |\n| 4 | U4 | WH-L101-L | SMT | 1 | LoRa 通信模组 | [[Sheet4-LoRa通信]] |\n| 5 | U5 | MP2307 | SOP-8 | 1 | 5V 降压 DC-DC | [[Sheet2-电源系统]] |\n| 6 | U6 | B0509XT-2WR3 | SIP-4 | 1 | 隔离 DC-DC 5V→9V | [[Sheet2-电源系统]] |"
+  },
+  {
+    "file": "原理图设计/BOM-物料清单.md",
+    "chunk_index": 2,
+    "total_chunks": 22,
+    "frontmatter": {},
+    "text": "压 DC-DC | [[Sheet2-电源系统]] |\n| 6 | U6 | B0509XT-2WR3 | SIP-4 | 1 | 隔离 DC-DC 5V→9V | [[Sheet2-电源系统]] |\n| 7 | U6b | ME6209-3.3 | SOT-23-5 | 1 | 隔离侧 3.3V LDO | [[Sheet2-电源系统]] |\n| 8 | U7 | TPS3820-33 | SOT-23-5 | 1 | 硬件看门狗 | [[Sheet3-ESP32主控]] |\n| 9 | U8 | DS3231 | SOIC-16 | 1 | I²C RTC | [[Sheet6-RTC与存储]] |\n| 10 | U9 | MB85RC256V | SOP-8 | 1 | 32KB I²C FRAM | [[Sheet6-RTC与存储]] |\n| 11 | U10 | SHT30 | DFN-8 | 1 | I²C 温湿度 | [[Sheet8-传感器接口]] |\n| 12 | U11 | BH1750FVI | WSOF-6 | 1 | I²C 光照 | [[Sheet8-传感器"
+  },
+  {
+    "file": "原理图设计/BOM-物料清单.md",
+    "chunk_index": 3,
+    "total_chunks": 22,
+    "frontmatter": {},
+    "text": "DFN-8 | 1 | I²C 温湿度 | [[Sheet8-传感器接口]] |\n| 12 | U11 | BH1750FVI | WSOF-6 | 1 | I²C 光照 | [[Sheet8-传感器接口]] |\n| 13 | U12 | MAX3485ESA | SOP-8 | 1 | RS485 收发器 | [[Sheet7-RS485隔离]] |\n| 14 | U13 | ADuM1301 | SOIC-16 | 1 | 三通道数字隔离器 | [[Sheet7-RS485隔离]] |\n| 15 | U14 | CP2102N | QFN-24 | 1 | USB-UART 桥接 | [[Sheet5-TypeC与调试]] |\n| 16 | U15 | CH224K | SOT23-6 | 1 | PD 12V 诱骗 | [[Sheet5-TypeC与调试]] |"
+  },
+  {
+    "file": "原理图设计/BOM-物料清单.md",
+    "chunk_index": 4,
+    "total_chunks": 22,
+    "frontmatter": {},
+    "text": "---\n## 分立半导体"
+  },
+  {
+    "file": "原理图设计/BOM-物料清单.md",
+    "chunk_index": 5,
+    "total_chunks": 22,
+    "frontmatter": {},
+    "text": "| # | 位号 | 型号 | 封装 | 数量 | 说明 | 详见 |\n|---|------|------|------|------|------|------|\n| 17 | Q0 | AO3401 | SOT-23 | 1 | P-MOS 反接保护 | [[Sheet1-输入保护与充电]] |\n| 18 | Q_OVP | Si2301 | SOT-23 | 1 | P-MOS OVP 串联关断 | [[Sheet1-输入保护与充电]] |\n| 19 | Q1~Q5 | AO3401 | SOT-23 | 5 | P-MOS 负载开关 | [[Sheet2-电源系统]] |\n| 20 | Q6~Q10 | S8050 | SOT-23 | 5 | NPN 驱动管 | [[Sheet2-电源系统]] |\n| 21 | D_TVS1 | SMBJ20A | SMA | 1 | 输入浪涌 TVS | [[Sheet1-输入保护与充电]] |\n| 22 | D_GS0 | BZT52C10 | SOD-123 | 1 | Q0 栅源钳位 | [[Sheet1-输入保护与充电]] |\n|"
+  },
+  {
+    "file": "原理图设计/BOM-物料清单.md",
+    "chunk_index": 6,
+    "total_chunks": 22,
+    "frontmatter": {},
+    "text": " TVS | [[Sheet1-输入保护与充电]] |\n| 22 | D_GS0 | BZT52C10 | SOD-123 | 1 | Q0 栅源钳位 | [[Sheet1-输入保护与充电]] |\n| 23 | D_GS1 | BZT52C15 | SOD-123 | 1 | Q_OVP 栅源钳位 | [[Sheet1-输入保护与充电]] |\n| 24 | D_RS485_A | SMBJ6.5CA | SMB | 1 | RS485 A 对地 TVS | [[Sheet7-RS485隔离]] |\n| 25 | D_RS485_B | SMBJ6.5CA | SMB | 1 | RS485 B 对地 TVS | [[Sheet7-RS485隔离]] |\n| 26 | D_RS485_AB | SMBJ6.5CA | SMB | 1 | RS485 线间 TVS | [[Sheet7-RS485隔离]] |\n| 27 | D_USB1 | SS34 | SOD-123 | 1 | PD 12V 隔离二极管 | [[Sheet5-TypeC与调试]] |\n| 28 | D_USB2 | S"
+  },
+  {
+    "file": "原理图设计/BOM-物料清单.md",
+    "chunk_index": 7,
+    "total_chunks": 22,
+    "frontmatter": {},
+    "text": "85隔离]] |\n| 27 | D_USB1 | SS34 | SOD-123 | 1 | PD 12V 隔离二极管 | [[Sheet5-TypeC与调试]] |\n| 28 | D_USB2 | SS14 | SOD-123 | 1 | VBUS 5V 隔离二极管 | [[Sheet5-TypeC与调试]] |\n| 29 | D_RF1 | RCLAMP0521P | SOT-23 | 1 | 射频 ESD 保护 | [[Sheet4-LoRa通信]] |\n| 30 | TL431 | TL431AIDR | SOT-23 | 1 | OVP 阈值基准 | [[Sheet1-输入保护与充电]] |"
+  },
+  {
+    "file": "原理图设计/BOM-物料清单.md",
+    "chunk_index": 8,
+    "total_chunks": 22,
+    "frontmatter": {},
+    "text": "---\n## 无源器件 — 电阻"
+  },
+  {
+    "file": "原理图设计/BOM-物料清单.md",
+    "chunk_index": 9,
+    "total_chunks": 22,
+    "frontmatter": {},
+    "text": "| # | 位号 | 值 | 精度 | 封装 | 数量 | 说明 |\n|---|------|-----|------|------|------|------|\n| 31 | R_CS | 0.1Ω | 1% | 1206 | 1 | 充电电流采样 |\n| 32 | R_CV | 75kΩ | 1% | 0603 | 1 | 恒压充电设定 |\n| 33 | R_VSEN1 | 56kΩ | 1% | 0603 | 1 | MPPT 分压上臂 |\n| 34 | R_VSEN2 | 12kΩ | 1% | 0603 | 1 | MPPT 分压下臂 |\n| 35 | R_CS_EN | 4.7kΩ | 1% | 0603 | 1 | CS5383C EN 下拉 |\n| 36 | R_BAT1 | 47kΩ | 0.1% | 0603 | 1 | 电池分压上臂 |\n| 37 | R_BAT2 | 10kΩ | 0.1% | 0603 | 1 | 电池分压下臂 |\n| 38 | R_5VS1 | 100kΩ | 1% | 0603 | 1 | 5V 回读分压上臂 |\n| 39 | R_5VS2"
+  },
+  {
+    "file": "原理图设计/BOM-物料清单.md",
+    "chunk_index": 10,
+    "total_chunks": 22,
+    "frontmatter": {},
+    "text": " 10kΩ | 0.1% | 0603 | 1 | 电池分压下臂 |\n| 38 | R_5VS1 | 100kΩ | 1% | 0603 | 1 | 5V 回读分压上臂 |\n| 39 | R_5VS2 | 100kΩ | 1% | 0603 | 1 | 5V 回读分压下臂 |\n| 40 | R_VBUS1 | 100kΩ | 1% | 0603 | 1 | VBUS 分压上臂 |\n| 41 | R_VBUS2 | 100kΩ | 1% | 0603 | 1 | VBUS 分压下臂 |\n| 42 | R_I2C_SDA_PU | 4.7kΩ | 1% | 0603 | 1 | SDA 上拉 |\n| 43 | R_I2C_SCL_PU | 4.7kΩ | 1% | 0603 | 1 | SCL 上拉 |\n| 44 | R_I2C_SDA_PD | 10kΩ | 1% | 0603 | 1 | SDA 钳位下拉 |\n| 45 | R_I2C_SCL_PD | 10kΩ | 1% | 0603 | 1 | SCL 钳位下拉 |\n| 46 | R_BOOT | 10kΩ | — | 0603 |"
+  },
+  {
+    "file": "原理图设计/BOM-物料清单.md",
+    "chunk_index": 11,
+    "total_chunks": 22,
+    "frontmatter": {},
+    "text": "SDA 钳位下拉 |\n| 45 | R_I2C_SCL_PD | 10kΩ | 1% | 0603 | 1 | SCL 钳位下拉 |\n| 46 | R_BOOT | 10kΩ | — | 0603 | 1 | GPIO0 上拉 |\n| 47 | R_B0509_PD | 10kΩ | — | 0603 | 1 | GPIO2 下拉 |\n| 48 | R_CP2102_PD | 10kΩ | — | 0603 | 1 | GPIO15 下拉 |\n| 49 | R_WAKE_DN | 10kΩ | 1% | 0603 | 1 | LoRa WAKE 下拉 |\n| 50 | R_HOST_DN | 10kΩ | 1% | 0603 | 1 | HOST_WAKE 下拉 |\n| 51 | R_EN_5V | 4.7kΩ | 1% | 0603 | 1 | MP2307 EN 下拉 |\n| 52 | R_WD | 100kΩ | 1% | 0603 | 1 | TPS3820 /EN 上拉 |\n| 53 | R_STAT1 | 100kΩ | 1% | 0603 | 1 | STAT1 上拉 |"
+  },
+  {
+    "file": "原理图设计/BOM-物料清单.md",
+    "chunk_index": 12,
+    "total_chunks": 22,
+    "frontmatter": {},
+    "text": " R_WD | 100kΩ | 1% | 0603 | 1 | TPS3820 /EN 上拉 |\n| 53 | R_STAT1 | 100kΩ | 1% | 0603 | 1 | STAT1 上拉 |\n| 54 | R_STAT2 | 100kΩ | 1% | 0603 | 1 | STAT2 上拉 |\n| 55 | R_INT | 4.7kΩ | 1% | 0603 | 1 | RTC INT 上拉 |\n| 56 | R_LORA_RST | 10kΩ | — | 0603 | 1 | LoRa 复位上拉 |\n| 57 | R_CFG1 | 24kΩ | 1% | 0603 | 1 | CH224K 12V 配置 |\n| 58 | R_5V_DIS | 100kΩ | — | 0603 | 1 | 5V 泄放电阻 |\n| 59 | R_GATE_PU_Q0 | 100kΩ | 1% | 0603 | 1 | Q0 栅极上拉 |\n| 60 | R_GATE_PU_Q1~Q5 | 100kΩ | 1% | 0603 | 5 | Q1~Q5 栅极上拉 |\n| 61 | R_RS485_A_"
+  },
+  {
+    "file": "原理图设计/BOM-物料清单.md",
+    "chunk_index": 13,
+    "total_chunks": 22,
+    "frontmatter": {},
+    "text": "0603 | 1 | Q0 栅极上拉 |\n| 60 | R_GATE_PU_Q1~Q5 | 100kΩ | 1% | 0603 | 5 | Q1~Q5 栅极上拉 |\n| 61 | R_RS485_A_PU | 680Ω | 1% | 0603 | 1 | RS485 A 偏置上拉 |\n| 62 | R_RS485_B_PD | 680Ω | 1% | 0603 | 1 | RS485 B 偏置下拉 |\n| 63 | R_RS485_TERM | 120Ω | 1% | 0805 | 1 | RS485 终端电阻 |\n| 64 | R_VBAT | 0Ω | — | 0603 | 1 | DS3231 VBAT-VCC 短接 |"
+  },
+  {
+    "file": "原理图设计/BOM-物料清单.md",
+    "chunk_index": 14,
+    "total_chunks": 22,
+    "frontmatter": {},
+    "text": "---\n## 无源器件 — 电容"
+  },
+  {
+    "file": "原理图设计/BOM-物料清单.md",
+    "chunk_index": 15,
+    "total_chunks": 22,
+    "frontmatter": {},
+    "text": "| # | 位号 | 值 | 耐压 | 封装 | 数量 | 说明 |\n|---|------|-----|------|------|------|------|\n| 65 | C_CS_PMID | 100nF | 50V | 0402 | 1 | CS5383C PMID 去耦 |\n| 66 | C_CS_BST | 100nF | 50V | 0402 | 1 | CS5383C 自举 |\n| 67 | C_CS_VCC1 | 1μF | 10V | 0402 | 1 | CS5383C VCC 去耦 |\n| 68 | C_CS_VCC2 | 10μF | 10V | 0805 | 1 | CS5383C VCC 去耦 |\n| 69 | C_CS_VIN1 | 22μF | 50V | Φ5×11 | 1 | CS5383C PVIN 滤波 |\n| 70 | C_CS_VIN2 | 10μF | 50V | 1206 | 1 | CS5383C PVIN 滤波 |\n| 71 | C_CS_VIN3 | 100nF | 50V | 0402 | 1 | CS5383C PVIN 滤"
+  },
+  {
+    "file": "原理图设计/BOM-物料清单.md",
+    "chunk_index": 16,
+    "total_chunks": 22,
+    "frontmatter": {},
+    "text": "10μF | 50V | 1206 | 1 | CS5383C PVIN 滤波 |\n| 71 | C_CS_VIN3 | 100nF | 50V | 0402 | 1 | CS5383C PVIN 滤波 |\n| 72 | C_5V_IN | 22μF | 25V | 1206 | 1 | MP2307 输入 |\n| 73 | C_5V_OUT | 22μF | 16V | 1206 | 2 | MP2307 输出 |\n| 74 | C_MP2307_EN | 1μF | 10V | 0402 | 1 | MP2307 EN RC 延时 |\n| 75 | C_LDO33_IN | 1μF | 10V | 0402 | 1 | ME6209 输入 |\n| 76 | C_LDO33_OUT | 10μF | 10V | 0805 | 1 | ME6209 输出 |\n| 77 | C_B05_IN | 10μF | 10V | 0805 | 1 | B0509XT 输入 |\n| 78 | C_B05_OUT | 4.7μF | 25V | 0805 | 1 | B0509XT 输出 |\n| 7"
+  },
+  {
+    "file": "原理图设计/BOM-物料清单.md",
+    "chunk_index": 17,
+    "total_chunks": 22,
+    "frontmatter": {},
+    "text": " | 10μF | 10V | 0805 | 1 | B0509XT 输入 |\n| 78 | C_B05_OUT | 4.7μF | 25V | 0805 | 1 | B0509XT 输出 |\n| 79 | C_LORA_VCC | 100μF | 6.3V | 0805 | 1 | LoRa 电源去耦 |\n| 80 | C_ESP_VCC1 | 100nF | 10V | 0402 | 1 | ESP32 VDD3P3 |\n| 81 | C_ESP_VCC2 | 100nF | 10V | 0402 | 1 | ESP32 VDD3P3_RTC |\n| 82 | C_DS3231 | 100nF | 10V | 0402 | 1 | DS3231 去耦 |\n| 83 | C_FRAM | 100nF | 10V | 0402 | 1 | FRAM 去耦 |\n| 84 | C_SHT30 | 100nF | 10V | 0402 | 1 | SHT30 去耦 |\n| 85 | C_BH1750 | 100nF | 10V | 0402 | 1 | BH1750 去耦 |\n| 86 | "
+  },
+  {
+    "file": "原理图设计/BOM-物料清单.md",
+    "chunk_index": 18,
+    "total_chunks": 22,
+    "frontmatter": {},
+    "text": "| 100nF | 10V | 0402 | 1 | SHT30 去耦 |\n| 85 | C_BH1750 | 100nF | 10V | 0402 | 1 | BH1750 去耦 |\n| 86 | C_CP2102 | 100nF | 10V | 0402 | 1 | CP2102N 去耦 |\n| 87 | C_MAX3485 | 100nF | 10V | 0402 | 1 | MAX3485 去耦 |\n| 88 | C_ADUM_VDD2 | 100nF | 10V | 0402 | 1 | ADuM1301 隔离侧去耦 |\n| 89 | C_GND_SAFE | 1nF | 2kV | 1206 | 1 | 安规电容 |\n| 90 | C_VBUS_FILT | 100nF | 10V | 0402 | 1 | VBUS ADC 滤波 |\n| 91 | C_CH224K | 100nF | 10V | 0402 | 1 | CH224K 去耦 |\n| 92 | C_GATE | 100pF | 50V | 0402 | 1 | OVP 加速电容 |"
+  },
+  {
+    "file": "原理图设计/BOM-物料清单.md",
+    "chunk_index": 19,
+    "total_chunks": 22,
+    "frontmatter": {},
+    "text": "nF | 10V | 0402 | 1 | CH224K 去耦 |\n| 92 | C_GATE | 100pF | 50V | 0402 | 1 | OVP 加速电容 |"
+  },
+  {
+    "file": "原理图设计/BOM-物料清单.md",
+    "chunk_index": 20,
+    "total_chunks": 22,
+    "frontmatter": {},
+    "text": "---\n## 磁性器件\n| # | 位号 | 型号 | 封装 | 数量 | 说明 |\n|---|------|------|------|------|------|\n| 93 | L1 | 10μH ≥3A 屏蔽 | SMD | 1 | CS5383C 功率电感 |\n---\n## 保护器件\n| # | 位号 | 型号 | 封装 | 数量 | 说明 |\n|---|------|------|------|------|------|\n| 94 | F1 | 保险丝 2A | — | 1 | 输入保险丝 |\n| 95 | FUSE_A | SMD1206-035 | 1206 | 1 | RS485 A 自恢复保险丝 |\n| 96 | FUSE_B | SMD1206-035 | 1206 | 1 | RS485 B 自恢复保险丝 |\n| 97 | GDT | B3D090L-C | — | 1 | RS485 气体放电管 |\n---\n## 连接器"
+  },
+  {
+    "file": "原理图设计/BOM-物料清单.md",
+    "chunk_index": 21,
+    "total_chunks": 22,
+    "frontmatter": {},
+    "text": "| # | 位号 | 型号 | 封装 | 数量 | 说明 |\n|---|------|------|------|------|------|\n| 98 | J1 | Type-C 6pin | SMD 卧贴 | 1 | USB Type-C |\n| 99 | J_SMA | SMA 天线座 | — | 1 | LoRa 天线 |\n| 100 | RT1 | NTC 10kΩ B=3435 | 线装 | 1 | 电池温度检测 |\n---\n## 统计\n| 类别 | 数量 |\n|------|------|\n| IC 芯片 | 16 |\n| 分立半导体 | 14 |\n| 电阻 | 34 |\n| 电容 | 28 |\n| 磁性器件 | 1 |\n| 保护器件 | 4 |\n| 连接器 | 3 |\n| **合计** | **~100** |"
+  },
+  {
+    "file": "原理图设计/Netlist-网络表.md",
+    "chunk_index": 0,
+    "total_chunks": 12,
+    "frontmatter": {},
+    "text": "# Netlist 网络表\n> 按网络名汇总所有连接点 | 回到索引：[[00-索引]]\n> 格式：`网络名 → 器件.引脚`\n---\n## 电源网络"
+  },
+  {
+    "file": "原理图设计/Netlist-网络表.md",
+    "chunk_index": 1,
+    "total_chunks": 12,
+    "frontmatter": {},
+    "text": "| 网络名 | 连接点 |\n|--------|--------|\n| V_BAT_IN | Q0(AO3401).S, D_GS0(BZT52C10).阴极, R_GATE_PU_Q0.一端 |\n| V_BAT | Q0(AO3401).D, CS5383C.BAT(9), CS5383C.CSP(8)→R_CS→BAT, ME6209.VIN(1), MP2307.VIN, R_BAT1.一端, R_VBAT.一端→DS3231 |\n| V_IN_FUSED | F1.输出, Si2301(Q_OVP).S, R_GATE_PU.一端→Q_OVP.G, TL431.REF→分压 |\n| V_IN_OVP | Si2301(Q_OVP).D, CS5383C.PVIN(1), CS5383C.AVIN(20), SMBJ20A.阴极, R_VSEN1.一端, C_CS_VIN1/C2/C3.一端 |\n| NET_5V_RAIL | MP2307.VOUT, C_5V_OUT.一端×2, R_5V_DIS.一端, R_5VS1.一端, AO3401(Q1).D→B0509XT.VIN+"
+  },
+  {
+    "file": "原理图设计/Netlist-网络表.md",
+    "chunk_index": 2,
+    "total_chunks": 12,
+    "frontmatter": {},
+    "text": "3.一端 |\n| NET_5V_RAIL | MP2307.VOUT, C_5V_OUT.一端×2, R_5V_DIS.一端, R_5VS1.一端, AO3401(Q1).D→B0509XT.VIN+ |\n| NET_3V3 | ME6209.VOUT(5), C_LDO33_OUT.一端, ESP32.VDD3P3, ESP32.VDD3P3_RTC, WH-L101-L.VCC(13,14), DS3231.VCC(8), MB85RC256V.VCC(8), TPS3820.VDD(1), ADuM1301.VDD1(1,14), R_BOOT.一端, R_INT.一端, R_STAT1/2.一端, R_WD.一端, R_LORA_RST.一端 |\n| NET_ISO_3V3 | 隔离ME6209.VOUT, ADuM1301.VDD2(7,10), MAX3485.VCC(8), R_RS485_A_PU.一端 |\n| 9V_ISO | B0509XT.VOUT+, 隔离ME6209.VIN |\n| GND2 | ADuM1301.GND2(6,9), MAX3485.GND("
+  },
+  {
+    "file": "原理图设计/Netlist-网络表.md",
+    "chunk_index": 3,
+    "total_chunks": 12,
+    "frontmatter": {},
+    "text": "R_RS485_A_PU.一端 |\n| 9V_ISO | B0509XT.VOUT+, 隔离ME6209.VIN |\n| GND2 | ADuM1301.GND2(6,9), MAX3485.GND(5), B0509XT.VOUT-, C_GND_SAFE.一端, C_ADUM_VDD2.一端, C_MAX3485.一端, 隔离ME6209.GND, R_RS485_B_PD.一端, D_RS485_A/B/AB.一端, GDT.一端 |"
+  },
+  {
+    "file": "原理图设计/Netlist-网络表.md",
+    "chunk_index": 4,
+    "total_chunks": 12,
+    "frontmatter": {},
+    "text": "---\n## 数字信号网络"
+  },
+  {
+    "file": "原理图设计/Netlist-网络表.md",
+    "chunk_index": 5,
+    "total_chunks": 12,
+    "frontmatter": {},
+    "text": "| 网络名 | 连接点 |\n|--------|--------|\n| NET_CHG_EN | ESP32.GPIO5, CS5383C.EN(13), R_CS_EN.一端→GND |\n| NET_5V_EN | ESP32.GPIO32, MP2307.EN, R_EN_5V.一端→GND, C_MP2307_EN.一端→GND |\n| NET_WDT_EN | ESP32.GPIO33, TPS3820./EN(2), R_WD.一端→3.3V |\n| NET_ISO_EN | ESP32.GPIO2, S8050(Q1).B, R_B0509_PD.一端→GND |\n| NET_I2C_PWR | S8050(Q2).C→AO3401(Q2).D, SHT30.VDD(5), BH1750.VCC(1)/DVI(5), R_I2C_SDA_PU.一端, R_I2C_SCL_PU.一端 |\n| NET_BATT_SW | ESP32.GPIO25, S8050(Q3).B |\n| NET_SOIL9V_EN | ESP32.GPIO27, S8050(Q4).B |\n| NET"
+  },
+  {
+    "file": "原理图设计/Netlist-网络表.md",
+    "chunk_index": 6,
+    "total_chunks": 12,
+    "frontmatter": {},
+    "text": "一端 |\n| NET_BATT_SW | ESP32.GPIO25, S8050(Q3).B |\n| NET_SOIL9V_EN | ESP32.GPIO27, S8050(Q4).B |\n| NET_CP2102_EN | ESP32.GPIO15, S8050(Q5).B, R_CP2102_PD.一端→GND |\n| NET_RTC_INT | DS3231./INT(3), R_INT.一端→3.3V, ESP32.EXT0 |"
+  },
+  {
+    "file": "原理图设计/Netlist-网络表.md",
+    "chunk_index": 7,
+    "total_chunks": 12,
+    "frontmatter": {},
+    "text": "---\n## I²C 总线网络\n| 网络名 | 连接点 |\n|--------|--------|\n| NET_I2C_SDA | ESP32.GPIO21, DS3231.SDA(6), MB85RC256V.SDA(5), SHT30.SDA(1), BH1750.SDA(4), R_I2C_SDA_PU.一端→NET_I2C_PWR, R_I2C_SDA_PD.一端→GND |\n| NET_I2C_SCL | ESP32.GPIO22, DS3231.SCL(7), MB85RC256V.SCL(6), SHT30.SCL(4), BH1750.SCL(6), R_I2C_SCL_PU.一端→NET_I2C_PWR, R_I2C_SCL_PD.一端→GND |\n---\n## UART 网络"
+  },
+  {
+    "file": "原理图设计/Netlist-网络表.md",
+    "chunk_index": 8,
+    "total_chunks": 12,
+    "frontmatter": {},
+    "text": "| 网络名 | 连接点 |\n|--------|--------|\n| NET_UART0_TX | ESP32.GPIO1, CP2102N.TXD |\n| NET_UART0_RX | ESP32.GPIO3, CP2102N.RXD |\n| NET_LORA_TX | WH-L101-L.UART_TX(19), ESP32.GPIO19 |\n| NET_LORA_RX | ESP32.GPIO23, WH-L101-L.UART_RX(20) |\n| NET_LORA_WAKE | ESP32.GPIO14, WH-L101-L.WAKE(23), R_WAKE_DN.一端→GND |\n| NET_HOST_WAKE | WH-L101-L.HOST_WAKE(24), ESP32.GPIO4, R_HOST_DN.一端→GND |\n---\n## RS485 网络"
+  },
+  {
+    "file": "原理图设计/Netlist-网络表.md",
+    "chunk_index": 9,
+    "total_chunks": 12,
+    "frontmatter": {},
+    "text": "| 网络名 | 连接点 |\n|--------|--------|\n| NET_RS485_RO | MAX3485.RO(1), ADuM1301.VOC(8) |\n| NET_RS485_DE | MAX3485.DE(3)/RE(2), ADuM1301.VOB(5) |\n| NET_RS485_DI | MAX3485.DI(4), ADuM1301.VOA(4) |\n| RS485_A | MAX3485.A(6), FUSE_A.一端, D_RS485_A.一端, D_RS485_AB.一端, GDT.一端, R_RS485_A_PU.一端→3.3V_ISO, R_RS485_TERM.一端 |\n| RS485_B | MAX3485.B(7), FUSE_B.一端, D_RS485_B.一端, D_RS485_AB.一端, GDT.一端, R_RS485_B_PD.一端→GND2, R_RS485_TERM.一端 |\n---\n## ADC 网络"
+  },
+  {
+    "file": "原理图设计/Netlist-网络表.md",
+    "chunk_index": 10,
+    "total_chunks": 12,
+    "frontmatter": {},
+    "text": "| 网络名 | 连接点 |\n|--------|--------|\n| NET_BATT_ADC | ESP32.GPIO34, R_BAT1.一端→V_BAT_SWITCHED, R_BAT2.一端→GND |\n| NET_5V_FB | ESP32.GPIO26, R_5VS1.一端→NET_5V_RAIL, R_5VS2.一端→GND |\n| NET_VBUS_FB | ESP32.GPIO36, R_VBUS1.一端→Type-C VBUS, R_VBUS2.一端→GND, C_VBUS_FILT.一端→GND |\n---\n## 射频网络\n| 网络名 | 连接点 |\n|--------|--------|\n| NET_RF | WH-L101-L.RFIO(2), J_SMA.信号中心导体, D_RF1(RCLAMP0521P).信号端→GND |\n---\n## 充电状态网络"
+  },
+  {
+    "file": "原理图设计/Netlist-网络表.md",
+    "chunk_index": 11,
+    "total_chunks": 12,
+    "frontmatter": {},
+    "text": "| 网络名 | 连接点 |\n|--------|--------|\n| NET_STAT1 | CS5383C.STAT1(18), R_STAT1.一端→3.3V, ESP32.GPIO35 |\n| NET_STAT2 | CS5383C.STAT2(17), R_STAT2.一端→3.3V, ESP32.GPIO39 |\n---\n## Type-C / USB 网络\n| 网络名 | 连接点 |\n|--------|--------|\n| Type-C_VBUS | J1.VBUS, CH224K.VDD(6), D_USB2(SS14).阳极 |\n| CC1 | J1.CC1, CH224K.CC1(4) |\n| CC2 | J1.CC2, CH224K.CC2(5) |\n| D+ | J1.D+, CP2102N.D+ |\n| D- | J1.D-, CP2102N.D- |"
+  },
+  {
+    "file": "原理图设计/Sheet1-输入保护与充电.md",
+    "chunk_index": 0,
+    "total_chunks": 12,
+    "frontmatter": {},
+    "text": "# Sheet 1：输入保护 + CS5383C MPPT 充电\n> 域：⚡ 电源 | 回到索引：[[00-索引]]\n---\n## 1.1 电池反接保护\n### AO3401 (Q0) — P-MOS 反接保护\n| 引脚 | 网络 | 连接目标 |\n|------|------|---------|\n| S (Source) | V_BAT_IN | 电池正极输入端 |\n| D (Drain) | V_BAT | 保护后主电路 |\n| G (Gate) | — | R_GATE_PU_Q0 (100kΩ) → V_BAT_IN；D_GS0 (BZT52C10) → V_BAT_IN |\n### BZT52C10 (D_GS0) — 栅源钳位\n| 引脚 | 网络 | 连接目标 |\n|------|------|---------|\n| 阳极 | Q0 Gate | — |\n| 阴极 | Q0 Source (V_BAT_IN) | — |\n| 参数 | 9.50~10.50V | 钳位 Vgs ≥ -10.5V |\n### R_GATE_PU_Q0"
+  },
+  {
+    "file": "原理图设计/Sheet1-输入保护与充电.md",
+    "chunk_index": 1,
+    "total_chunks": 12,
+    "frontmatter": {},
+    "text": "| 值 | 封装 | 端 A | 端 B |\n|-----|------|------|------|\n| 100kΩ 1% | 0603 | Q0 Source (V_BAT_IN) | Q0 Gate |\n---\n## 1.2 输入浪涌保护\n| 器件 | 网络 A | 网络 B | 参数 |\n|------|--------|--------|------|\n| F1 (保险丝) | V_BAT_IN | V_IN_FUSED | 2A |\n| D_TVS1 (SMBJ20A) | V_IN_OVP | GND | 钳位 33.4V < CS5383C 36V 耐压 |\n> [!warning] 注意\n> SMBJ20A 钳位电压 33.4V，CS5383C 耐压 36V，裕量 2.6V\n---\n## 1.3 有源钳位 OVP\n### Si2301 (Q_OVP) — P-MOS 串联关断"
+  },
+  {
+    "file": "原理图设计/Sheet1-输入保护与充电.md",
+    "chunk_index": 2,
+    "total_chunks": 12,
+    "frontmatter": {},
+    "text": "| 引脚 | 网络 | 连接目标 |\n|------|------|---------|\n| S (Source) | V_IN_FUSED | 经保险丝后输入 |\n| D (Drain) | V_IN_OVP | → CS5383C PVIN(1) |\n| G (Gate) | — | R_GATE_PU (1MΩ) → V_IN_FUSED；10kΩ → TL431 阴极；D_GS1 (BZT52C15) → V_IN_FUSED；C_GATE (100pF) → V_IN_FUSED |\n### BZT52C15 (D_GS1) — 栅源钳位\n| 参数 | 值 |\n|------|-----|\n| 齐纳电压 | 14.25~15.75V |\n| 阳极 | Q_OVP Gate |\n| 阴极 | Q_OVP Source (V_IN_FUSED) |\n### TL431 — OVP 阈值设定"
+  },
+  {
+    "file": "原理图设计/Sheet1-输入保护与充电.md",
+    "chunk_index": 3,
+    "total_chunks": 12,
+    "frontmatter": {},
+    "text": "| 引脚 | 连接 |\n|------|------|\n| REF | VIN 经 100kΩ + 10kΩ 分压（OVP ≈ 28V） |\n| 阴极 | 经 10kΩ → Q_OVP Gate |\n| 阳极 | GND |\n| VCC | VIN 经 100kΩ |\n### 外围器件\n| 位号 | 值 | 端 A | 端 B |\n|------|-----|------|------|\n| R_GATE_PU | 1MΩ | V_IN_FUSED | Q_OVP Gate |\n| C_GATE | 100pF | Q_OVP Gate | Q_OVP Source |\n---\n## 1.4 CS5383C MPPT 充电 IC (U1)\n> 封装：TSSOP20L-PP | 数据手册：[[采集节点开发文档v4.2.7#附录|CS5383C]] | 详细引脚见 [[采集节点开发文档v4.2.7|文档]]\n### 引脚连接"
+  },
+  {
+    "file": "原理图设计/Sheet1-输入保护与充电.md",
+    "chunk_index": 4,
+    "total_chunks": 12,
+    "frontmatter": {},
+    "text": "| # | 引脚 | 网络 | 连接目标 |\n|---|------|------|---------|\n| 1 | PVIN | V_IN_OVP | OVP 输出 / C_CS_VIN1(22μF) / C_CS_VIN2(10μF) / C_CS_VIN3(100nF) → PGND |\n| 2 | PMID | — | C_CS_PMID (100nF/50V) → PGND |\n| 3 | BST | — | C_CS_BST (100nF/50V) → SW(4,5) |\n| 4 | SW | L1 | L1 (10μH, ≥3A) → BAT(9) |\n| 5 | SW | L1 | 同引脚 4 并联 |\n| 6 | PGND | GND | 功率地 |\n| 7 | PGND | GND | 同引脚 6 并联 |\n| 8 | CSP | — | R_CS (0.1Ω 1%, 1206) → BAT(9)/V_BAT |\n| 9 | BAT | V_BAT | 直连电池正极 |\n| 10 | BATCV | — | R_CV (75kΩ 1%) → GND |\n| 11 |"
+  },
+  {
+    "file": "原理图设计/Sheet1-输入保护与充电.md",
+    "chunk_index": 5,
+    "total_chunks": 12,
+    "frontmatter": {},
+    "text": "1206) → BAT(9)/V_BAT |\n| 9 | BAT | V_BAT | 直连电池正极 |\n| 10 | BATCV | — | R_CV (75kΩ 1%) → GND |\n| 11 | SELC0 | NC | 悬空（2S 配置） |\n| 12 | SELC1 | GND | 接地（2S 配置） |\n| 13 | EN | NET_CHG_EN | R_CS_EN (4.7kΩ) → GND；→ ESP32 GPIO5 |\n| 14 | AGND | GND | 模拟地 |\n| 15 | NTC | — | RT1 (10kΩ B=3435) → GND |\n| 16 | VCC | — | C_CS_VCC1 (1μF) + C_CS_VCC2 (10μF) → GND |\n| 17 | STAT2 | NET_STAT2 | R_STAT2 (100kΩ) → 3.3V；→ ESP32 GPIO39 |\n| 18 | STAT1 | NET_STAT1 | R_STAT1 (100kΩ) → 3.3V；→ ESP32 GPIO35 |\n| 19 | VSEN | —"
+  },
+  {
+    "file": "原理图设计/Sheet1-输入保护与充电.md",
+    "chunk_index": 6,
+    "total_chunks": 12,
+    "frontmatter": {},
+    "text": "；→ ESP32 GPIO39 |\n| 18 | STAT1 | NET_STAT1 | R_STAT1 (100kΩ) → 3.3V；→ ESP32 GPIO35 |\n| 19 | VSEN | — | R_VSEN1 (56kΩ) → V_IN_OVP；R_VSEN2 (12kΩ) → GND |\n| 20 | AVIN | V_IN_OVP | 短接至 PVIN(1) |\n| EP | AGND | GND | 散热焊盘，底层过孔阵列 (0.3mm, 1mm 间距) |"
+  },
+  {
+    "file": "原理图设计/Sheet1-输入保护与充电.md",
+    "chunk_index": 7,
+    "total_chunks": 12,
+    "frontmatter": {},
+    "text": "### 外围器件"
+  },
+  {
+    "file": "原理图设计/Sheet1-输入保护与充电.md",
+    "chunk_index": 8,
+    "total_chunks": 12,
+    "frontmatter": {},
+    "text": "| 位号 | 值 | 封装 | 端 A | 端 B |\n|------|-----|------|------|------|\n| C_CS_PMID | 100nF/50V X7R | 0402 | PMID(2) | GND |\n| C_CS_BST | 100nF/50V X7R | 0402 | BST(3) | SW(4,5) |\n| C_CS_VCC1 | 1μF/10V X7R | 0402 | VCC(16) | GND |\n| C_CS_VCC2 | 10μF/10V X7R | 0805 | VCC(16) | GND |\n| C_CS_VIN1 | 22μF/50V 电解 | Φ5×11 | PVIN(1)/AVIN(20) | PGND |\n| C_CS_VIN2 | 10μF/50V X7R | 1206 | PVIN(1)/AVIN(20) | PGND |\n| C_CS_VIN3 | 100nF/50V X7R | 0402 | PVIN(1)/AVIN(20) | PGND |\n| R_CS | 0.1Ω 1% | 1206 | CSP(8) | BAT"
+  },
+  {
+    "file": "原理图设计/Sheet1-输入保护与充电.md",
+    "chunk_index": 9,
+    "total_chunks": 12,
+    "frontmatter": {},
+    "text": " C_CS_VIN3 | 100nF/50V X7R | 0402 | PVIN(1)/AVIN(20) | PGND |\n| R_CS | 0.1Ω 1% | 1206 | CSP(8) | BAT(9) |\n| R_CV | 75kΩ 1% | 0603 | BATCV(10) | GND |\n| R_VSEN1 | 56kΩ 1% | 0603 | V_IN_OVP | VSEN(19) |\n| R_VSEN2 | 12kΩ 1% | 0603 | VSEN(19) | GND |\n| R_CS_EN | 4.7kΩ 1% | 0603 | EN(13) | GND |\n| R_STAT1 | 100kΩ 1% | 0603 | STAT1(18) | 3.3V |\n| R_STAT2 | 100kΩ 1% | 0603 | STAT2(17) | 3.3V |\n| RT1 | 10kΩ B=3435 | 线装 | NTC(15) | GND |\n| L1 | 10μH ≥3A | SMD | SW(4,5) | BAT(9) |"
+  },
+  {
+    "file": "原理图设计/Sheet1-输入保护与充电.md",
+    "chunk_index": 10,
+    "total_chunks": 12,
+    "frontmatter": {},
+    "text": "kΩ B=3435 | 线装 | NTC(15) | GND |\n| L1 | 10μH ≥3A | SMD | SW(4,5) | BAT(9) |"
+  },
+  {
+    "file": "原理图设计/Sheet1-输入保护与充电.md",
+    "chunk_index": 11,
+    "total_chunks": 12,
+    "frontmatter": {},
+    "text": "### MPPT 分压参数\n| 参数 | 值 |\n|------|-----|\n| V_REF | 0.4V (CS5383C) |\n| V_MPP | 18.0V (12V 太阳能板) |\n| R_VSEN1 | 56kΩ |\n| R_VSEN2 | 12kΩ |\n| 恒压 CV | 8.2V (R_CV=75kΩ, 2S×4.10V) |"
+  },
+  {
+    "file": "原理图设计/Sheet2-电源系统.md",
+    "chunk_index": 0,
+    "total_chunks": 8,
+    "frontmatter": {},
+    "text": "# Sheet 2：DC-DC + LDO + 隔离电源\n> 域：⚡ 电源 | 回到索引：[[00-索引]]\n---\n## 电源轨拓扑\n```\nV_BAT (7.4V 2S)\n├── MP2307 (U5) ──→ NET_5V_RAIL (5V)\n├── ME6209 (U3) ──→ NET_3V3 (3.3V 常供电)\nNET_5V_RAIL\n├── AO3401 Q1 (GPIO2) ──→ B0509XT VIN\n│   └── B0509XT (U6) ──→ 9V_ISO\n│       └── 隔离 ME6209 ──→ NET_ISO_3V3 (3.3V 隔离)\n```\n---\n## 2.1 MP2307 降压 DC-DC (U5)\n> 封装：SOP-8 | 输入：V_BAT (6.5~18V) | 输出：5V/600mA"
+  },
+  {
+    "file": "原理图设计/Sheet2-电源系统.md",
+    "chunk_index": 1,
+    "total_chunks": 8,
+    "frontmatter": {},
+    "text": "| 引脚 | 网络 | 连接目标 |\n|------|------|---------|\n| VIN | V_BAT | 电池正极 |\n| EN | NET_5V_EN | ESP32 GPIO32 (RTC GPIO)；R_EN_5V (4.7kΩ) → GND；C_MP2307_EN (1μF) → GND |\n| GND | GND | 系统地 |\n| SW | L2 | 开关节点 |\n| BOOT | — | 自举（芯片内部） |\n| VOUT | NET_5V_RAIL | 5V 输出 |\n### 外围器件"
+  },
+  {
+    "file": "原理图设计/Sheet2-电源系统.md",
+    "chunk_index": 2,
+    "total_chunks": 8,
+    "frontmatter": {},
+    "text": "| 位号 | 值 | 封装 | 端 A | 端 B |\n|------|-----|------|------|------|\n| C_5V_IN | 22μF/25V X7R | 1206 | V_BAT | GND |\n| C_5V_OUT | 22μF/16V X7R ×2 | 1206 | NET_5V_RAIL | GND |\n| R_EN_5V | 4.7kΩ 1% | 0603 | GPIO32 | GND |\n| C_MP2307_EN | 1μF/10V X7R | 0402 | GPIO32 | GND |\n| R_5V_DIS | 100kΩ | — | NET_5V_RAIL | GND |\n> [!important] 5V 关断延迟\n> C_MP2307_EN (1μF) × R_EN_5V (4.7kΩ) ≈ 4.7ms RC 延时；文档要求关断后 ≥15s 等待放电再校验\n---\n## 2.2 ME6209-3.3 LDO (U3)\n> 封装：SOT-23-5 | 输入：V_BAT (≤18V) | 输出：3.3V/500mA"
+  },
+  {
+    "file": "原理图设计/Sheet2-电源系统.md",
+    "chunk_index": 3,
+    "total_chunks": 8,
+    "frontmatter": {},
+    "text": "| 引脚 | 网络 | 连接目标 |\n|------|------|---------|\n| 1 VIN | V_BAT | 电池正极 |\n| 2 GND | GND | 系统地 |\n| 3 EN | V_BAT | 常使能（接 VIN） |\n| 4 NC/BP | — | C_LDO33_IN (1μF) |\n| 5 VOUT | NET_3V3 | 3.3V 输出 |\n### 外围器件\n| 位号 | 值 | 封装 | 端 A | 端 B |\n|------|-----|------|------|------|\n| C_LDO33_IN | 1μF/10V X7R | 0402 | V_BAT | GND |\n| C_LDO33_OUT | 10μF/10V X7R | 0805 | NET_3V3 | GND |\n---\n## 2.3 B0509XT-2WR3 隔离 DC-DC (U6)\n> 封装：SIP-4 | 输入：5V | 输出：9V/166mA（隔离 1kVDC）"
+  },
+  {
+    "file": "原理图设计/Sheet2-电源系统.md",
+    "chunk_index": 4,
+    "total_chunks": 8,
+    "frontmatter": {},
+    "text": "| 引脚 | 网络 | 连接目标 |\n|------|------|---------|\n| VIN+ | NET_5V_RAIL | 经 AO3401 Q1 负载开关 (GPIO2 控制) |\n| VIN- | GND | 系统地 |\n| VOUT+ | 9V_ISO | → 隔离 ME6209 VIN |\n| VOUT- | GND2 | 隔离侧地 |\n### 外围器件\n| 位号 | 值 | 封装 | 端 A | 端 B |\n|------|-----|------|------|------|\n| C_B05_IN | 10μF/10V X7R | 0805 | NET_5V_RAIL | GND |\n| C_B05_OUT | 4.7μF/25V X7R | 0805 | 9V_ISO | GND2 |\n---\n## 2.4 隔离 ME6209-3.3 (U6b)\n> 封装：SOT-23-5 | 输入：9V_ISO | 输出：3.3V_ISO"
+  },
+  {
+    "file": "原理图设计/Sheet2-电源系统.md",
+    "chunk_index": 5,
+    "total_chunks": 8,
+    "frontmatter": {},
+    "text": "| 引脚 | 网络 | 连接目标 |\n|------|------|---------|\n| VIN | 9V_ISO | B0509XT VOUT+ |\n| GND | GND2 | 隔离侧地 |\n| EN | 9V_ISO | 常使能 |\n| VOUT | NET_ISO_3V3 | → ADuM1301 VDD2, MAX3485 VCC |\n### 外围器件\n| 位号 | 值 | 封装 | 端 A | 端 B |\n|------|-----|------|------|------|\n| C_ISO_IN | 1μF/10V X7R | 0402 | 9V_ISO | GND2 |\n| C_ISO_OUT | 10μF/10V X7R | 0805 | NET_ISO_3V3 | GND2 |\n---\n## 2.5 负载开关 (AO3401 ×5 + S8050 ×5)\n> 每个开关结构：GPIO → S8050 (NPN) → AO3401 (P-MOS) → 负载"
+  },
+  {
+    "file": "原理图设计/Sheet2-电源系统.md",
+    "chunk_index": 6,
+    "total_chunks": 8,
+    "frontmatter": {},
+    "text": "| 开关 | P-MOS | NPN | GPIO | 控制目标 | 详见 |\n|------|-------|-----|------|---------|------|\n| Q1 | AO3401 | S8050 | GPIO2 | B0509XT 输入 5V | [[Sheet3-ESP32主控#GPIO2]] |\n| Q2 | AO3401 | S8050 | GPIO13 | I²C 传感器电源 | [[Sheet8-传感器接口#83-i2c-电源开关]] |\n| Q3 | AO3401 | S8050 | GPIO25 | 电池分压采样 | [[Sheet8-传感器接口#83-电池分压采样]] |\n| Q4 | AO3401 | S8050 | GPIO27 | 土壤传感器 9V | [[Sheet8-传感器接口#84-土壤传感器]] |\n| Q5 | AO3401 | S8050 | GPIO15 | CP2102N 电源 | [[Sheet5-TypeC与调试#53-cp2102n]] |\n### 通用开关结构"
+  },
+  {
+    "file": "原理图设计/Sheet2-电源系统.md",
+    "chunk_index": 7,
+    "total_chunks": 8,
+    "frontmatter": {},
+    "text": "```\nGPIO ──→ S8050.B (基极)\n         S8050.C (集电极) ──→ AO3401.G (栅极)\n         S8050.E (发射极) ──→ GND\nAO3401.S (源极) ──→ 供电侧\nAO3401.D (漏极) ──→ 负载侧\nR_GATE_PU (100kΩ) ──→ AO3401.S ──→ AO3401.G (上拉，默认关断)\n```\n### 器件清单\n| 位号 | 值 | 封装 | 说明 |\n|------|-----|------|------|\n| R_GATE_PU_Q1 | 100kΩ 1% | 0603 | Q1 栅极上拉 |\n| R_GATE_PU_Q2 | 100kΩ 1% | 0603 | Q2 栅极上拉 |\n| R_GATE_PU_Q3 | 100kΩ 1% | 0603 | Q3 栅极上拉 |\n| R_GATE_PU_Q4 | 100kΩ 1% | 0603 | Q4 栅极上拉 |\n| R_GATE_PU_Q5 | 100kΩ 1% | 0603 | Q5 栅极上拉 |"
+  },
+  {
+    "file": "原理图设计/Sheet3-ESP32主控.md",
+    "chunk_index": 0,
+    "total_chunks": 11,
+    "frontmatter": {},
+    "text": "# Sheet 3：ESP32 主控\n> 域：🔵 数字 | 回到索引：[[00-索引]]\n---\n## 3.1 ESP32-WROOM-32E (U2)\n> 封装：SMD-38 | 数据手册：[[采集节点开发文档v4.2.7|文档]]\n### GPIO 分配总览"
+  },
+  {
+    "file": "原理图设计/Sheet3-ESP32主控.md",
+    "chunk_index": 1,
+    "total_chunks": 11,
+    "frontmatter": {},
+    "text": "| GPIO | 功能 | 方向 | 连接网络 | 详见 |\n|------|------|------|---------|------|\n| GPIO0 | BOOT | IN | R_BOOT (10kΩ) → 3.3V | #strapping |\n| GPIO1 | UART0_TX | OUT | → CP2102N RXD | [[Sheet5-TypeC与调试#53-cp2102n]] |\n| GPIO2 | B0509XT_EN | OUT | → Q1 S8050 Base | [[Sheet2-电源系统#25-负载开关]] |\n| GPIO3 | UART0_RX | IN | ← CP2102N TXD | [[Sheet5-TypeC与调试#53-cp2102n]] |\n| GPIO4 | HOST_WAKE | IN | ← WH-L101-L HOST_WAKE(24) | [[Sheet4-LoRa通信]] |\n| GPIO5 | CS5383C_EN | OUT | → CS5383C EN(13) | [[Sheet1-输入保护与充电#14-cs53"
+  },
+  {
+    "file": "原理图设计/Sheet3-ESP32主控.md",
+    "chunk_index": 2,
+    "total_chunks": 11,
+    "frontmatter": {},
+    "text": "E(24) | [[Sheet4-LoRa通信]] |\n| GPIO5 | CS5383C_EN | OUT | → CS5383C EN(13) | [[Sheet1-输入保护与充电#14-cs5383c-mppt-充电-ic-u1]] |\n| GPIO12 | NC | — | 悬空（避免拉高） | #strapping |\n| GPIO13 | I2C_PWR | OUT | → Q2 S8050 Base | [[Sheet8-传感器接口#83-i2c-电源开关]] |\n| GPIO14 | LORA_WAKE | OUT | → WH-L101-L WAKE(23) | [[Sheet4-LoRa通信]] |\n| GPIO15 | CP2102_PWR | OUT | → Q5 S8050 Base | [[Sheet5-TypeC与调试#53-cp2102n]] |\n| GPIO16 | NC | — | PSRAM 保留 | — |\n| GPIO17 | NC | — | PSRAM 保留 | — |\n| GPIO18 | AUX | IN | 冗余 | — |\n| GP"
+  },
+  {
+    "file": "原理图设计/Sheet3-ESP32主控.md",
+    "chunk_index": 3,
+    "total_chunks": 11,
+    "frontmatter": {},
+    "text": "O16 | NC | — | PSRAM 保留 | — |\n| GPIO17 | NC | — | PSRAM 保留 | — |\n| GPIO18 | AUX | IN | 冗余 | — |\n| GPIO19 | UART2_RX | IN | ← WH-L101-L UART_TX(19) | [[Sheet4-LoRa通信]] |\n| GPIO21 | I2C_SDA | OD | I²C 数据总线 | #i2c [[Sheet6-RTC与存储]] [[Sheet8-传感器接口]] |\n| GPIO22 | I2C_SCL | OD | I²C 时钟总线 | #i2c [[Sheet6-RTC与存储]] [[Sheet8-传感器接口]] |\n| GPIO23 | UART2_TX | OUT | → WH-L101-L UART_RX(20) | [[Sheet4-LoRa通信]] |\n| GPIO25 | BATT_SW | OUT | → Q3 S8050 Base | [[Sheet8-传感器接口#83-电池分压采样]] |\n| GPIO26 | 5V_FB_ADC | IN"
+  },
+  {
+    "file": "原理图设计/Sheet3-ESP32主控.md",
+    "chunk_index": 4,
+    "total_chunks": 11,
+    "frontmatter": {},
+    "text": "\n| GPIO25 | BATT_SW | OUT | → Q3 S8050 Base | [[Sheet8-传感器接口#83-电池分压采样]] |\n| GPIO26 | 5V_FB_ADC | IN | ADC2_CH8, 5V 回读 | [[Sheet8-传感器接口#85-5v-回读]] |\n| GPIO27 | SOIL9V_EN | OUT | → Q4 S8050 Base | [[Sheet8-传感器接口#84-土壤传感器]] |\n| GPIO32 | MP2307_EN | OUT | → MP2307 EN | [[Sheet2-电源系统#21-mp2307-降压-dc-dc-u5]] |\n| GPIO33 | WDT_EN | OUT | → TPS3820-33 /EN | #本页 |\n| GPIO34 | BATT_ADC | IN | ADC1_CH6, 电池电压 | [[Sheet8-传感器接口#83-电池分压采样]] |\n| GPIO35 | STAT1_IN | IN | ← CS5383C STAT1(18) | [[Sheet1-输入保护与充电]] |"
+  },
+  {
+    "file": "原理图设计/Sheet3-ESP32主控.md",
+    "chunk_index": 5,
+    "total_chunks": 11,
+    "frontmatter": {},
+    "text": "| [[Sheet8-传感器接口#83-电池分压采样]] |\n| GPIO35 | STAT1_IN | IN | ← CS5383C STAT1(18) | [[Sheet1-输入保护与充电]] |\n| GPIO36 | VBUS_ADC | IN | ADC1_CH0, VBUS 检测 | [[Sheet5-TypeC与调试]] |\n| GPIO39 | STAT2_IN | IN | ← CS5383C STAT2(17) | [[Sheet1-输入保护与充电]] |"
+  },
+  {
+    "file": "原理图设计/Sheet3-ESP32主控.md",
+    "chunk_index": 6,
+    "total_chunks": 11,
+    "frontmatter": {},
+    "text": "---\n## 3.2 外围器件\n### Strapping / 下拉电阻\n| 位号 | 值 | 端 A | 端 B | 功能 |\n|------|-----|------|------|------|\n| R_BOOT | 10kΩ | GPIO0 | 3.3V | BOOT 上拉 |\n| R_B0509_PD | 10kΩ | GPIO2 | GND | B0509XT EN 下拉 #strapping |\n| R_CS_EN | 4.7kΩ | GPIO5 | GND | CS5383C EN 下拉 |\n| R_CP2102_PD | 10kΩ | GPIO15 | GND | CP2102 电源下拉 #strapping |\n| R_WAKE_DN | 10kΩ | GPIO14 | GND | LoRa WAKE 下拉 |\n| R_HOST_DN | 10kΩ | GPIO4 | GND | HOST_WAKE 下拉 |\n### I²C 上拉/下拉"
+  },
+  {
+    "file": "原理图设计/Sheet3-ESP32主控.md",
+    "chunk_index": 7,
+    "total_chunks": 11,
+    "frontmatter": {},
+    "text": "| 位号 | 值 | 端 A | 端 B | 功能 |\n|------|-----|------|------|------|\n| R_I2C_SDA_PU | 4.7kΩ 1% | GPIO21 | NET_I2C_PWR | SDA 上拉至传感器电源 |\n| R_I2C_SCL_PU | 4.7kΩ 1% | GPIO22 | NET_I2C_PWR | SCL 上拉至传感器电源 |\n| R_I2C_SDA_PD | 10kΩ 1% | GPIO21 | GND | SDA 钳位下拉 |\n| R_I2C_SCL_PD | 10kΩ 1% | GPIO22 | GND | SCL 钳位下拉 |\n> [!note] I²C 上拉供电\n> 上拉电阻接 NET_I2C_PWR（非 NET_3V3），由 GPIO13 控制通断，实现传感器完全断电\n### ADC 分压网络"
+  },
+  {
+    "file": "原理图设计/Sheet3-ESP32主控.md",
+    "chunk_index": 8,
+    "total_chunks": 11,
+    "frontmatter": {},
+    "text": "| 位号 | 值 | 精度 | 端 A | 端 B | 功能 |\n|------|-----|------|------|------|------|\n| R_BAT1 | 47kΩ | 0.1% | V_BAT | GPIO34 | 电池分压上臂 |\n| R_BAT2 | 10kΩ | 0.1% | GPIO34 | GND | 电池分压下臂 |\n| R_5VS1 | 100kΩ | 1% | NET_5V_RAIL | GPIO26 | 5V 回读分压上臂 |\n| R_5VS2 | 100kΩ | 1% | GPIO26 | GND | 5V 回读分压下臂 |\n| R_VBUS1 | 100kΩ | 1% | Type-C VBUS | GPIO36 | VBUS 分压上臂 |\n| R_VBUS2 | 100kΩ | 1% | GPIO36 | GND | VBUS 分压下臂 |\n| C_VBUS_FILT | 100nF | — | GPIO36 | GND | VBUS ADC 滤波 |\n### 去耦电容"
+  },
+  {
+    "file": "原理图设计/Sheet3-ESP32主控.md",
+    "chunk_index": 9,
+    "total_chunks": 11,
+    "frontmatter": {},
+    "text": "| 位号 | 值 | 端 A | 端 B |\n|------|-----|------|------|\n| C_ESP_VCC1 | 100nF/10V | VDD3P3 | GND |\n| C_ESP_VCC2 | 100nF/10V | VDD3P3_RTC | GND |\n---\n## 3.3 TPS3820-33 看门狗 (U7)\n> 封装：SOT-23-5\n| 引脚 | 网络 | 连接目标 |\n|------|------|---------|\n| 1 VDD | NET_3V3 | 3.3V 常供电 |\n| 2 /EN | NET_WDT_EN | GPIO33；R_WD (100kΩ) → 3.3V（默认禁用） |\n| 3 SENSE | — | 内部阈值检测 |\n| 4 /RST | — | → ESP32 EN 或不接 |\n| 5 GND | GND | 系统地 |\n### 外围器件\n| 位号 | 值 | 端 A | 端 B |\n|------|-----|------|------|\n| R_WD | 100kΩ 1% | GPIO33 | 3.3V |"
+  },
+  {
+    "file": "原理图设计/Sheet3-ESP32主控.md",
+    "chunk_index": 10,
+    "total_chunks": 11,
+    "frontmatter": {},
+    "text": "> [!warning] WDT 使能时序\n> GPIO33 为 RTC GPIO，DeepSleep 期间可输出低电平使能看门狗\n> 必须在 `esp_deep_sleep()` 之前执行 `gpio_hold_en(GPIO_NUM_33)` 保持输出"
+  },
+  {
+    "file": "原理图设计/Sheet4-LoRa通信.md",
+    "chunk_index": 0,
+    "total_chunks": 6,
+    "frontmatter": {},
+    "text": "# Sheet 4：WH-L101-L LoRa 通信\n> 域：🔵 数字 | 回到索引：[[00-索引]]\n---\n## 4.1 WH-L101-L (U4)\n> 封装：SMT | 供电：3.3V (1.9~3.7V) | 频段：410~525MHz\n### 引脚连接"
+  },
+  {
+    "file": "原理图设计/Sheet4-LoRa通信.md",
+    "chunk_index": 1,
+    "total_chunks": 6,
+    "frontmatter": {},
+    "text": "| # | 引脚 | 网络 | 连接目标 |\n|---|------|------|---------|\n| 1 | GND | GND | 系统地 |\n| 2 | RFIO | NET_RF | 50Ω 微带线 → SMA 天线座；RCLAMP0521P ESD → GND |\n| 3 | GND | GND | 系统地 |\n| 4 | NREST | — | R_LORA_RST (10kΩ) → 3.3V |\n| 11 | GND | GND | 系统地 |\n| 12 | GND | GND | 系统地 |\n| 13 | VCC | NET_3V3 | 3.3V 供电 |\n| 14 | VCC | NET_3V3 | 同引脚 13 |\n| 17 | GND | GND | 系统地 |\n| 19 | UART_TX | NET_LORA_TX | → ESP32 GPIO19 (UART2_RX) |\n| 20 | UART_RX | NET_LORA_RX | ← ESP32 GPIO23 (UART2_TX) |\n| 21 | Reload | NC | 恢复出厂（测试点） |"
+  },
+  {
+    "file": "原理图设计/Sheet4-LoRa通信.md",
+    "chunk_index": 2,
+    "total_chunks": 6,
+    "frontmatter": {},
+    "text": "T2_RX) |\n| 20 | UART_RX | NET_LORA_RX | ← ESP32 GPIO23 (UART2_TX) |\n| 21 | Reload | NC | 恢复出厂（测试点） |\n| 23 | WAKE | NET_LORA_WAKE | ← ESP32 GPIO14；R_WAKE_DN (10kΩ) → GND |\n| 24 | HOST_WAKE | NET_HOST_WAKE | → ESP32 GPIO4；R_HOST_DN (10kΩ) → GND |\n| 28 | GND | GND | 系统地 |\n| 29 | GND | GND | 系统地 |\n| 30 | 485_CTRL | NC | 未使用 |\n| 36 | LINK | NC | 点对点模式无作用 |\n| 44 | GND | GND | 系统地 |"
+  },
+  {
+    "file": "原理图设计/Sheet4-LoRa通信.md",
+    "chunk_index": 3,
+    "total_chunks": 6,
+    "frontmatter": {},
+    "text": "### 外围器件\n| 位号 | 值 | 端 A | 端 B |\n|------|-----|------|------|\n| C_LORA_VCC | 100μF/6.3V 陶瓷 0805 | VCC(13,14) | GND |\n| R_LORA_RST | 10kΩ | NREST(4) | 3.3V |\n| R_WAKE_DN | 10kΩ | WAKE(23) | GND |\n| R_HOST_DN | 10kΩ | HOST_WAKE(24) | GND |\n> [!warning] 电源去耦\n> C_LORA_VCC 使用 100μF 陶瓷电容（非电解），发射峰值电流 ≤45mA，必须就近放置\n---\n## 4.2 SMA 天线座 + 射频 ESD"
+  },
+  {
+    "file": "原理图设计/Sheet4-LoRa通信.md",
+    "chunk_index": 4,
+    "total_chunks": 6,
+    "frontmatter": {},
+    "text": "| 器件 | 引脚 | 网络 | 连接目标 |\n|------|------|------|---------|\n| J_SMA | 信号中心导体 | NET_RF | 50Ω 微带线 → WH-L101-L RFIO(2) |\n| | 接地外壳 | GND | PCB 地，天线座下方挖空无铺铜 |\n| D_RF1 (RCLAMP0521P) | 信号端 | NET_RF | → GND |\n| | GND | GND | — |\n> [!note] 射频布局\n> - 50Ω 微带线走线宽度根据 PCB 层叠计算\n> - 天线座下方地平面挖空，避免寄生电容影响阻抗\n> - RCLAMP0521P 结电容 <0.5pF，适配 470MHz\n---\n## 4.3 UART 连接"
+  },
+  {
+    "file": "原理图设计/Sheet4-LoRa通信.md",
+    "chunk_index": 5,
+    "total_chunks": 6,
+    "frontmatter": {},
+    "text": "| ESP32 GPIO | 方向 | WH-L101-L 引脚 |\n|------------|------|----------------|\n| GPIO19 (UART2_RX) | ← | UART_TX(19) |\n| GPIO23 (UART2_TX) | → | UART_RX(20) |\n| GPIO14 | → | WAKE(23) |\n| GPIO4 | ← | HOST_WAKE(24) |"
+  },
+  {
+    "file": "原理图设计/Sheet5-TypeC与调试.md",
+    "chunk_index": 0,
+    "total_chunks": 5,
+    "frontmatter": {},
+    "text": "# Sheet 5：Type-C + CP2102N 调试\n> 域：🔵 数字 | 回到索引：[[00-索引]]\n---\n## 5.1 Type-C 连接器 (J1)\n> 封装：6pin 卧贴 SMD\n| 引脚 | 网络 | 连接目标 |\n|------|------|---------|\n| VBUS | Type-C_VBUS | → SS14 → CP2102N VDD；→ CH224K VDD |\n| GND | GND | 系统地 |\n| CC1 | CC1 | → CH224K CC1 |\n| CC2 | CC2 | → CH224K CC2 |\n| D+ | D+ | → CP2102N D+ |\n| D- | D- | → CP2102N D- |\n### 供电路径\n```\nType-C VBUS (5V)\n├── D_USB2 (SS14) → CP2102N VDD (GPIO15 控制通断)\n└── CH224K 诱骗 12V → D_USB1 (SS34) → CS5383C PVIN"
+  },
+  {
+    "file": "原理图设计/Sheet5-TypeC与调试.md",
+    "chunk_index": 1,
+    "total_chunks": 5,
+    "frontmatter": {},
+    "text": "Type-C CC1/CC2\n└── CH224K CC1/CC2 (PD 协议协商 12V)\nType-C D+/D-\n└── CP2102N D+/D- (USB 转 UART 调试)\n```\n---\n## 5.2 CH224K PD 诱骗 (U15)\n> 封装：SOT23-6 | 功能：Type-C PD 12V 档位诱骗\n| 引脚 | 网络 | 连接目标 |\n|------|------|---------|\n| 1 CFG1 | — | R_CFG1 (24kΩ) → GND（12V 档位） |\n| 2 CFG2 | NC | 悬空 |\n| 3 CFG3 | NC | 悬空 |\n| 4 CC1 | CC1 | ← Type-C CC1 |\n| 5 CC2 | CC2 | ← Type-C CC2 |\n| 6 VDD/VBUS | Type-C_VBUS | ← Type-C VBUS |\n| 输出 | 12V_OUT | → D_USB1 (SS34) → CS5383C PVIN |\n### 外围器件"
+  },
+  {
+    "file": "原理图设计/Sheet5-TypeC与调试.md",
+    "chunk_index": 2,
+    "total_chunks": 5,
+    "frontmatter": {},
+    "text": "| 位号 | 值 | 端 A | 端 B |\n|------|-----|------|------|\n| R_CFG1 | 24kΩ 1% | CH224K CFG1 | GND |\n| C_CH224K | 100nF/10V | CH224K VDD | GND |\n| D_USB1 (SS34) | 肖特基 SOD-123 | 阳极=12V_OUT | 阴极=CS5383C PVIN |\n> [!note] PD 诱骗\n> CH224K CC1/CC2 直连 Type-C 连接器，无需外部 5.1kΩ 下拉\n> CFG1=24kΩ 选择 12V 档位\n---\n## 5.3 CP2102N USB-UART (U14)\n> 封装：QFN-24"
+  },
+  {
+    "file": "原理图设计/Sheet5-TypeC与调试.md",
+    "chunk_index": 3,
+    "total_chunks": 5,
+    "frontmatter": {},
+    "text": "| 引脚 | 网络 | 连接目标 |\n|------|------|---------|\n| VDD | — | ← D_USB2 (SS14) ← Type-C VBUS（GPIO15 控制通断） |\n| VIO | NET_3V3 | 3.3V I/O 电源 |\n| TXD | NET_UART0_TX | → ESP32 GPIO1 (UART0_TX) |\n| RXD | NET_UART0_RX | ← ESP32 GPIO3 (UART0_RX) |\n| GND | GND | 系统地 |\n| D+ | D+ | ← Type-C D+ |\n| D- | D- | ← Type-C D- |\n### 外围器件\n| 位号 | 值 | 端 A | 端 B |\n|------|-----|------|------|\n| C_CP2102 | 100nF/10V | CP2102N VDD | GND |\n| D_USB2 (SS14) | 肖特基 SOD-123 | 阳极=Type-C VBUS | 阴极=CP2102N VDD |"
+  },
+  {
+    "file": "原理图设计/Sheet5-TypeC与调试.md",
+    "chunk_index": 4,
+    "total_chunks": 5,
+    "frontmatter": {},
+    "text": "> [!important] CP2102 电源控制\n> GPIO15 → S8050 → AO3401 控制 CP2102N VDD 通断\n> 仅在调试时使能，正常运行时完全断电\n---\n## 5.4 VBUS 检测\n| 位号 | 值 | 端 A | 端 B |\n|------|-----|------|------|\n| R_VBUS1 | 100kΩ 1% | Type-C VBUS | GPIO36 |\n| R_VBUS2 | 100kΩ 1% | GPIO36 | GND |\n| C_VBUS_FILT | 100nF | GPIO36 | GND |\n> [!note] 检测逻辑\n> VBUS 5V → 分压 2.5V → GPIO36 ADC1_CH0\n> VBUS = 0V → GPIO36 = 0V"
+  },
+  {
+    "file": "原理图设计/Sheet6-RTC与存储.md",
+    "chunk_index": 0,
+    "total_chunks": 6,
+    "frontmatter": {},
+    "text": "# Sheet 6：DS3231 + MB85RC256V\n> 域：🔵 数字 | 回到索引：[[00-索引]]\n---\n## 6.1 DS3231 RTC (U8)\n> 封装：SOIC-16 | 供电：NET_3V3（ME6209 持续供电）"
+  },
+  {
+    "file": "原理图设计/Sheet6-RTC与存储.md",
+    "chunk_index": 1,
+    "total_chunks": 6,
+    "frontmatter": {},
+    "text": "| 引脚 | 网络 | 连接目标 |\n|------|------|---------|\n| 1 | 32kHz_CLK | NC | 未使用 |\n| 2 | 32kHz_CLK | NC | 未使用 |\n| 3 | /INT | NET_RTC_INT | → R_INT (4.7kΩ) → 3.3V；→ ESP32 EXT0 唤醒 |\n| 4 | V_BAT | — | R_VBAT (0Ω) → V_CC(8) |\n| 5 | GND | GND | 系统地 |\n| 6 | SDA | NET_I2C_SDA | I²C 数据（#i2c 总线） |\n| 7 | SCL | NET_I2C_SCL | I²C 时钟（#i2c 总线） |\n| 8 | V_CC | NET_3V3 | C_DS3231 (100nF) → GND |\n| 9-16 | — | — | NC 或地 |\n### 外围器件"
+  },
+  {
+    "file": "原理图设计/Sheet6-RTC与存储.md",
+    "chunk_index": 2,
+    "total_chunks": 6,
+    "frontmatter": {},
+    "text": "| 位号 | 值 | 端 A | 端 B |\n|------|-----|------|------|\n| R_INT | 4.7kΩ 1% | DS3231 /INT(3) | 3.3V |\n| R_VBAT | 0Ω | DS3231 V_BAT(4) | V_CC(8) |\n| C_DS3231 | 100nF/10V | V_CC(8) | GND |\n> [!important] 唤醒连接\n> DS3231 /INT → ESP32 EXT0 (GPIO 引脚)\n> DeepSleep 期间 DS3231 持续供电，闹钟触发 EXT0 唤醒\n---\n## 6.2 MB85RC256V FRAM (U9)\n> 封装：SOP-8 | 容量：32KB | I²C 地址：0x50"
+  },
+  {
+    "file": "原理图设计/Sheet6-RTC与存储.md",
+    "chunk_index": 3,
+    "total_chunks": 6,
+    "frontmatter": {},
+    "text": "| 引脚 | 网络 | 连接目标 |\n|------|------|---------|\n| 1 A0 | GND | 地址位 0 = 0 |\n| 2 A1 | GND | 地址位 1 = 0 |\n| 3 A2 | GND | 地址位 2 = 0 |\n| 4 GND | GND | 系统地 |\n| 5 SDA | NET_I2C_SDA | I²C 数据（#i2c 总线） |\n| 6 SCL | NET_I2C_SCL | I²C 时钟（#i2c 总线） |\n| 7 /WP | GND | 写保护未使能（允许写入） |\n| 8 VCC | NET_3V3 | C_FRAM (100nF) → GND |\n### 外围器件\n| 位号 | 值 | 端 A | 端 B |\n|------|-----|------|------|\n| C_FRAM | 100nF/10V | VCC(8) | GND |\n> [!note] I²C 地址\n> A0=A1=A2=GND → 地址 0x50（与 DS3231 0x68, SHT30 0x44, BH1750 0x23 不冲突）\n---"
+  },
+  {
+    "file": "原理图设计/Sheet6-RTC与存储.md",
+    "chunk_index": 4,
+    "total_chunks": 6,
+    "frontmatter": {},
+    "text": "## 6.3 I²C 总线汇总\n### I²C 器件地址\n| 器件 | 地址 | 详见 |\n|------|------|------|\n| SHT30 | 0x44 | [[Sheet8-传感器接口#81-sht30-温湿度]] |\n| BH1750 | 0x23 | [[Sheet8-传感器接口#82-bh1750-光照]] |\n| MB85RC256V | 0x50 | #62-mb85rc256v-fram-u9 |\n| DS3231 | 0x68 | #61-ds3231-rtc-u8 |\n### I²C 上拉/下拉"
+  },
+  {
+    "file": "原理图设计/Sheet6-RTC与存储.md",
+    "chunk_index": 5,
+    "total_chunks": 6,
+    "frontmatter": {},
+    "text": "| 位号 | 值 | 端 A | 端 B | 功能 |\n|------|-----|------|------|------|\n| R_I2C_SDA_PU | 4.7kΩ | GPIO21 | NET_I2C_PWR | SDA 上拉至传感器电源 |\n| R_I2C_SCL_PU | 4.7kΩ | GPIO22 | NET_I2C_PWR | SCL 上拉至传感器电源 |\n| R_I2C_SDA_PD | 10kΩ | GPIO21 | GND | SDA 钳位下拉 |\n| R_I2C_SCL_PD | 10kΩ | GPIO22 | GND | SCL 钳位下拉 |\n> [!warning] 上拉电源\n> 上拉电阻接 NET_I2C_PWR（非 NET_3V3），由 GPIO13 控制\n> 传感器断电时 I²C 总线被下拉电阻钳位至 0V，防止漏电"
+  },
+  {
+    "file": "原理图设计/Sheet7-RS485隔离.md",
+    "chunk_index": 0,
+    "total_chunks": 9,
+    "frontmatter": {},
+    "text": "# Sheet 7：RS485 隔离\n> 域：🟢 模拟 | 回到索引：[[00-索引]]\n---\n## 电源隔离架构\n```\nNET_5V_RAIL (5V)\n└── AO3401 Q1 (GPIO2) ──→ B0509XT-2WR3 VIN\n    └── 9V_ISO ──→ 隔离 ME6209 ──→ NET_ISO_3V3 (3.3V 隔离)\n        ├── ADuM1301 VDD2 (引脚 7,10)\n        └── MAX3485 VCC (引脚 8)\nGND ──(1nF/2kV 安规电容)──→ GND2 (隔离地)\n```\n---\n## 7.1 ADuM1301 三通道数字隔离器 (U13)\n> 封装：SOIC-16 | 隔离电压：2.5kVrms\n### 引脚连接"
+  },
+  {
+    "file": "原理图设计/Sheet7-RS485隔离.md",
+    "chunk_index": 1,
+    "total_chunks": 9,
+    "frontmatter": {},
+    "text": "| # | 引脚 | 侧 | 网络 | 连接目标 |\n|---|------|-----|------|---------|\n| 1 | VDD1 | 主控 | NET_3V3 | 3.3V 供电 |\n| 2 | GND1 | 主控 | GND | 系统地 |\n| 3 | VIA | 主控 | NET_RS485_DIR | → ESP32 方向控制 |\n| 4 | VOA | 隔离 | NET_RS485_DI | → MAX3485 DI(4) |\n| 5 | VOB | 隔离 | NET_RS485_DE | → MAX3485 DE(3)/RE(2) |\n| 6 | GND2 | 隔离 | GND2 | 隔离地 |\n| 7 | VDD2 | 隔离 | NET_ISO_3V3 | 隔离 3.3V 供电 |\n| 8 | VOC | 隔离 | NET_RS485_RO | ← MAX3485 RO(1) |\n| 9 | GND2 | 隔离 | GND2 | 隔离地 |\n| 10 | VDD2 | 隔离 | NET_ISO_3V3 | 同引脚 7 |\n| 11 | VOD | 主控 |"
+  },
+  {
+    "file": "原理图设计/Sheet7-RS485隔离.md",
+    "chunk_index": 2,
+    "total_chunks": 9,
+    "frontmatter": {},
+    "text": "85 RO(1) |\n| 9 | GND2 | 隔离 | GND2 | 隔离地 |\n| 10 | VDD2 | 隔离 | NET_ISO_3V3 | 同引脚 7 |\n| 11 | VOD | 主控 | — | ← ESP32 UART TX |\n| 12 | VIC | 主控 | — | ← ESP32 方向控制 |\n| 13 | GND1 | 主控 | GND | 同引脚 2 |\n| 14 | VDD1 | 主控 | NET_3V3 | 同引脚 1 |\n| 15 | VIE | 主控 | — | → ESP32 UART RX |\n| 16 | GND1 | 主控 | GND | 同引脚 2 |\n| EP | — | 主控 | GND | 散热焊盘 |"
+  },
+  {
+    "file": "原理图设计/Sheet7-RS485隔离.md",
+    "chunk_index": 3,
+    "total_chunks": 9,
+    "frontmatter": {},
+    "text": "### 外围器件\n| 位号 | 值 | 端 A | 端 B |\n|------|-----|------|------|\n| C_ADUM_VDD2 | 100nF/10V | VDD2(7,10) | GND2 |\n| C_GND_SAFE | 1nF/2kV Y5V 1206 | GND1 | GND2 |\n---\n## 7.2 MAX3485 RS485 收发器 (U12)\n> 封装：SOP-8 | 供电：NET_ISO_3V3（隔离侧）"
+  },
+  {
+    "file": "原理图设计/Sheet7-RS485隔离.md",
+    "chunk_index": 4,
+    "total_chunks": 9,
+    "frontmatter": {},
+    "text": "| 引脚 | 网络 | 连接目标 |\n|------|------|---------|\n| 1 RO | NET_RS485_RO | ← ADuM1301 VOC(8) |\n| 2 /RE | NET_RS485_DE | ← ADuM1301 VOB(5)（与 DE 短接） |\n| 3 DE | NET_RS485_DE | ← ADuM1301 VOB(5) |\n| 4 DI | NET_RS485_DI | ← ADuM1301 VOA(4) |\n| 5 GND | GND2 | 隔离地 |\n| 6 A | RS485_A | → 偏置/终端/浪涌防护 |\n| 7 B | RS485_B | → 偏置/终端/浪涌防护 |\n| 8 VCC | NET_ISO_3V3 | 隔离 3.3V；C_MAX3485 (100nF) → GND2 |\n### 外围器件\n| 位号 | 值 | 端 A | 端 B |\n|------|-----|------|------|\n| C_MAX3485 | 100nF/10V | VCC(8) | GND2 |\n---"
+  },
+  {
+    "file": "原理图设计/Sheet7-RS485隔离.md",
+    "chunk_index": 5,
+    "total_chunks": 9,
+    "frontmatter": {},
+    "text": "## 7.3 RS485 偏置与终端\n| 位号 | 值 | 封装 | 端 A | 端 B | 功能 |\n|------|-----|------|------|------|------|\n| R_RS485_A_PU | 680Ω 1% | 0603 | RS485_A | NET_ISO_3V3 | A 上拉偏置 |\n| R_RS485_B_PD | 680Ω 1% | 0603 | RS485_B | GND2 | B 下拉偏置 |\n| R_RS485_TERM | 120Ω 1% | 0805 | RS485_A | RS485_B | 终端电阻（跳线可选） |\n---\n## 7.4 RS485 浪涌防护\n### TVS 保护"
+  },
+  {
+    "file": "原理图设计/Sheet7-RS485隔离.md",
+    "chunk_index": 6,
+    "total_chunks": 9,
+    "frontmatter": {},
+    "text": "| 器件 | 型号 | 连接 | 参数 |\n|------|------|------|------|\n| D_RS485_A | SMBJ6.5CA | RS485_A — GND2 | 双向 TVS，钳位 11.2V |\n| D_RS485_B | SMBJ6.5CA | RS485_B — GND2 | 双向 TVS，钳位 11.2V |\n| D_RS485_AB | SMBJ6.5CA | RS485_A — RS485_B | 线间 TVS |\n### 气体放电管\n| 器件 | 型号 | 连接 | 参数 |\n|------|------|------|------|\n| GDT | B3D090L-C | RS485_A — GND2 — RS485_B | 三端 GDT，90V 放电，10kA 脉冲 |\n### 自恢复保险丝"
+  },
+  {
+    "file": "原理图设计/Sheet7-RS485隔离.md",
+    "chunk_index": 7,
+    "total_chunks": 9,
+    "frontmatter": {},
+    "text": "| 器件 | 型号 | 端 A | 端 B | 参数 |\n|------|------|------|------|------|\n| FUSE_A | SMD1206-035 | MAX3485 A(6) | RS485_A 外部端 | 0.35A |\n| FUSE_B | SMD1206-035 | MAX3485 B(7) | RS485_B 外部端 | 0.35A |\n---\n## 7.5 安规电容\n| 位号 | 值 | 封装 | 端 A | 端 B | 功能 |\n|------|-----|------|------|------|------|\n| C_GND_SAFE | 1nF/2kV Y5V | 1206 | GND1 (主控地) | GND2 (隔离地) | 安规电容，单点连接 |\n> [!warning] 安规电容\n> 必须使用 Y5V 介质、额定电压 ≥2kV 的安规认证电容\n> GND1 和 GND2 之间仅此一个连接点\n---\n## 7.6 RS485 外部接线"
+  },
+  {
+    "file": "原理图设计/Sheet7-RS485隔离.md",
+    "chunk_index": 8,
+    "total_chunks": 9,
+    "frontmatter": {},
+    "text": "```\nMAX3485 A(6) → FUSE_A → RS485_A 外部端子\nMAX3485 B(7) → FUSE_B → RS485_B 外部端子\nTVS: A-GND2, B-GND2, A-B\nGDT: A-GND2-B (三端)\n偏置: A→680Ω→3.3V_ISO, B→680Ω→GND2\n终端: A→120Ω→B (跳线可选)\n屏蔽层: 1MΩ + 0.1μF 并联 → GND (设备端接地)\n```"
+  },
+  {
+    "file": "原理图设计/Sheet8-传感器接口.md",
+    "chunk_index": 0,
+    "total_chunks": 8,
+    "frontmatter": {},
+    "text": "# Sheet 8：传感器接口\n> 域：🟢 模拟 | 回到索引：[[00-索引]]\n---\n## 8.1 SHT30 温湿度 (U10)\n> 封装：DFN-8 | I²C 地址：0x44 | 精度：±0.3°C / ±2%RH\n| 引脚 | 网络 | 连接目标 |\n|------|------|---------|\n| 1 SDA | NET_I2C_SDA | I²C 数据 |\n| 2 NC | — | — |\n| 3 ALERT | NC | 未使用 |\n| 4 SCL | NET_I2C_SCL | I²C 时钟 |\n| 5 VDD | NET_I2C_PWR | 传感器电源（GPIO13 控制） |\n| 6 NC | — | — |\n| 7 NC | — | — |\n| 8 GND | GND | 系统地 |\n### 外围器件\n| 位号 | 值 | 端 A | 端 B |\n|------|-----|------|------|\n| C_SHT30 | 100nF/10V | VDD(5) | GND |"
+  },
+  {
+    "file": "原理图设计/Sheet8-传感器接口.md",
+    "chunk_index": 1,
+    "total_chunks": 8,
+    "frontmatter": {},
+    "text": "> [!note] 电源控制\n> VDD 接 NET_I2C_PWR（非 NET_3V3），由 GPIO13 → S8050 → AO3401 控制\n> 待机电流：0.2μA\n---\n## 8.2 BH1750 光照 (U11)\n> 封装：WSOF-6 | I²C 地址：0x23 | 量程：1~65535 lux\n| 引脚 | 网络 | 连接目标 |\n|------|------|---------|\n| 1 VCC | NET_I2C_PWR | 传感器电源（GPIO13 控制） |\n| 2 ADDR | GND | 地址 = 0x23 |\n| 3 GND | GND | 系统地 |\n| 4 SDA | NET_I2C_SDA | I²C 数据 |\n| 5 DVI | NET_I2C_PWR | 数据电压参考（随 VCC 上升满足复位时序） |\n| 6 SCL | NET_I2C_SCL | I²C 时钟 |\n### 外围器件"
+  },
+  {
+    "file": "原理图设计/Sheet8-传感器接口.md",
+    "chunk_index": 2,
+    "total_chunks": 8,
+    "frontmatter": {},
+    "text": "| 位号 | 值 | 端 A | 端 B |\n|------|-----|------|------|\n| C_BH1750 | 100nF/10V | VCC(1) | GND |\n> [!note] DVI 连接\n> DVI 直接接 VCC，上电时随 VCC 上升，满足 ≥2ms 复位时序要求\n---\n## 8.3 I²C 电源开关\n### Q2 (AO3401) + S8050 — I²C 传感器电源控制"
+  },
+  {
+    "file": "原理图设计/Sheet8-传感器接口.md",
+    "chunk_index": 3,
+    "total_chunks": 8,
+    "frontmatter": {},
+    "text": "| 器件 | 引脚 | 网络 | 连接目标 |\n|------|------|------|---------|\n| S8050 | B (基极) | — | ← ESP32 GPIO13 |\n| | C (集电极) | — | → AO3401 Gate |\n| | E (发射极) | — | GND |\n| AO3401 | S (源极) | NET_3V3 | 3.3V 供电侧 |\n| | D (漏极) | NET_I2C_PWR | → SHT30 VDD, BH1750 VCC, I²C 上拉电阻 |\n| | G (栅极) | — | ← S8050 Collector；R_GATE_PU_Q2 (100kΩ) → NET_3V3 |\n---\n## 8.4 电池分压采样\n### Q3 (AO3401) + S8050 — 采样开关"
+  },
+  {
+    "file": "原理图设计/Sheet8-传感器接口.md",
+    "chunk_index": 4,
+    "total_chunks": 8,
+    "frontmatter": {},
+    "text": "| 器件 | 引脚 | 网络 | 连接目标 |\n|------|------|------|---------|\n| S8050 | B | — | ← ESP32 GPIO25 |\n| | C | — | → AO3401 Gate |\n| | E | — | GND |\n| AO3401 | S | V_BAT | 电池正极 |\n| | D | V_BAT_SWITCHED | → 分压网络上臂 |\n| | G | — | R_GATE_PU_Q3 (100kΩ) → V_BAT |\n### 分压网络\n| 位号 | 值 | 精度 | 端 A | 端 B |\n|------|-----|------|------|------|\n| R_BAT1 | 47kΩ | 0.1% | V_BAT_SWITCHED | GPIO34 |\n| R_BAT2 | 10kΩ | 0.1% | GPIO34 | GND |"
+  },
+  {
+    "file": "原理图设计/Sheet8-传感器接口.md",
+    "chunk_index": 5,
+    "total_chunks": 8,
+    "frontmatter": {},
+    "text": "> [!note] 分压参数\n> V_BAT = 8.4V (满充) → ADC = 8.4 × 10/(47+10) ≈ 1.47V\n> V_BAT = 6.0V (截止) → ADC = 6.0 × 10/(47+10) ≈ 1.05V\n> ADC 量程：0~3.3V (ATTEN_DB6)\n---\n## 8.5 土壤传感器 9V 电源\n### Q4 (AO3401) + S8050 — 9V 开关\n| 器件 | 引脚 | 网络 | 连接目标 |\n|------|------|------|---------|\n| S8050 | B | — | ← ESP32 GPIO27 |\n| | C | — | → AO3401 Gate |\n| | E | — | GND |\n| AO3401 | S | NET_5V_RAIL | 5V 电源 |\n| | D | SOIL_9V | → 土壤传感器供电 |\n| | G | — | R_GATE_PU_Q4 (100kΩ) → NET_5V_RAIL |\n---\n## 8.6 5V 回读"
+  },
+  {
+    "file": "原理图设计/Sheet8-传感器接口.md",
+    "chunk_index": 6,
+    "total_chunks": 8,
+    "frontmatter": {},
+    "text": "| 位号 | 值 | 端 A | 端 B |\n|------|-----|------|------|\n| R_5VS1 | 100kΩ 1% | NET_5V_RAIL | GPIO26 |\n| R_5VS2 | 100kΩ 1% | GPIO26 | GND |\n> [!note] 检测逻辑\n> 5V 正常 → GPIO26 = 2.5V (ADC2_CH8)\n> 5V 关断 → GPIO26 = 0V\n---\n## 8.7 I²C 器件汇总"
+  },
+  {
+    "file": "原理图设计/Sheet8-传感器接口.md",
+    "chunk_index": 7,
+    "total_chunks": 8,
+    "frontmatter": {},
+    "text": "| 器件 | 地址 | 供电 | 详见 |\n|------|------|------|------|\n| SHT30 | 0x44 | NET_I2C_PWR | #81-sht30-温湿度-u10 |\n| BH1750 | 0x23 | NET_I2C_PWR | #82-bh1750-光照-u11 |\n| MB85RC256V | 0x50 | NET_3V3 | [[Sheet6-RTC与存储#62-mb85rc256v-fram-u9]] |\n| DS3231 | 0x68 | NET_3V3 | [[Sheet6-RTC与存储#61-ds3231-rtc-u8]] |\n> [!warning] I²C 总线挂载\n> SHT30 和 BH1750 的 VDD 接 NET_I2C_PWR（可断电）\n> MB85RC256V 和 DS3231 的 VCC 接 NET_3V3（常供电）\n> 所有 4 个器件共享 NET_I2C_SDA / NET_I2C_SCL"
+  },
+  {
+    "file": "原理图设计/检查清单.md",
+    "chunk_index": 0,
+    "total_chunks": 10,
+    "frontmatter": {},
+    "text": "# 检查清单\n> 原理图绘制完成后逐项校验 | 回到索引：[[00-索引]]\n---\n## ⚡ 电源域"
+  },
+  {
+    "file": "原理图设计/检查清单.md",
+    "chunk_index": 1,
+    "total_chunks": 10,
+    "frontmatter": {},
+    "text": "- [ ] CS5383C SELC0=悬空, SELC1=GND (2S 配置)\n- [ ] CS5383C BATCV=75kΩ→GND (CV=8.2V)\n- [ ] CS5383C EN 经 R_CS_EN (4.7kΩ) 下拉至 GND (默认使能)\n- [ ] CS5383C VSEN 分压: R1=56kΩ, R2=12kΩ (R2 > 10kΩ)\n- [ ] CS5383C R_CS=0.1Ω 开尔文采样连接到 CSP 和 BAT\n- [ ] CS5383C NTC=10kΩ B=3435 (紧贴电池)\n- [ ] CS5383C STAT1/2 经 100kΩ 上拉至 3.3V\n- [ ] CS5383C PVIN 输入滤波: 22μF(50V) + 10μF(50V) + 100nF(50V)\n- [ ] CS5383C PMID=100nF/50V → PGND\n- [ ] CS5383C BST=100nF/50V → SW\n- [ ] CS5383C VCC: 1μF + 10μF 并联去耦\n- [ ] MP2307 EN 经 4.7kΩ 下拉 + 1μF R"
+  },
+  {
+    "file": "原理图设计/检查清单.md",
+    "chunk_index": 2,
+    "total_chunks": 10,
+    "frontmatter": {},
+    "text": "[ ] CS5383C BST=100nF/50V → SW\n- [ ] CS5383C VCC: 1μF + 10μF 并联去耦\n- [ ] MP2307 EN 经 4.7kΩ 下拉 + 1μF RC 延时\n- [ ] MP2307 输入电容 22μF/25V\n- [ ] MP2307 输出电容 22μF/16V ×2\n- [ ] ME6209 VIN 去耦 1μF, VOUT 去耦 10μF\n- [ ] ME6209 EN 接 VIN (常使能)\n- [ ] B0509XT 输入去耦 10μF, 输出去耦 4.7μF\n- [ ] 隔离 ME6209 输入去耦 1μF, 输出去耦 10μF\n- [ ] SMBJ20A 阴极接 V_IN_OVP, 阳极接 GND\n- [ ] Si2301 OVP: TL431 REF 分压 OVP≈28V\n- [ ] Q0(AO3401) 反接保护: BZT52C10 钳位 Vgs\n- [ ] 负载开关 Q1~Q5 栅极上拉 100kΩ 至各自 Source\n- [ ] 5V 关断后泄放: R_5V_DIS (100kΩ) → GND"
+  },
+  {
+    "file": "原理图设计/检查清单.md",
+    "chunk_index": 3,
+    "total_chunks": 10,
+    "frontmatter": {},
+    "text": "T52C10 钳位 Vgs\n- [ ] 负载开关 Q1~Q5 栅极上拉 100kΩ 至各自 Source\n- [ ] 5V 关断后泄放: R_5V_DIS (100kΩ) → GND"
+  },
+  {
+    "file": "原理图设计/检查清单.md",
+    "chunk_index": 4,
+    "total_chunks": 10,
+    "frontmatter": {},
+    "text": "---\n## 🔵 数字域\n### ESP32\n- [ ] GPIO0 (BOOT): 10kΩ 上拉至 3.3V\n- [ ] GPIO2: 10kΩ 下拉至 GND (Strapping)\n- [ ] GPIO5: 4.7kΩ 下拉至 GND (CS5383C EN)\n- [ ] GPIO12: 悬空 (避免拉高)\n- [ ] GPIO15: 10kΩ 下拉至 GND (Strapping)\n- [ ] GPIO21/22: I²C 开漏，上拉 4.7kΩ 至 NET_I2C_PWR，下拉 10kΩ 至 GND\n- [ ] GPIO23: 无外部下拉 (UART TX 空闲高)\n- [ ] GPIO34: 仅输入 (ADC1_CH6)\n- [ ] GPIO35: 仅输入 (STAT1)\n- [ ] GPIO36: 仅输入 (ADC1_CH0)，100nF 滤波\n- [ ] GPIO39: 仅输入 (STAT2)\n- [ ] VDD3P3: 100nF 去耦\n- [ ] VDD3P3_RTC: 100nF 去耦"
+  },
+  {
+    "file": "原理图设计/检查清单.md",
+    "chunk_index": 5,
+    "total_chunks": 10,
+    "frontmatter": {},
+    "text": "### LoRa\n- [ ] WH-L101-L VCC: 100μF 陶瓷去耦 (就近)\n- [ ] WH-L101-L NREST: 10kΩ 上拉至 3.3V\n- [ ] WH-L101-L WAKE: 10kΩ 下拉至 GND\n- [ ] WH-L101-L HOST_WAKE: 10kΩ 下拉至 GND\n- [ ] RF 走线 50Ω 微带线\n- [ ] SMA 下方地平面挖空\n- [ ] RCLAMP0521P 射频 ESD\n### Type-C / 调试\n- [ ] CH224K CFG1=24kΩ (12V 档位)\n- [ ] CH224K CC1/CC2 直连 Type-C (无外部 5.1kΩ)\n- [ ] SS14 隔离二极管: 阳极=VBUS, 阴极=CP2102 VDD\n- [ ] SS34 隔离二极管: 阳极=12V_OUT, 阴极=CS5383C PVIN\n- [ ] CP2102N VIO=3.3V\n- [ ] CP2102N 去耦 100nF"
+  },
+  {
+    "file": "原理图设计/检查清单.md",
+    "chunk_index": 6,
+    "total_chunks": 10,
+    "frontmatter": {},
+    "text": "### RTC / 存储\n- [ ] DS3231 VBAT 与 VCC 经 0Ω 短接\n- [ ] DS3231 /INT: 4.7kΩ 上拉至 3.3V\n- [ ] MB85RC256V A0=A1=A2=GND (地址 0x50)\n- [ ] MB85RC256V /WP=GND (允许写入)\n---\n## 🟢 模拟域"
+  },
+  {
+    "file": "原理图设计/检查清单.md",
+    "chunk_index": 7,
+    "total_chunks": 10,
+    "frontmatter": {},
+    "text": "### RS485\n- [ ] ADuM1301 VDD1=3.3V, VDD2=隔离 3.3V\n- [ ] ADuM1301 GND1=GND, GND2=GND2\n- [ ] ADuM1301 去耦: VDD2 100nF\n- [ ] MAX3485 VCC=NET_ISO_3V3\n- [ ] MAX3485 /RE 与 DE 短接\n- [ ] RS485 A 上拉 680Ω → 3.3V_ISO\n- [ ] RS485 B 下拉 680Ω → GND2\n- [ ] RS485 终端 120Ω (跳线可选)\n- [ ] TVS: A-GND2, B-GND2, A-B (SMBJ6.5CA ×3)\n- [ ] GDT: B3D090L-C 三端 (A-GND2-B)\n- [ ] 自恢复保险丝: A/B 串联\n- [ ] 安规电容: C_GND_SAFE 1nF/2kV 单点连接"
+  },
+  {
+    "file": "原理图设计/检查清单.md",
+    "chunk_index": 8,
+    "total_chunks": 10,
+    "frontmatter": {},
+    "text": "### 传感器\n- [ ] SHT30 VDD=NET_I2C_PWR (非 3.3V)\n- [ ] BH1750 VCC=NET_I2C_PWR, DVI=VCC, ADDR=GND\n- [ ] 电池分压: 47kΩ/10kΩ, 0.1% 精度\n- [ ] I²C 上拉: 4.7kΩ → NET_I2C_PWR\n- [ ] I²C 下拉: 10kΩ → GND\n---\n## 布局检查\n- [ ] CS5383C 散热焊盘: 底层过孔阵列 (0.3mm, 1mm 间距)\n- [ ] CS5383C 功率回路: PVIN→SW→L1→BAT 面积最小\n- [ ] CS5383C R_CS: 开尔文采样走线避开电感\n- [ ] CS5383C VSEN 分压: 靠近 IC，远离电感\n- [ ] 50Ω 微带线: 根据 PCB 层叠计算走线宽度\n- [ ] SMA 下方: 地平面挖空\n- [ ] 模拟地与数字地: 单点连接\n---\n## 交叉引用检查"
+  },
+  {
+    "file": "原理图设计/检查清单.md",
+    "chunk_index": 9,
+    "total_chunks": 10,
+    "frontmatter": {},
+    "text": "- [ ] 所有网络名与 [[Netlist-网络表]] 一致\n- [ ] 所有器件位号与 [[BOM-物料清单]] 一致\n- [ ] 每页原理图内的引脚连接与 [[00-索引]] 中电源轨拓扑一致"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 0,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "# 太阳能低功耗环境采集节点开发文档 V4.2.7\n---\n## 版本说明\n本版本基于 V4.2.6 全面可行性评估结果及 MAX3485ESA/BZT52C10 数据手册交叉验证，完成以下 **20 项关键修复与优化**："
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 1,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "**🔴 P0 严重修复（8 项）：**\n1. **FRAM 地址重叠**：休眠标记从 0x0070/0x0080 迁移至 0x0090/0x00A0，消除与 OTA 区域（0x0050-0x008F）的完全重叠\n2. **GPIO26 ADC 通道号**：修正 ADC2_CH9 → ADC2_CH8（GPIO26 硬件映射为 CH8）\n3. **5V 关断校验延时**：从 ≥5s 增加至 ≥15s（44μF×100kΩ=4.4s，15s≈3.4τ）\n4. **看门狗复位**：5V 校验前禁用看门狗，避免 15s 等待期间 WDT 触发\n5. **光伏浪涌 TVS**：主选从 SMBJ22A（钳位 35.5V，裕量仅 0.5V）改为 SMBJ20A（钳位 33.4V，裕量 2.6V）\n6. **RS485 线间 TVS**：从 SMBJ12CA（钳位 19.9V）改为 **SMBJ6.5CA（钳位 11.2V）**，因 MAX3485ESA 数据手册确认总线耐压仅 -7V~+13V，原选型超标 6.9V\n7. **BOM 电容清单**：从仅 2 颗电容扩展至完整 26 颗，覆盖全部去耦/"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 2,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "（钳位 11.2V）**，因 MAX3485ESA 数据手册确认总线耐压仅 -7V~+13V，原选型超标 6.9V\n7. **BOM 电容清单**：从仅 2 颗电容扩展至完整 26 颗，覆盖全部去耦/滤波需求\n8. **SELC 配置表**：修正 2S 配置为 SELC0=Float/SELC1=GND（原表错误为 GND/Float）"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 3,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "**🟡 P1 重要修复（12 项）：**\n1. **DeepSleep 电流**：纳入全部常供电器件（DS3231/TPS3820/WH-L101-L/CS5383C 等），从 ~10μA 修正为 ~32μA，续航从 120 天修正为 ~106 天\n2. **GPIO5 非 RTC GPIO**：明确标注 `rtc_gpio_hold_en(GPIO5)` 无效，依赖外部 4.7kΩ 下拉\n3. **GPIO25/GPIO13 hold**：补充 `rtc_gpio_hold_en()` 调用，防止 DeepSleep 期间浮空漏电\n4. **随机延时 WDT**：延时前禁用看门狗，避免 0~30s 延时期间 WDT 复位\n5. **GPIO23 下拉**：移除 UART TX 线上的 10kΩ 下拉（空闲应为高电平）\n6. **BZT52C10 稳压值**：根据数据手册确认为 9.50~10.50V（原文档标注 9.40~10.60V 有误）\n7. **MP2307 输入电容**：从 10μF/25V X7R 0805 升级至 22μF/25V X7R 1206\n8. **ACK 超"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 4,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "10.50V（原文档标注 9.40~10.60V 有误）\n7. **MP2307 输入电容**：从 10μF/25V X7R 0805 升级至 22μF/25V X7R 1206\n8. **ACK 超时**：从 3000ms 扩展至 5000ms，覆盖 200 节点高负载场景\n9. **RS485 超时**：新增 2000ms 通信超时，传感器离线时填充默认值\n10. **OTA 安全**：补充 Secure Boot V2 签名校验、CRC32 逐 chunk 计算、断电恢复、Factory 回滚触发条件\n11. **产线校准**：补充环境温度（25±5°C）、电源精度（±0.01V）、失败处理流程\n12. **5V 校验时序**：明确校验前禁用 WDT 的代码实现"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 5,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "---\n## 目录\n1. 项目概述与组网拓扑\n2. 系统五域隔离架构 & 整机完整数据流\n3. LoRa 网关通信适配规范\n4. 全硬件器件选型清单\n5. 能源管理电源拓扑与充电完整规范\n6. 整机低功耗控制策略 & 全缺陷闭环说明\n7. ESP32-WROOM-32E 完整引脚资源分配表\n8. 二进制通信帧协议 & FRAM 大容量缓存机制\n9. PCB 布局、热设计与户外结构规范\n10. RS485 隔离浪涌防护方案\n11. 完整 BOM 物料清单\n12. 全维度整机测试大纲\n13. 分阶段开发交付里程碑\n14. 工程流程闭环与产线校准规范\n15. Type-C 调试与市电辅助充电复用规范\n16. OTA 无线升级规范\n17. WH-L101-L 新款模组适配规范\n18. 版本说明与变更控制（V4.2.7 更新）\n---\n## 1. 项目概述与组网拓扑\n### 1.1 项目简介"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 6,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "本设备为农业大棚及野外无人值守太阳能低功耗采集节点，无市电供电。采集空气温湿度、光照强度、土壤温湿度及 EC 三合一参数。采用 12V 5W 光伏板配合 2S 7.4V 锂电池储能（2S1P 18650 2600mAh），CS5383C 同步 MPPT 充电管理，通过 470MHz USR 私有 LoRa 协议上传至 USR-LG210-L 网关，网关经 4G 或以太网推送数据至云端。\n采用采控分离架构，节点仅负责采集、存储、上报，无本地执行器驱动。全链路软硬件极致低功耗设计，集成有源钳位 OVP 电路（串联关断拓扑）、反接保护、栅极钳位、掉电自恢复、关断校验及栅极稳压管保护，适配长期野外无人值守场景。\n**主控平台**：\n- 型号：**ESP32-WROOM-32E**（ESP32-D0WD-V3 ECO V3）\n- 升级收益：修复 ECO V2 安全漏洞，支持 Secure Boot V2，Flash 加密增强，DeepSleep 功耗优化至 ~10μA\n- 引脚兼容：与 ESP32-WROOM-32 完全兼容，原理图无需修改"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 7,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "**CS5383C 充电管理关键特性**：\n- 输入电压范围：9~26V（推荐），绝对最大 36V\n- 同步 Buck 架构，内置功率 MOS，500kHz 开关频率\n- 支持 2~5 节锂电池，MPPT 功能\n- 内部 VIN OVP 阈值 27.4V\n- 封装：TSSOP20L-PP（带散热焊盘）\n- ESD：HBM ±2kV\n### 1.2 组网拓扑\n```\n采集节点 × N\n  ├── SHT30 空气温湿度（待机 0.2μA，内置加热器）\n  ├── BH1750FVI 光照强度（DVI 接 VCC，上电 ≥2ms 复位）\n  ├── RS485 土壤三合一传感器\n  └── WH-L101-L LoRa 通信模组\n           │\n           ▼ 470MHz ISM 频段 USR 私有 LoRa 协议\nUSR-LG210-L LoRa 网关\n  ├── 4G / 以太网双上行通道\n  └── 云端服务器\n```\n---\n## 2. 系统五域隔离架构 & 整机完整数据流\n### 2.1 电源分区"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 8,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "1. **3.3V 弱电主控域（常供电）** ：ESP32-WROOM-32E、WH-L101-L、FRAM、DS3231、TPS3820-33、CP2102 VIO。由电池母线直供高压低静态 LDO 独立供电，深度休眠期间持续供电。\n2. **5V 外设可控域**：CP2102 内核电源、B0509XT-2W 隔离升压电源。由 MP2307 统一供电，EN 引脚可控完全关断。\n3. **隔离 3.3V 及 9V 接口域**：ADuM1301 三通道磁隔离、MAX3485 RS485 收发器、土壤 RS485 三合一传感器。TX、RX、DIR 全信号电气隔离，电源随 B0509 同步通断。\n4. **独立充电功率域**：CS5383C 充电 IC、有源钳位 OVP 电路（串联关断）、输入滤波、NTC 测温。Type-C PD 12V 辅助输入经隔离二极管并入本域。\n5. **电池输入保护域**：P-MOS 反接保护电路（AO3401，Vgs=±12V），带栅极稳压钳位（BZT52C10）。电池正负极反接时自动截止。\n### 2.2 正常采集唤醒流程（电池 ≥ 6.4V，10 分钟周期）"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 9,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "DS3231 RTC 闹钟低电平触发 ESP32-WROOM-32E DeepSleep EXT0 外部唤醒。"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 10,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "1. **使能看门狗**：拉低 TPS3820 /EN 引脚使能硬件看门狗，立即喂狗。\n2. **电池电压采集**：GPIO25 驱动 S8050 与 AO3401 开启电池分压采样开关，延时 10ms 建立，配置 `ADC_ATTEN_DB_6`，通过 47kΩ 与 10kΩ 分压网络采集（GPIO34），8 次滑动平均加中值滤波。使用产线校准系数（三点插值二次拟合）换算实际电压。读取 DS3231 温度，经三点插值温度补偿表修正。\n3. **使能 5V 外设轨**：GPIO32 拉高使能 MP2307，等待 5ms 确认输出稳定。\n4. **清除 RTC 中断**：读取 DS3231 状态寄存器，清除全部闹钟中断标志，确保 INT 引脚恢复高电平。\n5. **导通 I²C 上拉电源**：GPIO13 驱动 S8050 与 AO3401 导通 I²C 传感器电源（SHT30、BH1750）与 I²C 总线上拉电源（4.7kΩ 至传感器电源轨）。**V4.2.6 修正：上拉电源必须在总线解锁前导通。**\n6. **I²C 总线解锁**：SDA/SCL 恢复输入模式，发送 9 个 SCL"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 11,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "）与 I²C 总线上拉电源（4.7kΩ 至传感器电源轨）。**V4.2.6 修正：上拉电源必须在总线解锁前导通。**\n6. **I²C 总线解锁**：SDA/SCL 恢复输入模式，发送 9 个 SCL 时钟脉冲，随后发送 STOP 条件（SDA 低→高跳变），完成总线恢复。**此时 SDA/SCL 已有上拉电阻供电。**\n7. **开启隔离电源**：GPIO2 驱动 S8050 与 AO3401 导通 B0509XT 的 5V 输入电源，等待 **100ms** 稳定（V4.2.6 增加，覆盖低温启动场景）。\n8. **开启土壤传感器**：GPIO27 驱动 S8050 导通土壤 9V 供电 P-MOS，传感器分段预热 2 秒（每 200ms 喂狗一次）。\n9. **数据采集**：\n   - I²C 读取 SHT30（0.2μA 待机，无需额外加热）\n   - I²C 读取 BH1750（DVI 接 VCC，复位已完成，VCC 上电后 2ms 延时已在步骤 5 中满足）\n   - I²C 读取 FRAM 历史缓存\n   - 隔离 RS485 读取土壤参数（9600bps，地址 0x01"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 12,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "DVI 接 VCC，复位已完成，VCC 上电后 2ms 延时已在步骤 5 中满足）\n   - I²C 读取 FRAM 历史缓存\n   - 隔离 RS485 读取土壤参数（9600bps，地址 0x01）\n   - **V4.2.7 新增：RS485 通信超时处理**：发送请求后启动 2000ms 超时定时器，若超时未收到完整响应则标记传感器离线，填充默认值（0xFFFF），不阻塞后续流程\n   - 发送完成后等待 UART 硬件空闲标志置位，延时 1ms 后切换 DIR 为接收\n   - **看门狗喂狗**：上述长时间操作期间每 500ms 喂狗一次\n10. **关断外设电源**：关断土壤 9V 电源，切断 B0509XT 的 5V 输入，关断 I²C 传感器与上拉电源，拉低 GPIO32 关断 MP2307，拉低 GPIO15 关断 CP2102 内核电源。\n11. **生成随机上报延时**：生成 0~30s 随机延时，**V4.2.7 修正：延时前禁用看门狗（拉高 TPS3820 /EN），延时结束后不重新使能（因后续步骤 18 会再次禁用）**。延时期间外设保持关断，仅 RTC "
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 13,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "**：生成 0~30s 随机延时，**V4.2.7 修正：延时前禁用看门狗（拉高 TPS3820 /EN），延时结束后不重新使能（因后续步骤 18 会再次禁用）**。延时期间外设保持关断，仅 RTC 运行（防拥堵策略）。\n12. **数据上报**：组装二进制采集帧（24B Payload）并执行字节转义，通过 UART 发送至 LoRa 模组。\n13. **等待模组就绪与发送完成**：等待 HOST_WAKE（GPIO4）拉高指示模组就绪，UART 输出数据后等待 HOST_WAKE 拉低标记发送完成。启动 **5000ms** 软件定时器等待网关 ACK。\n14. **补发机制**：网关层最多重传 3 次，3 次均失败则标记该帧待 FRAM 补发。FRAM 补发层每帧最多 5 次唤醒周期上报机会，超过则丢弃并标记异常。\n15. **缓存管理**：唤醒优先补发 FRAM 历史缓存（最多 5 次机会/帧），全部上报成功后写入本次新采集数据。**FRAM 缓存满时采用 FIFO 策略覆盖最旧帧。**\n16. **中断确认**：确认 DS3231 无未清中断且 INT 引脚为高电平，切断电池"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 14,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": " 次机会/帧），全部上报成功后写入本次新采集数据。**FRAM 缓存满时采用 FIFO 策略覆盖最旧帧。**\n16. **中断确认**：确认 DS3231 无未清中断且 INT 引脚为高电平，切断电池分压采样电源。\n17. **I²C 总线钳位**：GPIO21 与 GPIO22 配置为输出低电平，完成休眠前总线钳位。进入 DeepSleep 后依靠外部 10kΩ 下拉电阻保持总线低电平。\n18. **5V 轨关断校验**：关断 MP2307 后等待 **≥15s**（RC 放电时间常数 τ=100kΩ×44μF=4.4s，15s≈3.4τ，电压降至 <0.2V），通过 GPIO26（ADC2_CH8，ATTEN_DB11）经 100kΩ+100kΩ 分压回读 5V 轨电压，确认已降至 0.5V 以下。**V4.2.7 修正：校验前必须先禁用看门狗（拉高 TPS3820 /EN），校验完成后不重新使能，直接进入后续休眠流程。** 若未达标则重试关断最多 3 次，异常写入 FRAM。\n19. **LoRa 模组休眠**：WAKE 引脚保持低电平，WH-L101-L 自动进入低功耗休眠。\n"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 15,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "后不重新使能，直接进入后续休眠流程。** 若未达标则重试关断最多 3 次，异常写入 FRAM。\n19. **LoRa 模组休眠**：WAKE 引脚保持低电平，WH-L101-L 自动进入低功耗休眠。\n20. **关键引脚电平锁定**：调用 `rtc_gpio_hold_en()` 锁定以下 RTC GPIO：\n    - GPIO33（看门狗）✓ RTC_GPIO8\n    - GPIO32（MP2307 EN）✓ RTC_GPIO9\n    - GPIO2（B0509XT EN）✓ RTC_GPIO12\n    - GPIO27（土壤电源 EN）✓ RTC_GPIO21\n    - **GPIO25（电池分压开关）✓ RTC_GPIO6（V4.2.7 新增）**\n    - **GPIO13（I²C 传感器电源）✓ RTC_GPIO14（V4.2.7 新增）**\n    - **GPIO5（CS5383C EN）✗ 非 RTC GPIO，无法 hold，依赖外部 4.7kΩ 下拉保持低电平**\n    - GPIO14（LoRa WAKE）✓ RTC_GPIO16，有 10kΩ 下拉"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 16,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "5（CS5383C EN）✗ 非 RTC GPIO，无法 hold，依赖外部 4.7kΩ 下拉保持低电平**\n    - GPIO14（LoRa WAKE）✓ RTC_GPIO16，有 10kΩ 下拉\n    - GPIO15（CP2102 电源）✓ RTC_GPIO13，有 10kΩ 下拉\n21. **进入 DeepSleep**：拉高 TPS3820 /EN 禁用看门狗，调用 `esp_deep_sleep_start()`。"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 17,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "### 2.3 低电压预警流程（6.0V ≤ 电池 < 6.4V）\n1. 唤醒后不启动 MP2307、不开启传感器，仅读取电池电压与 RTC 时间。\n2. 组装精简上报帧，仅上传电池电压、设备状态及温度补偿标志。\n3. 停止向 FRAM 写入新数据，仅补发存量历史帧（最多 5 次/帧）。\n4. 上报完成后按正常流程进入 10 分钟休眠。\n### 2.4 欠压休眠流程（电池 < 6.0V）\n系统依赖 BMS 过放保护切断或主动 DeepSleep，待太阳能充电恢复后冷启动。BMS 过放保护阈值 ≤ 5.8V，欠压休眠阈值 6.0V 高于 BMS 保护点 0.2V。"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 18,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "1. 全程持续喂狗，FRAM 写入休眠标记（双副本：0x0090 与 0x00A0，CRC + version 校验）。\n2. DS3231 配置标准闹钟流程：写新闹钟匹配值，清除 A1F/A2F，延时 2ms 确认 INT 高电平，确认中断使能，初始闹钟周期 1 小时。\n3. 确认 MP2307 已关断，所有外设电源断开，钳位 I²C 总线。\n4. 执行 5V 轨关断校验（含 ≥15s 延时，校验前禁用看门狗），确认外设无漏电。\n5. WAKE 保持低电平，WH-L101-L 自动休眠。拉高 TPS3820 /EN 禁用看门狗并锁定电平，进入 DeepSleep。\n6. DeepSleep 期间若电池继续跌落至 BMS 过放保护点，BMS 切断输出，3.3V 主控轨归零，系统彻底断电。\n7. **充电恢复冷启动**：太阳能充电使电池电压回升至 BMS 恢复电压后 ESP32-WROOM-32E 上电冷启动，进入 `cold_boot_recovery` 流程。延时 500ms，连续 3 次采样电池电压：\n   - 电压 ≥ 6.5V：清除 FRAM 休眠标记，初始化 DS3231，首"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 19,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "32E 上电冷启动，进入 `cold_boot_recovery` 流程。延时 500ms，连续 3 次采样电池电压：\n   - 电压 ≥ 6.5V：清除 FRAM 休眠标记，初始化 DS3231，首次通信携带时间同步请求，恢复 10 分钟周期。\n   - 电压 6.0V–6.5V：继续休眠，指数退避（1h→2h→4h→8h，最大 8h）。\n   - 电压 < 6.0V：写入/更新休眠标记，DS3231 设置 1 小时闹钟，进入 DeepSleep。\n8. **指数退避适用边界**：仅当 DS3231 VCC 由 ME6209-3.3 持续供电时生效。BMS 切断后失效，恢复完全依赖太阳能充电冷启动。\n9. **上电初始化恢复**：冷启动后优先读取 FRAM 双副本，校验休眠标记（magic + valid + crc16 + version）。若两个副本 version 不一致则视为无效，进入正常初始化。若存在有效休眠标记或 RTC 时间戳异常（年份 < 2020），强制进入电压检测模式。若无有效标记，直接进入正常初始化。"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 20,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "，进入正常初始化。若存在有效休眠标记或 RTC 时间戳异常（年份 < 2020），强制进入电压检测模式。若无有效标记，直接进入正常初始化。"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 21,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "**DS3231 供电补充说明（V4.2.6）** ：\n- VBAT 通过 0Ω 电阻接 VCC，VCC 由 ME6209-3.3 供电\n- 当电池电压跌落至 6.0V 以下，ME6209-3.3 输出仍可维持 3.3V（压差 2.7V）\n- DS3231 在电池电压 > 约 3.6V 时仍继续走时，直至 BMS 切断或电池耗尽\n- 因此文档中\"BMS 切断后 RTC 立即停走\"的描述修正为：**BMS 切断后 RTC 在 ME6209-3.3 输出有效期间（电池 > 约 3.6V）继续走时，直至主控轨彻底掉电**\n---\n## 3. LoRa 网关通信适配规范\n### 3.1 基础通信参数"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 22,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "| 参数项 | 设计规格 |\n|--------|----------|\n| 通信模组 | WH-L101-L（SX1268 + FM33LE） |\n| 工作频段 | 470MHz ISM |\n| 组网模式 | 网关自动组网，节点定时主动上报 |\n| 空中速率 | 速率等级 4（0.814kbps），空旷视距 4.5km |\n| 单网关挂载上限 | ≤ 200 台 |\n| 防拥堵策略 | 唤醒后附加 0~30s 随机上报延时 |\n| ACK 重传 | 网关层最多 3 次，FRAM 补发层最多 5 次/帧 |\n| ACK 等待超时 | **5000ms（V4.2.7 从 3000ms 扩展，覆盖 200 节点高负载场景）** |\n| UART | 115200bps，8N1 |\n| 串口等待时间 | AT+PTM 200ms（产线配置） |\n### 3.2 WH-L101-L 引脚定义"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 23,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "| 模组引脚 | 名称 | 功能 | 本方案连接 |\n|----------|------|------|------------|\n| 1,3,11,12,17,28,29,44 | GND | 电源地 | 系统 GND |\n| 2 | RFIO | 射频输入输出 | 50Ω 微带线 → SMA |\n| 4 | NREST | 复位，低有效 | 10kΩ 上拉 3.3V |\n| 13,14 | VCC | 1.9~3.7V | 3.3V + 100μF 陶瓷 |\n| 19 | UART_TX | 数据发送 | → GPIO19 |\n| 20 | UART_RX | 数据接收 | ← GPIO23（**V4.2.7 修正：移除 10kΩ 下拉，UART TX 空闲应为高电平**） |\n| 21 | Reload | 恢复出厂 | 测试点 |\n| 23 | WAKE | 下降沿唤醒，默认低 | → GPIO14，10kΩ 下拉 |\n| 24 | HOST_WAKE | 发送状态指示 | → GPIO4，10kΩ 下拉 |\n| 30 | 485_CTRL | 485 控制 | NC |\n|"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 24,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "| → GPIO14，10kΩ 下拉 |\n| 24 | HOST_WAKE | 发送状态指示 | → GPIO4，10kΩ 下拉 |\n| 30 | 485_CTRL | 485 控制 | NC |\n| 36 | LINK | 点对点无作用 | NC |"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 25,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "### 3.3 唤醒时序\nWAKE 下降沿唤醒：GPIO14 高 → 延时 5ms → 拉低 → 延时 10ms。\nHOST_WAKE 时序：串口发送前拉高 5ms，发送完成拉低，无线发送期间高电平指示繁忙。\n### 3.4 ACK 超时与重传\nACK 超时 **5000ms（V4.2.7 修正）**。24B Payload @0.814kbps 单向约 500ms，ACK 往返约 300ms，5000ms 含充足余量（覆盖 200 节点并发时网关 ACK 排队延迟）。节点在 5000ms 内未收到 ACK 即进入重传，网关层最多 3 次，3 次均失败则标记 FRAM 补发。\n### 3.5 关键参数产线配置"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 26,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "| 参数 | AT 命令 | 推荐值 |\n|------|---------|--------|\n| 工作模式 | AT+WMODE | 组网模式 |\n| 网关协议 | AT+LORAPROT | LG210 |\n| 速率等级 | AT+SPD1/SPD2 | 4 |\n| 串口等待时间 | AT+PTM | 200ms |\n| 串口波特率 | AT+UART | 115200,N,8,1 |\n---\n## 4. 全硬件器件选型清单"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 27,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "| 功能模块 | 器件型号 | 供电/接口 | 核心说明 |\n|----------|----------|-----------|----------|\n| 主控 | **ESP32-WROOM-32E** | 3.3V | ESP32-D0WD-V3 ECO V3，DeepSleep ~10μA，Secure Boot V2，引脚兼容 |\n| 主控 LDO | ME6209-3.3 | 7.4V→3.3V | 18V 耐压，Iq 2μA，250mA 持续输出 |\n| LoRa | WH-L101-L | UART 3.3V | SX1268+FM33LE，休眠 2.5μA |\n| 温湿度 | SHT30 | I²C 3.3V | ±0.3°C，待机 **0.2μA**，**内置加热器（可软件启用）** |\n| 光照 | BH1750FVI | I²C 3.3V | 1~65535lux，**DVI 接 VCC，上电 ≥2ms 复位**（如需 RC 延时方案需等待 25ms） |\n| RTC | DS3231 | I²C 3.3V | ±2ppm，VBAT→VCC（0Ω），**INT"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 28,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "，**DVI 接 VCC，上电 ≥2ms 复位**（如需 RC 延时方案需等待 25ms） |\n| RTC | DS3231 | I²C 3.3V | ±2ppm，VBAT→VCC（0Ω），**INT 上拉 4.7kΩ** |\n| FRAM | MB85RC256V | I²C 3.3V | 32KB，双副本+CRC+version |\n| RS485 | MAX3485 | 隔离 3.3V | 半双工，**需确认瞬态耐压** |\n| 隔离器 | ADuM1301 | 3.3V | 三通道磁隔离 |\n| 充电 IC | CS5383C | TSSOP20L-PP | 36V 耐压，MPPT，VSEN Rv2>10kΩ |\n| 反接保护 | AO3401 | SOT-23 | Vgs=±12V，栅极 **BZT52C10** 钳位 |\n| 降压 DC-DC | MP2307 | 7.4V→5V | EN 阈值 1.15V（典型），EN GPIO32，**输入 22μF/25V X7R，输出 22μF/16V X7R** |\n| 隔离电源 | B0509XT-2WR3 | 5V→9V | "
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 29,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "V | EN 阈值 1.15V（典型），EN GPIO32，**输入 22μF/25V X7R，输出 22μF/16V X7R** |\n| 隔离电源 | B0509XT-2WR3 | 5V→9V | 输入 10μF，输出 **4.7μF/25V**，**启动延时 100ms** |\n| 看门狗 | TPS3820-33 | 3.3V | /EN 低有效，1.6s |\n| 光伏浪涌（主选） | **SMBJ20A** | SMA | 钳位 33.4V < 36V（V4.2.7 修正，原 SMBJ22A 裕量仅 0.5V） |\n| 光伏浪涌（备选） | SMBJ22A | SMA | 钳位 35.5V（需实测确认 <35V，仅在 SMBJ20A 缺货时使用） |\n| RS485 线间 TVS | **SMBJ6.5CA** | SMA | **V4.2.7 修正：钳位 11.2V < MAX3485 耐压 13V（原 SMBJ12CA 钳位 19.9V 超标）** |\n| RS485 线对地 TVS | SMBJ6.5CA | SMA | 钳位 11.2V |\n| 栅极稳压（反接） | *"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 30,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "485 耐压 13V（原 SMBJ12CA 钳位 19.9V 超标）** |\n| RS485 线对地 TVS | SMBJ6.5CA | SMA | 钳位 11.2V |\n| 栅极稳压（反接） | **BZT52C10** | SOD-123 | **9.50~10.50V**（数据手册确认），350mW（V4.2.7 修正值域） |\n| 栅极稳压（OVP） | BZT52C15 | SOD-123 | 14.25~15.75V，350mW |\n| PD 诱骗 | CH224K | SOT23-6 | CFG1 24k 接地配置 12V，CC 无需外部 5.1kΩ |\n| 射频 ESD | **RCLAMP0521P** | SOT-23 | 结电容 <0.5pF，适配 470MHz |\n| GDT | B3D090L-C | 1206 | 90V，10kA |\n| 自恢复保险丝 | SMD1206-035 | 1206 | 0.35A |\n| 共模电感 | ACM2012-900-2P | 0805 | 90Ω@100MHz |\n| NTC | 10kΩ B=3435 **±1%**"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 31,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "D1206-035 | 1206 | 0.35A |\n| 共模电感 | ACM2012-900-2P | 0805 | 90Ω@100MHz |\n| NTC | 10kΩ B=3435 **±1%** | 线装 | 电池温度检测 |"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 32,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "---\n## 5. 能源管理电源拓扑与充电完整规范\n### 5.1 CS5383C 引脚配置与电源链路\n基于 CS5383C 官方数据手册及应用电路图：\n**光伏/Type-C 输入路径：**\n光伏正极或 Type-C PD 12V → 2A 贴片保险丝 → 有源钳位 OVP 电路 → CS5383C PVIN(1脚)\n**CS5383C 输入电压等级：**\n- 绝对最大额定值（VMAX）：**36V**（PVIN, AVIN, PMID, BST, SW, CSP, BAT, NTC, STAT1, STAT2, VSEN）\n- 推荐工作条件：**9~26V**（AVIN, PVIN）\n- 内部 VIN OVP 阈值：**27.4V**（超过后芯片自动停止充电）\n- EN, VCC, BATCV, SELC1, SELC0 引脚最大电压：**6V**\n**有源钳位 OVP 电路（串联关断拓扑）：**"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 33,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "VIN 经 100kΩ 与 10kΩ 分压至 TL431 参考极，OVP 动作阈值约 28V。正常时 TL431 不导通，Si2301（P-MOS）栅极经 1MΩ 上拉至 VIN，Vgs≈0V，MOS 导通（VIN 正常通过）。OVP 触发时 TL431 阴极导通，经 10kΩ 将 Si2301 栅极拉低，Vgs≈−VIN，MOS 关断（切断输入）。Si2301 栅源间并联 BZT52C15 稳压管限制 Vgs≤15V。栅极上拉 1MΩ，并联 100pF 加速电容。\n**CS5383C 完整配置表：**"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 34,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "| 引脚 | 名称 | 连接方式 | 说明 |\n|------|------|----------|------|\n| 1 | PVIN | 光伏/Type-C 输入（经 OVP 后接入） | 输入功率电源，9~26V 推荐 |\n| 2 | PMID | 0.1μF → GND | 反向阻断管与功率管公共点 |\n| 3 | BST | 100nF 50V X7R → SW | 自举电容 |\n| 4,5 | SW | 两脚并联 → 10μH 屏蔽电感 → BAT | 开关节点，大电流路径 |\n| 6,7 | PGND | → GND | 功率地 |\n| 8 | CSP | 0.1Ω 1% 采样电阻 → 电池正极 | 充电电流检测正端，开尔文采样 |\n| 9 | BAT | 直连电池正极 | 电池连接端（无串联元件） |\n| 10 | BATCV | 75kΩ 1% → GND | 恒压 8.2V（单节 4.10V，2S 锂电） |\n| 11 | SELC0 | → Float（悬空） | 2S 配置（V4.2.7 修正：SELC0=Float） |\n| 12 | SELC1 | → GN"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 35,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "2V（单节 4.10V，2S 锂电） |\n| 11 | SELC0 | → Float（悬空） | 2S 配置（V4.2.7 修正：SELC0=Float） |\n| 12 | SELC1 | → GND | 2S 配置（V4.2.7 修正：SELC1=GND） |\n| **13** | **EN** | → **GPIO5（4.7kΩ 下拉）** | **V4.2.6 修正：低电平/悬空=ON，高电平=OFF** |\n| 14 | AGND | → GND | 模拟地 |\n| 15 | NTC | 10kΩ B=3435 ±1% → GND | 热敏电阻输入，紧贴电池 |\n| 16 | VCC | 1μF + 10μF → GND | 内部 LDO 输出，必须去耦 |\n| 17 | STAT2 | 100kΩ 上拉 3.3V → GPIO39 | 开漏输出，充电完成指示 |\n| 18 | STAT1 | 100kΩ 上拉 3.3V → GPIO35 | 开漏输出，充电状态指示 |\n| 19 | VSEN | VIN → 56kΩ → VSEN → 12kΩ → GND | MPPT 跟"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 36,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "STAT1 | 100kΩ 上拉 3.3V → GPIO35 | 开漏输出，充电状态指示 |\n| 19 | VSEN | VIN → 56kΩ → VSEN → 12kΩ → GND | MPPT 跟踪，Rv2 > 10kΩ |\n| 20 | AVIN | 短接 PVIN | 输入模拟电源 |\n| Thermal PAD | AGND | → GND | 散热焊盘，低热阻路径 |"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 37,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "**输入滤波（PVIN 对地）：**\n- 22μF/50V 电解电容\n- 10μF/50V X7R 陶瓷电容\n- 100nF/50V X7R 高频陶瓷电容\n**BATCV 电阻选择依据（2S 锂电）：**\n| 单节电压 | 电池类型 | Rcv 值 |\n|----------|---------|--------|\n| 4.10V | 2S 锂电（保守延长寿命） | **75kΩ** |\n**SELC0/SELC1 配置表（V4.2.7 修正，基于官方数据手册确认）：**\n| SELC0 引脚状态 | SELC1 引脚状态 | 电池节数 |\n|----------------|----------------|----------|\n| 悬空 (Float) | 直接接地 (GND) | **2 节（锂电）** |\n| 悬空 (Float) | 悬空 (Float) | 3 节 |\n| 直接接地 (GND) | 悬空 (Float) | 4 节 |\n| 直接接地 (GND) | 直接接地 (GND) | 5 节（磷酸铁锂） |"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 38,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "> **V4.2.7 修正说明**：V4.2.6 原表中 2 cells 配置为 SELC0=GND/SELC1=Float，实际为 4 cells 配置，存在严重错误。本版本已根据官方数据手册修正为 **SELC0=Float/SELC1=GND**。本方案使用 2S 锂电，因此 SELC0 悬空、SELC1 接地。\n**CS5383C 状态指示（开漏输出，需禁用 GPIO 内部上拉）：**\n| 状态 | STAT1(18脚) | STAT2(17脚) |\n|------|-------------|-------------|\n| 充电中 | 低电平 | 高阻（外部上拉高） |\n| 充电完成 | 高阻（外部上拉高） | 低电平 |\n| 故障/待机 | 高阻（外部上拉高） | 高阻（外部上拉高） |"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 39,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "**备注（基于官方手册备注）：**\n1. L1 功率电感的饱和电流须大于充电电流（0.5A），建议 >2A 留足余量。\n2. 功率电阻 Rs（0.1Ω）的 CSP 抽头须紧靠对应端进行抽头，CSP 走线不要在电感附近布局。\n3. 功率电阻 Rs 的 BAT 抽头紧靠并经过其采样电容（须紧靠 Rs 电阻端口），其他贴片电容尽量靠近芯片引脚。\n4. STAT1、STAT2 是开漏 OD 结构，输出 0 电平或高阻态，不用时建议直接接地。\n5. NTC 功能不用时，将 NTC 引脚直接接地（本方案使用 NTC，不接地）。\n6. VSEN 引脚处的 Rv2 必须大于 10kΩ（本方案使用 12kΩ）。\n7. 为了优化 EMI，可在输入端添加 R1(10Ω)+C8(100nF)（可选）。\n8. PVIN→电感→BAT→采样电阻为流大电流路径，PCB 走线需短而粗。\n**CH224K PD 诱骗配置：**"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 40,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "```\nCH224K 配置（12V 输出）：\n- CFG1 → 24kΩ 1% → GND（12V 档位）\n- CFG2 → Float\n- CFG3 → Float\n- CC1 → 直接接 Type-C CC1（无需 5.1kΩ 下拉）\n- CC2 → 直接接 Type-C CC2（无需 5.1kΩ 下拉）\n- 注：12V 档位为单电阻配置（CFG1 24k），CC 引脚无需外接下拉电阻\n- 输出 12V → SS34 → CS5383C PVIN\n- VBUS 5V → SS14 → CP2102 VDD\n```\n**MP2307 使能控制：**"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 41,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "| 参数 | 值 |\n|------|-----|\n| 控制引脚 | GPIO32（RTC GPIO） |\n| EN 上升开启阈值 | 1.05V~1.25V（典型 1.15V） |\n| EN 关断阈值 | ~1.01V（典型） |\n| EN 下拉 | 4.7kΩ 至 GND |\n| RC 延时 | 1μF 电容 |\n| 5V 泄放电阻 | 100kΩ 对地 |\n| 输入电容 | **22μF/25V X7R 1206**（V4.2.7 升级，原 10μF 偏小，DC 偏压降额后仅 6~7μF） |\n| 输出电容 | **22μF/16V X7R 1206**（V4.2.6 规格明确） |\n**B0509XT-2WR3 隔离电源：**\n| 参数 | 值 |\n|------|-----|\n| 输入电容 | 10μF（匹配原厂推荐） |\n| 输出电容 | **4.7μF/25V**（远低于最大容性负载 1000μF，启动可靠） |\n| 启动延时 | **100ms**（V4.2.6 增加，覆盖低温场景） |\n**DS3231 INT 上拉电阻：**"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 42,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "- INT/SQW = 开漏输出\n- IOL(max) = 3mA\n- Rmin = 3.3V / 3mA = 1.1kΩ\n- 推荐值：**4.7kΩ**\n### 5.2 整机续航与功耗\n电池规格：2S1P 18650 2600mAh。典型工况电流预算：\n| 状态 | 电流 | 时间/周期 | 占比 |\n|------|------|-----------|------|\n| DeepSleep（系统合计） | **~32μA**（见下表） | 600s | 99.5% |\n| 唤醒采集 | 120mA | 3.05s | 0.5% |\n| LoRa 发射 | 110mA | 0.75s | 0.125% |\n**DeepSleep 电流明细（V4.2.7 修正）：**"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 43,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "| 器件 | 睡眠电流 | 说明 |\n|------|---------|------|\n| ESP32-WROOM-32E | ~10μA | DeepSleep |\n| ME6209-3.3 | ~2μA | 静态电流 |\n| WH-L101-L | ~2.5μA | 休眠 |\n| DS3231 | ~0.2μA | VBAT 供电 |\n| TPS3820-33 | ~1μA | /EN 高电平禁用 |\n| MB85RC256V | ~1μA | 待机 |\n| CS5383C | ~5μA | EN 高电平关断（漏电流） |\n| 电阻分压/上拉下拉 | ~3μA | 漏电流估算 |\n| **合计** | **~32μA** | — |"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 44,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "**典型续航计算：**\n- DeepSleep 平均：32μA × 597s/600s ≈ 32μA\n- 唤醒采集：120mA × 3.05s/600s ≈ 610μA\n- LoRa 发射：110mA × 0.75s/600s ≈ 137.5μA\n- **总平均 ≈ 780μA**\n- 电池可用容量（至 6.0V 截止）：约 2000mAh × 7.4V = 14.8Wh\n- **修正续航 ≈ 14.8Wh / (7.4V × 0.78mA) ≈ 106 天**（V4.2.7 修正，原 V4.2.6 估算 120 天偏乐观）\n> **注**：冬季光照不足导致长期阴天亏电场景下，续航可能进一步缩短。建议在 FRAM 中记录累计充电量，用于预测剩余续航。\n---\n## 6. 整机低功耗控制策略 & 全缺陷闭环说明\n### 6.1 核心硬件缺陷闭环"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 45,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "1. **I²C 总线钳位**：GPIO21/22 外部 10kΩ 下拉，产线通断测试。\n2. **WAKE 引脚**：外部 10kΩ 下拉，下降沿唤醒。\n3. **看门狗**：/EN 100kΩ 上拉，默认禁用，软件使能，休眠前禁用锁定。\n4. **GPIO35/36 独立**：GPIO35 仅 STAT1，GPIO36 ADC 检测 VBUS。\n5. **反接保护栅极钳位**：BZT52C10（9.50~10.50V，数据手册确认），AO3401 Vgs 裕量约 1.5V。\n6. **OVP 栅极钳位**：BZT52C15（14.25~15.75V）。\n7. **5V 回读 ADC**：GPIO26 ADC2_CH8（非 CH9），ATTEN_DB11，100k+100k 分压，关断校验前等待 ≥15s。\n8. **负载开关栅极**：各 AO3401 栅极 100kΩ 上拉至源极。\n9. **CP2102 电源控制**：GPIO15，唤醒流程中关断。\n10. **BH1750 复位时序**：VCC 上电后 ≥2ms 才能发送 I²C 指令。\n11. **CS5383C EN 独立控"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 46,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": ". **CP2102 电源控制**：GPIO15，唤醒流程中关断。\n10. **BH1750 复位时序**：VCC 上电后 ≥2ms 才能发送 I²C 指令。\n11. **CS5383C EN 独立控制**：GPIO5 专用，4.7kΩ 下拉，低电平使能充电（V4.2.6 修正）。\n12. **I²C 上拉时序**：先导通 GPIO13 上拉电源，再执行总线解锁（V4.2.6 修正）。"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 47,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "### 6.2 关键软件逻辑\n```c\n// 产线校准数据结构\ntypedef struct {\n    float slope;\n    float offset;\n    float quadratic;\n    int16_t temp_coeff;\n    uint16_t crc16;\n} AdcCalData_t;\n// 温度补偿三点插值表\ntypedef struct {\n    int8_t temp_points[3];      // {-20, 25, 70}\n    float adc_corrections[3];\n    uint16_t crc16;\n} TempCompTable_t;"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 48,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "// OTA 状态（FRAM 0x0050，64B 压缩位图，V4.2.6 优化）\ntypedef struct {\n    uint32_t magic;              // 4B  'OTAA'\n    uint32_t fw_version;         // 4B\n    uint32_t fw_size;            // 4B\n    uint16_t chunk_size;         // 2B\n    uint16_t total_chunks;       // 2B\n    uint16_t received_pairs[8];  // 16B  8 对起始-结束区间\n    uint32_t crc32_expected;     // 4B\n    uint32_t crc32_calculated;   // 4B\n    uint32_t ota_offset;         // 4B\n    uint8_t  state;              // 1B\n    uint8_t  attempt_count;   "
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 49,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "32_t ota_offset;         // 4B\n    uint8_t  state;              // 1B\n    uint8_t  attempt_count;      // 1B\n    uint8_t  pair_count;         // 1B\n    uint8_t  reserved;           // 1B\n    uint16_t crc16;              // 2B\n} OtaFramState_t;  // 总计约 52B，对齐后 52B → 放入 64B 区域"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 50,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "// FRAM 补发状态\ntypedef struct {\n    uint16_t frame_index;\n    uint8_t retry_count;        // 最多5次\n    uint8_t reserved;\n    uint16_t crc16;\n} FramRetryState_t;\n// 休眠标记（双副本 + version，V4.2.6 增加版本字段）\ntypedef struct {\n    uint32_t magic;             // HIBERNATE_MAGIC\n    uint8_t  valid;\n    uint8_t  cause;\n    uint8_t  version;           // V4.2.6 新增，递增\n    uint8_t  reserved;\n    uint32_t timestamp;\n    uint8_t  attempt_count;\n    uint16_t crc16;\n} HibernateFlag_t;"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 51,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "// V4.2.6: CS5383C EN 独立控制（低电平使能）\n#define GPIO_CHG_EN  GPIO5   // 原 GPIO32，V4.2.6 迁移\nvoid enable_charging(void) {\n    gpio_set_level(GPIO_CHG_EN, 0);  // 低电平使能\n}\nvoid disable_charging(void) {\n    gpio_set_level(GPIO_CHG_EN, 1);  // 高电平关断\n}\n// 充电状态读取（STAT1/STAT2 为开漏输出）\nbool is_charging(void) {\n    gpio_pulldown_dis(GPIO35);\n    gpio_pullup_dis(GPIO35);  // 禁用内部上拉\n    return !gpio_get_level(GPIO35);\n}"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 52,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "bool is_charge_done(void) {\n    gpio_pulldown_dis(GPIO39);\n    gpio_pullup_dis(GPIO39);\n    return !gpio_get_level(GPIO39);\n}\n// LoRa 模组唤醒\nvoid lora_module_wakeup(void) {\n    gpio_set_level(GPIO_WAKE, 1);\n    vTaskDelay(pdMS_TO_TICKS(5));\n    gpio_set_level(GPIO_WAKE, 0);\n    vTaskDelay(pdMS_TO_TICKS(10));\n}"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 53,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "// 电池电压读取（GPIO34, ATTEN_DB6）\n// V4.2.6: 显式配置 ADC 衰减\nfloat read_battery_voltage(void) {\n    int8_t temp = ds3231_read_temperature();\n    adc1_config_channel_atten(ADC1_CHANNEL_6, ADC_ATTEN_DB_6);  // V4.2.6 显式配置\n    uint32_t adc_sum = 0;\n    for (int i = 0; i < 8; i++) {\n        adc_sum += adc1_get_raw(ADC1_CHANNEL_6);\n        vTaskDelay(pdMS_TO_TICKS(1));\n    }\n    float adc_avg = (float)(adc_sum / 8);\n    float v = g_adc_cal.quadratic * adc_avg * adc_avg\n            + g_adc_cal.slope * adc_avg\n"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 54,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "/ 8);\n    float v = g_adc_cal.quadratic * adc_avg * adc_avg\n            + g_adc_cal.slope * adc_avg\n            + g_adc_cal.offset;\n    float correction = interpolate_temp_comp(temp, &g_temp_comp);\n    v *= correction;\n    return v;\n}"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 55,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "// 5V 轨回读（GPIO26, ADC2_CH8, ATTEN_DB11）\n// V4.2.7 修正：GPIO26 = ADC2_CH8（非 CH9），增加显式 ADC2 重新初始化\nfloat read_5v_rail_voltage(void) {\n    int raw = 0;\n    adc2_config_channel_atten(ADC2_CHANNEL_8, ADC_ATTEN_DB_11);  // V4.2.7 修正：CH8 对应 GPIO26\n    adc2_get_raw(ADC2_CHANNEL_8, ADC_WIDTH_BIT_12, &raw);\n    return (float)raw * 3.3f / 4095.0f * 2.0f;  // 分压比1:1\n}"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 56,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "// VBUS 检测（GPIO36, ADC1_CH0）\nbool mains_power_detected(void) {\n    int raw = 0;\n    adc1_config_channel_atten(ADC1_CHANNEL_0, ADC_ATTEN_DB_11);\n    raw = adc1_get_raw(ADC1_CHANNEL_0);\n    float v = (float)raw * 3.3f / 4095.0f * 2.0f;\n    return v > 2.0f;  // VBUS > 4.0V\n}"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 57,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "// BH1750 传感器使能（含复位时序）\n// V4.2.6: 增加详细注释\nvoid enable_bh1750(void) {\n    gpio_set_level(GPIO_SENSOR_PWR, 1);  // GPIO13 导通传感器 VCC\n    // BH1750 数据手册要求：VCC 上升沿后 DVI 高电平 ≥1μs，之后至少 2ms 才能发 I²C 命令\n    // 本方案 DVI 直接接 VCC，2ms 延时同时满足两个条件\n    vTaskDelay(pdMS_TO_TICKS(2));\n}"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 58,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "// V4.2.6: I²C 总线恢复（含 STOP）— 必须在 I²C 上拉电源导通后执行\nvoid i2c_bus_recover(void) {\n    // 确保 SDA/SCL 已有上拉电源（GPIO13 已导通）\n    gpio_set_direction(GPIO_SDA, GPIO_MODE_INPUT);\n    gpio_set_direction(GPIO_SCL, GPIO_MODE_INPUT);\n    for (int i = 0; i < 9; i++) {\n        gpio_set_direction(GPIO_SCL, GPIO_MODE_OUTPUT);\n        gpio_set_level(GPIO_SCL, 1);\n        ets_delay_us(5);\n        gpio_set_level(GPIO_SCL, 0);\n        ets_delay_us(5);\n        gpio_set_direction(GPIO_SCL, GPIO_MODE_INPUT);\n    }\n    // STO"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 59,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "0);\n        ets_delay_us(5);\n        gpio_set_direction(GPIO_SCL, GPIO_MODE_INPUT);\n    }\n    // STOP: SDA 低→高（SCL 高时 SDA 上升沿）\n    gpio_set_direction(GPIO_SDA, GPIO_MODE_OUTPUT);\n    gpio_set_direction(GPIO_SCL, GPIO_MODE_OUTPUT);\n    gpio_set_level(GPIO_SDA, 0);      // 先拉低 SDA\n    gpio_set_level(GPIO_SCL, 1);      // SCL 高\n    ets_delay_us(5);\n    gpio_set_level(GPIO_SDA, 1);      // SDA 上升沿 → STOP\n    ets_delay_us(5);\n    gpio_set_direction(GPIO_SDA, GPIO_MODE_INPUT);\n    gpio_set_direction(G"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 60,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "TOP\n    ets_delay_us(5);\n    gpio_set_direction(GPIO_SDA, GPIO_MODE_INPUT);\n    gpio_set_direction(GPIO_SCL, GPIO_MODE_INPUT);\n}\n```"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 61,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "### 6.3 欠压休眠与冷启动恢复"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 62,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "```c\nvoid undervoltage_hibernate(void) {\n    disable_all_peripherals();\n    float vcc = read_5v_rail_voltage();\n    if (vcc >= 2.8f) {\n        HibernateFlag_t flag = {\n            .magic = HIBERNATE_MAGIC,\n            .valid = 1,\n            .cause = HIBERNATE_CAUSE_UNDERVOLTAGE,\n            .version = 1,          // V4.2.6: 版本字段\n            .timestamp = 0x00000000,\n            .attempt_count = 0,\n            .crc16 = 0\n        };\n        flag.crc16 = crc16_compute(&flag, sizeof(flag) - 2);\n    "
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 63,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "\n            .crc16 = 0\n        };\n        flag.crc16 = crc16_compute(&flag, sizeof(flag) - 2);\n        fram_write_hibernate_flag(0x0090, &flag);\n        fram_write_hibernate_flag(0x00A0, &flag);\n    }\n    ds3231_set_alarm1_minutes(60);\n    enter_deepsleep();\n}"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 64,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "void cold_boot_recovery(void) {\n    HibernateFlag_t flag = fram_read_hibernate_flag(0x0090);\n    HibernateFlag_t flag2 = fram_read_hibernate_flag(0x00A0);\n    // V4.2.6: 双副本比较增加 version 一致性检查\n    if (flag.magic == HIBERNATE_MAGIC && flag.valid == 1 &&\n        flag2.magic == HIBERNATE_MAGIC && flag2.valid == 1 &&\n        flag.version == flag2.version &&  // V4.2.6: 版本一致\n        flag.crc16 == crc16_compute(&flag, sizeof(flag)-2)) {\n        vTaskDelay(pdMS_TO_TICKS(500));\n        float v = read_bat"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 65,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "compute(&flag, sizeof(flag)-2)) {\n        vTaskDelay(pdMS_TO_TICKS(500));\n        float v = read_battery_voltage_averaged(3);\n        if (v >= 6.5f) {\n            fram_clear_hibernate_flag(0x0090);\n            fram_clear_hibernate_flag(0x00A0);\n            ds3231_init();\n            g_time_sync_needed = true;\n            restore_normal_cycle(10_MINUTES);\n        } else if (v >= 6.0f) {\n            uint32_t sleep_minutes = 60 * (1 << (flag.attempt_count > 3 ? 3 : flag.attempt_count));\n           "
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 66,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": " uint32_t sleep_minutes = 60 * (1 << (flag.attempt_count > 3 ? 3 : flag.attempt_count));\n            if (sleep_minutes > 480) sleep_minutes = 480;\n            ds3231_init();\n            ds3231_set_alarm1_minutes(sleep_minutes);\n            flag.attempt_count++;\n            fram_write_hibernate_flag(0x0090, &flag);\n            fram_write_hibernate_flag(0x00A0, &flag);\n            enter_deepsleep();\n        } else {\n            ds3231_init();\n            ds3231_set_alarm1_minutes(60);\n            "
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 67,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "\n        } else {\n            ds3231_init();\n            ds3231_set_alarm1_minutes(60);\n            flag.attempt_count++;\n            fram_write_hibernate_flag(0x0090, &flag);\n            fram_write_hibernate_flag(0x00A0, &flag);\n            enter_deepsleep();\n        }\n    } else {\n        ds3231_init();\n        normal_boot();\n    }\n}"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 68,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "// V4.2.7: 5V 关断校验（含延时 + WDT 管理）\nvoid verify_5v_shutdown(void) {\n    // V4.2.7: 先禁用看门狗，避免 15s 等待期间 WDT 复位\n    gpio_set_level(GPIO_WDT_EN, 1);  // 拉高 TPS3820 /EN 禁用看门狗\n    \n    // 关断 MP2307\n    gpio_set_level(GPIO_EN_5V, 0);\n    \n    // V4.2.7: 等待 ≥15s，让 100kΩ 泄放电阻充分放电（44μF×100kΩ=4.4s，15s≈3.4τ）\n    vTaskDelay(pdMS_TO_TICKS(15000));\n    \n    // 读取 3 次，确认 <0.5V\n    for (int i = 0; i < 3; i++) {\n        float v = read_5v_rail_voltage();\n        if (v < 0.5f) {\n            return;  // 校验通过\n        }\n"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 69,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "   float v = read_5v_rail_voltage();\n        if (v < 0.5f) {\n            return;  // 校验通过\n        }\n        vTaskDelay(pdMS_TO_TICKS(100));\n    }\n    // 3 次均失败，写入异常标志\n    fram_write_system_flags(FLAG_SHUTDOWN_FAIL);\n}\n```"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 70,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "---\n## 7. ESP32-WROOM-32E 完整引脚资源分配表"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 71,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "| GPIO | 功能 | 方向 | 说明 |\n|------|------|------|------|\n| GPIO0 | BOOT | 输入 | 10k 上拉 |\n| GPIO1 | UART0 TX | 输出 | 调试 |\n| GPIO2 | B0509XT EN | 输出 | 驱动 S8050，10k 下拉，Strapping |\n| GPIO3 | UART0 RX | 输入 | 调试 |\n| GPIO4 | HOST_WAKE | 输入 | WH-L101-L，10k 下拉 |\n| **GPIO5** | **CS5383C EN** | **输出** | **V4.2.7 迁移，4.7kΩ 下拉，低电平使能（非 RTC GPIO，依赖外部下拉保持电平）** |\n| GPIO12 | 保留 | — | **悬空（绝对避免拉高，会导致 1.8V Flash 电压）** |\n| GPIO13 | I²C 传感器电源 | 输出 | 驱动 S8050，同时为 I²C 上拉供电 |\n| GPIO14 | LoRa WAKE | 输出 | 10k 下拉 |\n| GPIO15 | CP"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 72,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "GPIO13 | I²C 传感器电源 | 输出 | 驱动 S8050，同时为 I²C 上拉供电 |\n| GPIO14 | LoRa WAKE | 输出 | 10k 下拉 |\n| GPIO15 | CP2102 电源 | 输出 | 驱动 S8050，10k 下拉，Strapping |\n| GPIO16 | 保留 | — | 可扩展（如 PSRAM 占用需注意） |\n| GPIO17 | 保留 | — | 可扩展（如 PSRAM 占用需注意） |\n| GPIO18 | AUX | 输入 | 冗余 |\n| GPIO19 | UART2 RX | 输入 | WH-L101-L TX |\n| GPIO21 | I²C SDA | 开漏 | 10k 下拉（钳位），4.7k 上拉（通信） |\n| GPIO22 | I²C SCL | 开漏 | 10k 下拉（钳位），4.7k 上拉（通信） |\n| GPIO23 | UART2 TX | 输出 | WH-L101-L RX |\n| GPIO25 | 电池分压开关 | 输出 | 驱动 S8050 |\n| GPIO26 | 5V 回读 ADC | 输入 "
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 73,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "IO23 | UART2 TX | 输出 | WH-L101-L RX |\n| GPIO25 | 电池分压开关 | 输出 | 驱动 S8050 |\n| GPIO26 | 5V 回读 ADC | 输入 | ADC2_CH8（非 CH9），ATTEN_DB11，100k+100k 分压 |\n| GPIO27 | 土壤 9V 电源 | 输出 | 驱动 S8050 |\n| GPIO32 | MP2307 EN | 输出 | RTC GPIO，4.7k 下拉（高电平使能 5V） |\n| GPIO33 | TPS3820 /EN | 输出 | RTC GPIO，100k 上拉 |\n| GPIO34 | 电池电压 ADC | 输入 | ADC1_CH6，ATTEN_DB6，47k+10k 分压 |\n| GPIO35 | STAT1（充电指示） | 输入 | 100k 上拉，禁用内部上拉 |\n| GPIO36 | VBUS 检测 | 输入 | ADC1_CH0，ATTEN_DB11，100k+100k 分压 |\n| GPIO39 | STAT2（充电完成） | 输入 | 100k 上拉，禁用内部上拉 "
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 74,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "36 | VBUS 检测 | 输入 | ADC1_CH0，ATTEN_DB11，100k+100k 分压 |\n| GPIO39 | STAT2（充电完成） | 输入 | 100k 上拉，禁用内部上拉 |"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 75,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "**ESP32-WROOM-32E 特殊说明：**\n- 与 ESP32-WROOM-32 引脚完全兼容，可直接替换\n- GPIO16-17 若被内部 PSRAM 占用，需确认未使用\n- 32.768kHz 晶振需并联电阻（如使用外部 RTC 晶振）\n- 支持 ECO V3 安全特性：Secure Boot V2，Flash 加密增强\n- **GPIO5（CS5383C EN）非 RTC GPIO，无法调用 rtc_gpio_hold_en()，依赖外部 4.7kΩ 下拉保持 DeepSleep 期间低电平**\n---\n## 8. 二进制通信帧协议 & FRAM 大容量缓存机制\n### 8.1 通信帧协议\n帧格式：\n```\n[0x7E][LEN(1B)][CMD(1B)][PAYLOAD(nB)][CRC16(2B)][0x7E]\n```"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 76,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "- LEN：PAYLOAD 字节数（不含 CMD、CRC、帧头帧尾）\n- CRC16：CCITT-FALSE，覆盖 LEN+CMD+PAYLOAD，**在字节转义前计算**\n- 转义：发送时先算 CRC，再对整个帧（除帧头帧尾）做字节转义\n- 0x7E → 0x7D 0x5E，0x7D → 0x7D 0x5D\n- **接收缓冲区 ≥ 64B**（V4.2.6 明确）\n命令字："
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 77,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "| CMD | 名称 | 方向 |\n|-----|------|------|\n| 0x01 | DATA_UPLOAD | Node→GW |\n| 0x02 | DATA_ACK | GW→Node |\n| 0x03 | STATUS_UPLOAD | Node→GW |\n| 0x04 | CONFIG_SET | GW→Node |\n| 0xE0 | OTA_START | GW→Node |\n| 0xE1 | OTA_READY | Node→GW |\n| 0xE2 | OTA_DATA | GW→Node |\n| 0xE3 | OTA_ACK | Node→GW |\n| 0xE4 | OTA_VERIFY | Node→GW |\n| 0xE5 | OTA_APPLY | GW→Node |\n| 0xE6 | OTA_STATUS | Node→GW |\n| 0xE7 | OTA_CANCEL | 双向 |\nDATA_UPLOAD Payload（24B）："
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 78,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "```\n[节点ID(2B)][帧序号(2B)][时间戳(4B)][电池电压(2B)][温度(2B)][湿度(2B)]\n[光照(2B)][土壤温度(2B)][土壤湿度(2B)][土壤EC(2B)][system_flags(2B)]\n```\n时间戳：正常填充 Unix 时间；未同步时填充 `0x00000000`。\n### 8.2 FRAM 地址分配（V4.2.7 修正）"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 79,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "| 地址 | 内容 | 大小 |\n|------|------|------|\n| 0x0000–0x000F | ADC 校准系数 | 16B |\n| 0x0010–0x001F | 系统标志位 | 16B |\n| 0x0020–0x003F | 设备序列号 | 32B |\n| 0x0040–0x0043 | 上电次数计数器 | 4B |\n| 0x0044–0x0047 | 上次同步时间戳 | 4B |\n| 0x0048–0x004F | 保留 | 8B |\n| **0x0050–0x008F** | **OTA 状态（64B，压缩区间位图）** | **64B** |\n| **0x0090–0x009F** | **休眠标记副本1（V4.2.7 从 0x0070 迁移至此）** | **16B** |\n| **0x00A0–0x00AF** | **休眠标记副本2（V4.2.7 从 0x0080 迁移至此）** | **16B** |\n| **0x00B0–0x012F** | **温度补偿表** | **128B** |\n| 0x0130–0x7FFF | 历史数据缓存 | **"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 80,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "x0080 迁移至此）** | **16B** |\n| **0x00B0–0x012F** | **温度补偿表** | **128B** |\n| 0x0130–0x7FFF | 历史数据缓存 | **32432B** |"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 81,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "> **V4.2.7 修正说明**：原 V4.2.6 中休眠标记副本1（0x0070）和副本2（0x0080）与 OTA 状态区域（0x0050–0x008F）完全重叠，导致 OTA 写入覆盖休眠标记。本版本将休眠标记迁移至 0x0090–0x00AF，彻底消除地址冲突。\n**FRAM 缓存满覆盖策略（V4.2.6 补充）** ：\n- 采用 FIFO 环形缓冲区，写满时覆盖最旧帧\n- 覆盖前检查该帧是否已成功上报（通过 ACK 标记）\n- 若已上报，直接覆盖；若未上报，保留并尝试补发（最多 5 次）\n### 8.3 系统标志位（2 字节）"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 82,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "| 位 | 名称 | 含义 |\n|----|------|------|\n| bit0 | FLAG_ADC_CAL_INVALID | 校准失效 |\n| bit1 | FLAG_OVP_FAULT | OVP 异常 |\n| bit2 | FLAG_SHUTDOWN_FAIL | 5V 关断校验失败 |\n| bit3 | FLAG_BMS_TRIGGERED | BMS 过放触发 |\n| bit4 | FLAG_WATCHDOG_RESET | 看门狗复位 |\n| bit5 | FLAG_HW_FAULT | 硬件故障 |\n| bit6 | FLAG_OTA_FAIL | OTA 失败 |\n| bit7 | FLAG_MAINS_POWER | 市电接入 |\n| bit8 | FLAG_TIME_SYNC_REQ | 时间同步请求 |\n| bit9 | FLAG_ENTERING_HIBERNATE | 欠压休眠 |\nRTC 时间戳丢失判定：年份 < 2020 判定无效，携带 FLAG_TIME_SYNC_REQ。\n---\n## 9. PCB 布局、热设计与户外结构规范"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 83,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "### 9.1 布局规范"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 84,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "1. CS5383C 功率回路面积 < 25mm²，SW 铺铜最小化（大电流路径：PVIN→电感→BAT→采样电阻）。\n2. 自举电容 100nF 跨接 BST-SW，间距 < 3mm。\n3. CSP 开尔文采样独立从采样电阻两端引出，**走线避开电感**。\n4. 单点接地：PGND 与 AGND 磁珠连接，散热焊盘接地。\n5. DS3231 晶振紧邻引脚，包地。\n6. LoRa 50Ω 微带线，天线座下方挖空。\n7. WH-L101-L 天线端远离 CS5383C SW 和 MP2307 电感。\n8. WAKE 双焊盘：10k 下拉（默认），10k 上拉（NC）。\n9. I²C 上拉电阻 4.7kΩ ×2 接传感器电源轨，下拉电阻 10kΩ ×2 接 GND（钳位）。\n10. VSEN 分压电阻靠近 VSEN(19脚) 放置。\n11. BZT52C10 紧邻 AO3401 栅源，BZT52C15 紧邻 Si2301 栅源。\n12. 各负载开关 AO3401 栅极 100kΩ 上拉至源极，紧邻放置。\n13. MP2307 输入/输出电容紧邻引脚（输入 **22μF/25V X7R 12"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 85,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "2C15 紧邻 Si2301 栅源。\n12. 各负载开关 AO3401 栅极 100kΩ 上拉至源极，紧邻放置。\n13. MP2307 输入/输出电容紧邻引脚（输入 **22μF/25V X7R 1206**，输出 22μF/16V X7R 1206）。\n14. CS5383C 散热焊盘过孔阵列连接底层铜皮（过孔直径 0.3mm，间距 1mm）。\n15. VCC(16脚) 去耦电容 1μF+10μF 紧邻引脚。\n16. PMID(2脚) 0.1μF 电容紧邻引脚。\n17. STAT1/STAT2 上拉电阻 100kΩ 靠近芯片引脚。\n18. 射频 ESD 器件 RCLAMP0521P 紧邻 SMA 天线座放置。\n19. **GPIO5 CS5383C EN 下拉电阻 4.7kΩ 紧邻 GPIO5 放置**（V4.2.6 新增）。"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 86,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "### 9.2 热设计\nCS5383C 散热焊盘过孔阵列连接底层铜皮（0.3mm，间距 1mm），θJA=36°C/W。MP2307 下方铺铜散热。WH-L101-L 下方不铺铜。\n### 9.3 户外结构\nIP65，Type-C 防水塞。太阳能板分体式线长 3m。外壳阻燃 ABS，预留 2mm 空气间隙。\n---\n## 10. RS485 隔离浪涌防护方案\n### 10.1 接口定义\nA/B 信号线接土壤传感器。隔离电源 B0509XT-2W 9V → 隔离 ME6209-3.3 → ADuM1301 VDD2 + MAX3485。GND2 与 GND1 经 1nF 2kV 安规电容单点连接。\n### 10.2 浪涌防护（V4.2.6 确认）"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 87,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "| 器件 | 型号 | 位置 | 关键参数 |\n|------|------|------|----------|\n| 光伏浪涌（主选） | **SMBJ20A** | VIN-GND | 钳位 33.4V < CS5383C 36V（V4.2.7 修正，裕量 2.6V） |\n| 光伏浪涌（备选） | SMBJ22A | VIN-GND | 钳位 35.5V（需实测确认 <35V，仅备用） |\n| RS485 线间 TVS | **SMBJ6.5CA** | A-B | **V4.2.7 修正：原 SMBJ12CA 钳位 19.9V 超过 MAX3485 绝对最大 13V，改为 SMBJ6.5CA（钳位 11.2V < 13V）** |\n| RS485 线对地 TVS | SMBJ6.5CA | A-GND, B-GND | 钳位 11.2V |"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 88,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "> **V4.2.7 关键修正**：MAX3485ESA 数据手册确认总线绝对最大额定值为 -7V ~ +13V。SMBJ12CA 钳位电压 19.9V 超过此值 **6.9V**，浪涌时必然损坏芯片。本版本将线间 TVS 统一改为 SMBJ6.5CA（钳位 11.2V，裕量 1.8V），与线对地 TVS 一致，同时简化 BOM。\n| GDT | B3D090L-C | A/B 对地 | 90V，10kA |\n| 自恢复保险丝 | SMD1206-035 | A/B 串联 | 0.35A |\n| 共模电感 | ACM2012-900-2P | A/B 串联 | 90Ω@100MHz |\n| 终端电阻 | 120Ω（跳线可选） | A-B | — |\n| 偏置电阻 | 680Ω 上拉/下拉 | A→VDD，B→GND | — |\n**裕量核算（按最大钳位电压）：**"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 89,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "| 器件 | 最大钳位 | 后端器件耐压 | 裕量 |\n|------|----------|-------------|------|\n| SMBJ20A | 33.4V | CS5383C 36V | **+2.6V（V4.2.7 修正，裕量充足）** |\n| SMBJ6.5CA（线间+线对地） | 11.2V | MAX3485 总线 13V | **+1.8V（V4.2.7 修正，裕量充足）** |\n### 10.3 接地规范\n屏蔽层设备端经 1MΩ + 0.1μF 并联接地，传感器端悬空。\n### 10.4 土壤传感器默认参数\n| 参数 | 值 |\n|------|----|\n| 波特率 | 9600bps |\n| 数据位 | 8，停止位 1，无校验 |\n| 地址 | 0x01 |\n| 功能码 | 0x03 读，0x06 写 |\n| 寄存器 | 温度 0x0000，湿度 0x0001，EC 0x0002 |\n---\n## 11. 完整 BOM 物料清单\n### 11.1 主控与电源"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 90,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "| 位号 | 型号 | 数量 | 封装 | 供应商备选 | 备注 |\n|------|------|------|------|------------|------|\n| U2 | **ESP32-WROOM-32E（N4）** | 1 | SMD-38 | — | ECO V3，DeepSleep ~10μA |\n| U3 | ME6209-3.3 | 1 | SOT-23-5 | — | 18V，2μA，250mA |\n| U4 | WH-L101-L | 1 | SMT | — | SX1268+FM33LE |\n| U1 | CS5383C | 1 | TSSOP20L-PP | — | 36V 耐压，MPPT |\n| U5 | MP2307 | 1 | SOP-8 | — | EN 可控 |\n| U6 | B0509XT-2WR3 | 1 | SIP-4 | — | 2W，输入 10μF，输出 4.7μF |\n| U7 | TPS3820-33 | 1 | SOT-23-5 | — | /EN |\n| U8 | DS3231 | 1 | SOIC-16 | — | VBAT"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 91,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": " 10μF，输出 4.7μF |\n| U7 | TPS3820-33 | 1 | SOT-23-5 | — | /EN |\n| U8 | DS3231 | 1 | SOIC-16 | — | VBAT→VCC，INT 上拉 4.7kΩ |\n| U9 | MB85RC256V | 1 | SOP-8 | — | 32KB |\n| U10 | SHT30 | 1 | DFN-8 | — | PTFE，待机 0.2μA，内置加热器 |\n| U11 | BH1750FVI | 1 | WSOF-6 | — | DVI 接 VCC，上电 ≥2ms 复位 |\n| U12 | MAX3485 | 1 | SOP-8 | — | 3.3V |\n| U13 | ADuM1301 | 1 | SOIC-16 | — | 3 通道 |\n| U14 | CP2102N | 1 | QFN-24 | — | VIO=3.3V |\n| U15 | CH224K | 1 | SOT23-6 | — | CFG1 24k，CC 无需 5.1kΩ |\n| J1 | Type-C 6pin 卧贴 | 1 | SMD | "
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 92,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "=3.3V |\n| U15 | CH224K | 1 | SOT23-6 | — | CFG1 24k，CC 无需 5.1kΩ |\n| J1 | Type-C 6pin 卧贴 | 1 | SMD | — | |\n| Q0 | AO3401 | 1 | SOT-23 | — | Vgs=±12V，反接 |\n| Q_OVP | Si2301 | 1 | SOT-23 | — | OVP |\n| Q1-Q5 | AO3401 | 5 | SOT-23 | — | 负载开关，各 100k 上拉 |\n| Q6-Q10 | S8050 | 5 | SOT-23 | — | NPN 驱动 |\n| L1 | 10μH 屏蔽 | 1 | SMD | — | Isat≥3A |\n| RT1 | 10k B=3435 **±1%** | 1 | 线装 | — | NTC |"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 93,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "### 11.2 二极管与保护"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 94,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "| 位号 | 型号 | 数量 | 封装 | 供应商备选 | 备注 |\n|------|------|------|------|------------|------|\n| D_TVS1 | **SMBJ20A（主选）** | 1 | SMA | SMBJ22A | V4.2.7 修正：钳位 33.4V，裕量 2.6V |\n| D_TVS2 | SMBJ22A（备选） | 1 | SMA | — | 钳位 35.5V，需实测确认 <35V |\n| D_RS485_A | **SMBJ6.5CA（V4.2.7 修正）** | 2 | SMA | — | A-B 线间 + A 对地（原 SMBJ12CA 钳位 19.9V 超 MAX3485 耐压 13V） |\n| D_RS485_B | SMBJ6.5CA | 1 | SMA | — | B 对地，钳位 11.2V |\n| D_GS0 | **BZT52C10** | 1 | SOD-123 | BZT52C10 (Vishay) | **V4.2.7 修正：9.50~10.50V（数据手册确认），Q0 栅源** |\n| D_GS1 | "
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 95,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "*BZT52C10** | 1 | SOD-123 | BZT52C10 (Vishay) | **V4.2.7 修正：9.50~10.50V（数据手册确认），Q0 栅源** |\n| D_GS1 | BZT52C15 | 1 | SOD-123 | BZT52C15 (Vishay) | 14.25~15.75V，Si2301 栅源 |\n| D_USB1 | SS34 | 1 | SMA | — | PD 12V |\n| D_USB2 | SS14 | 1 | SOD-123 | — | VBUS 5V |\n| D_RF1 | **RCLAMP0521P** | 1 | SOT-23 | — | 结电容 <0.5pF，射频 ESD |"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 96,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "### 11.3 电阻（关键部分）"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 97,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "| 位号 | 规格 | 数量 | 封装 | 供应商备选 | 功能 |\n|------|------|------|------|------------|------|\n| R_BAT1 | 47k 0.1% | 1 | 0603 | — | 电池分压上臂 |\n| R_BAT2 | 10k 0.1% | 1 | 0603 | — | 电池分压下臂 |\n| R_VBUS1 | 100k 1% | 1 | 0603 | — | VBUS 分压上臂 |\n| R_VBUS2 | 100k 1% | 1 | 0603 | — | VBUS 分压下臂 |\n| R_5VS1 | 100k 1% | 1 | 0603 | — | 5V 回读上臂 |\n| R_5VS2 | 100k 1% | 1 | 0603 | — | 5V 回读下臂 |\n| R_I2C_PU | 4.7k 1% | 2 | 0603 | — | I²C 上拉（接 VCC） |\n| R_I2C_PD | 10k 1% | 2 | 0603 | — | I²C 钳位下拉（接 GND） |\n| R_STAT1 | 100k 1% | 1 "
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 98,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": " — | I²C 上拉（接 VCC） |\n| R_I2C_PD | 10k 1% | 2 | 0603 | — | I²C 钳位下拉（接 GND） |\n| R_STAT1 | 100k 1% | 1 | 0603 | — | STAT1 上拉 |\n| R_STAT2 | 100k 1% | 1 | 0603 | — | STAT2 上拉 |\n| R_INT | **4.7k 1%** | 1 | 0603 | — | DS3231 INT 上拉 |\n| R_EN_5V | 4.7k 1% | 1 | 0603 | — | MP2307 EN 下拉 |\n| **R_CS_EN** | **4.7k 1%** | **1** | **0603** | — | **CS5383C EN 下拉（GPIO5，V4.2.6 新增）** |\n| R_WD | 100k 1% | 1 | 0603 | — | /EN 上拉 |\n| R_WAKE_DN | 10k 1% | 1 | 0603 | — | WAKE 下拉 |\n| R_HOST_DN | 10k 1% | 1 | 0603 | — | HO"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 99,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": " | /EN 上拉 |\n| R_WAKE_DN | 10k 1% | 1 | 0603 | — | WAKE 下拉 |\n| R_HOST_DN | 10k 1% | 1 | 0603 | — | HOST_WAKE 下拉 |\n| R_GATE_PU | 100k 1% | 6 | 0603 | — | Q0-Q5 栅极上拉 |\n| R_RS485_BIAS | 680Ω 1% | 2 | 0603 | — | A 上拉/B 下拉 |\n| R_RS485_TERM | 120Ω 1% | 1 | 0805 | — | 终端（跳线可选） |\n| R_CV | 75k 1% | 1 | 0603 | — | BATCV |\n| R_VSEN1 | 56k 1% | 1 | 0603 | — | VSEN 上臂 |\n| R_VSEN2 | 12k 1% | 1 | 0603 | — | VSEN 下臂（>10kΩ） |\n| R_CS | 0.1Ω 1% | 1 | 1206 | — | 采样电阻（0.5A） |"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 100,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "下臂（>10kΩ） |\n| R_CS | 0.1Ω 1% | 1 | 1206 | — | 采样电阻（0.5A） |"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 101,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "### 11.4 电容（V4.2.7 完整清单）"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 102,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "| 位号 | 规格 | 数量 | 封装 | 功能 |\n|------|------|------|------|------|\n| C_5V_IN | **22μF 25V X7R** | 1 | 1206 | MP2307 输入（V4.2.7 升级，原 10μF 偏小） |\n| C_5V_OUT | **22μF 16V X7R** | 2 | 1206 | MP2307 输出 |\n| C_CS_VCC1 | 1μF 10V X7R | 1 | 0402 | CS5383C VCC 去耦（紧邻引脚） |\n| C_CS_VCC2 | 10μF 10V X7R | 1 | 0805 | CS5383C VCC 去耦（紧邻引脚） |\n| C_CS_PMID | 100nF 50V X7R | 1 | 0402 | CS5383C PMID 去耦 |\n| C_CS_BST | 100nF 50V X7R | 1 | 0402 | CS5383C BST 自举电容 |\n| C_CS_VIN1 | 22μF 50V 电解 | 1 | Φ5×11 | CS5383C PVIN 输入滤波 |\n| C"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 103,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": " X7R | 1 | 0402 | CS5383C BST 自举电容 |\n| C_CS_VIN1 | 22μF 50V 电解 | 1 | Φ5×11 | CS5383C PVIN 输入滤波 |\n| C_CS_VIN2 | 10μF 50V X7R | 1 | 1206 | CS5383C PVIN 高频滤波 |\n| C_CS_VIN3 | 100nF 50V X7R | 1 | 0402 | CS5383C PVIN 高频滤波 |\n| C_B05_IN | 10μF 10V X7R | 1 | 0805 | B0509XT-2WR3 输入去耦 |\n| C_B05_OUT | 4.7μF 25V X7R | 1 | 0805 | B0509XT-2WR3 输出去耦 |\n| C_LORA_VCC | 100μF 6.3V 陶瓷 | 1 | 0805 | WH-L101-L VCC 去耦 |\n| C_ESP_VCC | 100nF 10V X7R | 2 | 0402 | ESP32 去耦（VDD3P3, VDD3P3_RTC） |\n| C_DS3231 | 100nF 10V X7R | "
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 104,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": " C_ESP_VCC | 100nF 10V X7R | 2 | 0402 | ESP32 去耦（VDD3P3, VDD3P3_RTC） |\n| C_DS3231 | 100nF 10V X7R | 1 | 0402 | DS3231 去耦 |\n| C_FRAM | 100nF 10V X7R | 1 | 0402 | MB85RC256V 去耦 |\n| C_SHT30 | 100nF 10V X7R | 1 | 0402 | SHT30 VDD 去耦 |\n| C_BH1750 | 100nF 10V X7R | 1 | 0402 | BH1750 VCC 去耦 |\n| C_MP2307_EN | 1μF 10V X7R | 1 | 0402 | MP2307 EN RC 延时 |\n| C_CP2102 | 100nF 10V X7R | 1 | 0402 | CP2102 VDD 去耦 |\n| C_GND_SAFE | 1nF 2kV Y5V | 1 | 1206 | GND1-GND2 安规电容（单点连接） |\n| C_VBUS_FILT | 100nF 10V X7R | 1 |"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 105,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "|\n| C_GND_SAFE | 1nF 2kV Y5V | 1 | 1206 | GND1-GND2 安规电容（单点连接） |\n| C_VBUS_FILT | 100nF 10V X7R | 1 | 0402 | VBUS ADC 滤波 |\n| C_ADUM_VDD2 | 100nF 10V X7R | 1 | 0402 | ADuM1301 VDD2 去耦 |\n| C_LDO33_IN | 1μF 10V X7R | 1 | 0402 | ME6209-3.3 输入去耦 |\n| C_LDO33_OUT | 10μF 10V X7R | 1 | 0805 | ME6209-3.3 输出去耦 |\n| C_MAX3485 | 100nF 10V X7R | 1 | 0402 | MAX3485 VCC 去耦 |\n| C_CH224K | 100nF 10V X7R | 1 | 0402 | CH224K 去耦 |"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 106,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "CH224K 去耦 |"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 107,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "---\n## 12. 全维度整机测试大纲\n### P0 阻塞性测试项"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 108,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "| 序号 | 测试项 | 通过标准 | 备注 |\n|------|--------|----------|------|\n| 1 | 电源域通断 | 各轨电压 ±5% | |\n| 2 | CS5383C 充电 | 恒流 0.5A，恒压 8.2V | |\n| 3 | OVP 动作 | 28V±3% 动作 | |\n| 4 | 反接保护 | 反接截止，无电流 | |\n| 5 | 低功耗 | DeepSleep < **40μA**（系统合计，V4.2.7 修正） | |\n| 6 | LoRa 通信 | 500m 丢包 <1% | |\n| 7 | 传感器精度 | SHT30 ±0.3°C | |\n| 8 | RS485 隔离 | 2500V，Modbus 正确 | |\n| 9 | 产线校准 | 6.5V 误差 < ±0.05V | |\n| 10 | I²C 电阻测试 | 上拉 4.7k，下拉 10k | |\n| 11 | WAKE 电平 | 低电平，下降沿唤醒 | |\n| 12 | Strapping | GPIO0/2/5/15 启动电平正确 | **GPIO5=低（4.7kΩ 下拉，V4."
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 109,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "k | |\n| 11 | WAKE 电平 | 低电平，下降沿唤醒 | |\n| 12 | Strapping | GPIO0/2/5/15 启动电平正确 | **GPIO5=低（4.7kΩ 下拉，V4.2.7 修正）** |\n| 13 | Type-C | PD 充电（12V），GPIO36 检测正确 | |\n| 14 | 欠压冷启动 | BMS 切断/恢复全流程 | |\n| 15 | GPIO35/36 独立 | 四场景全部通过 | |\n| 16 | Flash 分区 | 无重叠，64KB 对齐 | |\n| 17 | GPIO26 回读 | 5V→ADC 2.4~2.6V，不饱和（ADC2_CH8，V4.2.7 修正） | |\n| 18 | CS5383C VSEN | Rv2=12kΩ >10kΩ 确认 | |\n| 19 | BH1750 复位时序 | VCC 上升沿到首次 I²C 命令 ≥2ms | |\n| 20 | B0509XT 低温启动 | -20°C 环境正常启动 | **对应 100ms 延时验证** |\n| 21 | 射频 ESD 插损 | LoRa 接收灵敏度无明显下"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 110,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": " ≥2ms | |\n| 20 | B0509XT 低温启动 | -20°C 环境正常启动 | **对应 100ms 延时验证** |\n| 21 | 射频 ESD 插损 | LoRa 接收灵敏度无明显下降 | |\n| **22** | **GPIO5 CS5383C EN 控制** | **低电平使能充电，高电平关断** | **V4.2.6 新增** |\n| **23** | **5V 关断校验延时** | **MP2307 关断后 ≥15s 再回读（V4.2.7 修正）** | **V4.2.7 修正** |\n| **24** | **SMBJ20A 钳位验证** | **实测钳位 <34V（V4.2.7 修正）** | **V4.2.7 修正** |\n| **25** | **FRAM OTA 区域写入验证** | **写入 64B 不溢出** | **V4.2.6 新增** |"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 111,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "### P1 非阻塞性测试项\n| 序号 | 测试项 | 通过标准 |\n|------|--------|----------|\n| 1 | 浪涌 | 共模 4kV/差模 2kV |\n| 2 | 温度循环 | -20/+60°C，ADC 全温 <±0.1V |\n| 3 | OTA | 断点续传、回滚 |\n| 4 | 防水 | IP65 喷淋 30min |\n| 5 | 充电与采集并发 | 唤醒采集期间充电正常（GPIO5 控制验证） |\n---\n## 13. 分阶段开发交付里程碑\n### 阶段 1：原理图与 PCB 设计\n交付物：原理图、PCB、完整 BOM、校准工装、OTA 协议。"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 112,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "**原理图必核清单（V4.2.7 更新）：**\n- [ ] 器件型号：CS5383C（TSSOP20L-PP）\n- [ ] **CS5383C EN(13) → GPIO5（4.7kΩ 下拉）** （V4.2.6 修正）\n- [ ] **GPIO12 悬空（绝对避免拉高）** （V4.2.6 强调）\n- [ ] PVIN(1) + AVIN(20) 短接\n- [ ] PMID(2) → 0.1μF → GND\n- [ ] BST(3) → 100nF → SW\n- [ ] SW(4,5) 两脚并联 → 10μH 功率电感 → BAT\n- [ ] CSP(8) → 0.1Ω 采样电阻 → 电池正极（开尔文采样）\n- [ ] BAT(9) 直连电池正极\n- [ ] BATCV(10) → 75kΩ 1% → GND（4.10V/节）\n- [ ] SELC0(11) → Float（悬空）（V4.2.7 修正）\n- [ ] SELC1(12) → GND（V4.2.7 修正）\n- [ ] VCC(16) → 1μF + 10μF → GND\n- [ ] STAT1(18) → 100kΩ 上"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 113,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": ".2.7 修正）\n- [ ] SELC1(12) → GND（V4.2.7 修正）\n- [ ] VCC(16) → 1μF + 10μF → GND\n- [ ] STAT1(18) → 100kΩ 上拉 3.3V → GPIO35（禁用内部上拉）\n- [ ] STAT2(17) → 100kΩ 上拉 3.3V → GPIO39（禁用内部上拉）\n- [ ] VSEN(19) → 56kΩ → VSEN → 12kΩ → GND（Rv2 > 10kΩ）\n- [ ] Thermal PAD → GND\n- [ ] **反接保护栅极钳位：BZT52C10** （V4.2.6 修正）\n- [ ] **I²C 唤醒流程时序：先导通上拉，再解锁总线** （V4.2.6 修正）\n- [ ] **B0509XT 启动延时 100ms** （V4.2.6 修正）\n- [ ] **FRAM OTA 区域 64B（地址 0x0050-0x008F），温度补偿表 0x00B0** （V4.2.6 修正）\n- [ ] **光伏浪涌 TVS：SMBJ20A（主选），钳位 33.4V** （V4.2.7 修正）\n- "
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 114,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "（地址 0x0050-0x008F），温度补偿表 0x00B0** （V4.2.6 修正）\n- [ ] **光伏浪涌 TVS：SMBJ20A（主选），钳位 33.4V** （V4.2.7 修正）\n- [ ] **RS485 线间 TVS：SMBJ6.5CA（V4.2.7 修正，钳位 11.2V < MAX3485 耐压 13V）**\n- [ ] MP2307 输入电容：22μF/25V X7R 1206（V4.2.7 升级）\n- [ ] MP2307 输出电容：22μF/16V X7R 1206\n- [ ] **GPIO26 ADC 通道：ADC2_CH8（非 CH9）** （V4.2.7 修正）\n- [ ] **5V 关断校验延时：≥15s，校验前禁用看门狗** （V4.2.7 修正）\n- [ ] **GPIO25/GPIO13 rtc_gpio_hold_en** （V4.2.7 新增）\n- [ ] **GPIO23 无外部下拉（UART TX 空闲高电平）** （V4.2.7 修正）\n- [ ] **随机延时前禁用看门狗** （V4.2.7 新增）"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 115,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "）\n- [ ] **GPIO23 无外部下拉（UART TX 空闲高电平）** （V4.2.7 修正）\n- [ ] **随机延时前禁用看门狗** （V4.2.7 新增）"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 116,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "### 阶段 2：原型验证\n- GPIO32（MP2307 EN）/GPIO5（CS5383C EN）独立控制验证\n- 充电与采集并发功能验证\n- B0509XT 100ms 启动延时实测确认\n- 5V 关断校验 **15s** 延时验证（V4.2.7 修正）\n- SMBJ20A 钳位电压实测（V4.2.7 修正）\n### 阶段 3：试产与量产\n- 全部 25 项 P0/P1 修复回归验证\n- 28 项必验项完整记录\n---\n## 14. 工程流程闭环与产线校准规范\n### 14.1 产线校准流程\n三点校准（6.0V、6.5V、8.4V），拉格朗日插值二次拟合。系数存 FRAM 0x0000。\n**V4.2.7 补充校准环境要求：**\n| 要求项 | 规格 |\n|--------|------|\n| 环境温度 | 25±5°C |\n| 校准电源精度 | 优于 ±0.01V（4½ 位万用表监测） |\n| 校准电源纹波 | <5mVpp |\n| 接地 | 单点接地，避免地环路 |\n| 操作员 | 经培训持证上岗 |"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 117,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "步骤：\n1. 烧录产线校准固件\n2. 精密电源执行三点校准\n3. 确认 \"CALIBRATION OK\"\n4. 擦除校准固件，烧录正式固件\n5. 终检：6.5V 验证，误差 < ±0.05V\n**失败处理流程：**\n- 校准失败：返工，更换被测板\n- 终检不合格：隔离标识，分析根因\n- 连续 3 台不合格：暂停产线，排查工装/治具\n### 14.2 产线检查项"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 118,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "| 检查项 | 标准 |\n|--------|------|\n| GPIO21/22 下拉电阻 | 10kΩ±5% 对 GND |\n| GPIO21/22 上拉电阻 | 4.7kΩ±5% 对传感器电源轨 |\n| GPIO35 STAT1 上拉 | 100kΩ 对 3.3V |\n| GPIO39 STAT2 上拉 | 100kΩ 对 3.3V |\n| GPIO36 对 GND | 100kΩ（下臂） |\n| **GPIO5 对 GND** | **4.7kΩ±5%（CS5383C EN 下拉）** |\n| VSEN Rv2 | 12kΩ±1%（>10kΩ） |\n| BATCV Rcv | 75kΩ±1% |\n| DS3231 VBAT 对 VCC | 0Ω（或导通） |\n| DS3231 INT 上拉 | 4.7kΩ±5% |\n| **反接保护栅极稳压管** | **BZT52C10（9.50~10.50V，数据手册确认）** |\n| WAKE 低电平 | <0.3V |\n| WH-L101-L AT+PTM | 200ms |\n| CS5383C EN | GPIO5 低电平（使能充电"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 119,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "0~10.50V，数据手册确认）** |\n| WAKE 低电平 | <0.3V |\n| WH-L101-L AT+PTM | 200ms |\n| CS5383C EN | GPIO5 低电平（使能充电） |\n| CS5383C SELC0 | 悬空（Float）（V4.2.7 修正） |\n| CS5383C SELC1 | 接 GND（V4.2.7 修正） |\n| CH224K CC | 无 5.1kΩ 下拉 |"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 120,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "---\n## 15. Type-C 调试与市电辅助充电复用规范\n### 15.1 硬件拓扑\n- CH224K CFG1 24kΩ 接地配置 12V\n- CFG2 → Float，CFG3 → Float\n- CC1/CC2 直接接 Type-C（**无外部 5.1kΩ 下拉**）\n- 12V 输出经 SS34 → CS5383C PVIN\n- VBUS 5V 经 SS14 → CP2102 VDD\n- VBUS 分压 100k+100k → GPIO36（ADC1_CH0），100nF 滤波\n### 15.2 软件检测\nGPIO36 ADC 采样，阈值 2.0V（对应 VBUS > 4.0V）。状态帧 bit7 标记市电接入。\n---\n## 16. OTA 无线升级规范\n### 16.1 Flash 分区表"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 121,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "```\n# Name,      Type, SubType,  Offset,   Size\nnvs,         data, nvs,      0x9000,   0x4000\notadata,     data, ota,      0xD000,   0x2000\nfactory,     app,  factory,  0x10000,  0x100000\nota_0,       app,  ota_0,    0x110000, 0x100000\nota_1,       app,  ota_1,    0x210000, 0x100000\nspiffs,      data, spiffs,   0x310000, 0xE0000\ncoredump,    data, coredump, 0x3F0000, 0x10000\n```\n### 16.2 OTA 状态机"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 122,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "FRAM 0x0050-0x008F（64B）存储 OtaFramState_t（压缩区间位图）。触发条件：市电接入时电压 >7.0V，无市电时 >7.2V。支持断点续传（区间记录）、版本防回滚、Factory 回滚。\n**V4.2.7 补充说明：**\n1. **CRC32 校验时机**：每个 chunk 接收后立即进行 CRC32 累加计算，全部接收后一次性比对 `crc32_expected`。若单个 chunk 校验失败，标记该区间为未接收，触发重传。\n2. **Secure Boot V2 签名校验**：ESP32-WROOM-32E ECO V3 支持 Secure Boot V2，OTA 固件需使用开发者密钥签名。**发板前必须启用 Secure Boot V2 和 Flash 加密**，签名验证在 bootloader 阶段执行，防止固件被篡改。\n3. **OTA 中途断电处理**：FRAM 压缩区间位图记录已接收区间，断电恢复后可从最后确认的区间继续接收。若 OTA 超过 2 小时未完成，自动取消并回滚至上一版本。"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 123,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "4. **Factory 分区回滚触发条件**：连续 3 次 OTA 启动失败（bootloader 检测到 app 分区 CRC 校验失败），自动回滚至 Factory 分区。\n---\n## 17. WH-L101-L 新款模组适配规范\n### 17.1 关键差异\n| 特性 | 老款 H20 | 新款 L |\n|------|----------|--------|\n| 休眠电流 | ~2μA | 2.5μA |\n| 发射电流 | ~120mA | 110mA |\n| WAKE | 高电平休眠 | 下降沿唤醒，默认低 |\n| HOST_WAKE | 无 | 引脚24，推挽输出 |\n### 17.2 WAKE 与 HOST_WAKE\nWAKE：10k 下拉，下降沿唤醒。HOST_WAKE：推挽输出，10k 下拉匹配，发送前拉高 5ms，完成后拉低。\n### 17.3 唤醒架构\nESP32-WROOM-32E 由 DS3231 RTC 独立定时唤醒，通过 lora_module_wakeup() 主动控制 WAKE。HOST_WAKE 仅状态指示，不作为唤醒源。\n---"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 124,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "## 18. 版本说明与变更控制\n### V4.2.7 变更清单（20 项修复与优化）\n基于 V4.2.6 全面可行性评估及 MAX3485ESA/BZT52C10 数据手册交叉验证："
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 125,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "| 编号 | 优先级 | 描述 | 验证状态 |\n|------|--------|------|----------|\n| CHG-4.2.7-P0-001 | P0 | FRAM 地址重叠：休眠标记迁移至 0x0090/0x00A0 | 待验证 |\n| CHG-4.2.7-P0-002 | P0 | GPIO26 ADC 通道号：ADC2_CH9 → ADC2_CH8 | 待验证 |\n| CHG-4.2.7-P0-003 | P0 | 5V 关断校验延时：≥5s → ≥15s | 待验证 |\n| CHG-4.2.7-P0-004 | P0 | 5V 校验前禁用看门狗，避免 WDT 复位 | 待验证 |\n| CHG-4.2.7-P0-005 | P0 | 光伏浪涌 TVS：SMBJ22A → SMBJ20A（钳位 33.4V） | 待验证 |\n| CHG-4.2.7-P0-006 | P0 | RS485 线间 TVS：SMBJ12CA → SMBJ6.5CA（MAX3485 耐压仅 13V） | 待验证 |\n| CHG-4.2.7-P0-007 | P0 | BOM 电容清单：从 "
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 126,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "0 | RS485 线间 TVS：SMBJ12CA → SMBJ6.5CA（MAX3485 耐压仅 13V） | 待验证 |\n| CHG-4.2.7-P0-007 | P0 | BOM 电容清单：从 2 颗扩展至 26 颗 | 待验证 |\n| CHG-4.2.7-P0-008 | P0 | SELC 配置表：2S 改为 SELC0=Float/SELC1=GND | 待验证 |\n| CHG-4.2.7-P1-001 | P1 | DeepSleep 电流：~10μA → ~32μA，续航 120→106 天 | 待验证 |\n| CHG-4.2.7-P1-002 | P1 | GPIO5 非 RTC GPIO：移除 rtc_gpio_hold_en 调用 | 待验证 |\n| CHG-4.2.7-P1-003 | P1 | GPIO25/GPIO13 补充 rtc_gpio_hold_en | 待验证 |\n| CHG-4.2.7-P1-004 | P1 | 随机延时前禁用看门狗 | 待验证 |\n| CHG-4.2.7-P1-005 | P1 | GPIO23 移除 UART TX 外部下拉"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 127,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": " 待验证 |\n| CHG-4.2.7-P1-004 | P1 | 随机延时前禁用看门狗 | 待验证 |\n| CHG-4.2.7-P1-005 | P1 | GPIO23 移除 UART TX 外部下拉 | 待验证 |\n| CHG-4.2.7-P1-006 | P1 | BZT52C10 稳压值：9.50~10.50V（数据手册确认） | 待验证 |\n| CHG-4.2.7-P1-007 | P1 | MP2307 输入电容：10μF → 22μF | 待验证 |\n| CHG-4.2.7-P1-008 | P1 | ACK 超时：3000ms → 5000ms | 待验证 |\n| CHG-4.2.7-P1-009 | P1 | RS485 新增 2000ms 通信超时 | 待验证 |\n| CHG-4.2.7-P1-010 | P1 | OTA 补充 Secure Boot V2/CRC32/回滚说明 | 待验证 |\n| CHG-4.2.7-P1-011 | P1 | 产线校准补充环境/设备/失败处理要求 | 待验证 |\n| CHG-4.2.7-P1-012 | P1 | 5V 校验时序："
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 128,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "回滚说明 | 待验证 |\n| CHG-4.2.7-P1-011 | P1 | 产线校准补充环境/设备/失败处理要求 | 待验证 |\n| CHG-4.2.7-P1-012 | P1 | 5V 校验时序：明确禁用 WDT 代码实现 | 待验证 |"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 129,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "### V4.2.6 变更清单（25 项修复与优化）"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 130,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "| 编号 | 优先级 | 描述 | 验证状态 |\n|------|--------|------|----------|\n| CHG-4.2.6-P0-001 | P0 | GPIO34 ADC 显式配置 `ADC_ATTEN_DB_6` | 待验证 |\n| CHG-4.2.6-P0-002 | P0 | SMBJ22A 钳位实测验证项（需 <35V） | 待验证 |\n| CHG-4.2.6-P0-003 | P0 | I²C 唤醒流程时序：先导通上拉，再解锁总线 | 待验证 |\n| CHG-4.2.6-P1-001 | P1 | BH1750 复位时序代码注释补充 | 待验证 |\n| CHG-4.2.6-P1-002 | P1 | GPIO26 ADC2 DeepSleep 显式初始化 | 待验证 |\n| CHG-4.2.6-P1-003 | P1 | DS3231 VBAT 供电描述修正 | 待验证 |\n| CHG-4.2.6-P1-004 | P1 | MP2307 电容规格标注完整 | 待验证 |\n| CHG-4.2.6-P1-005 | P1 | NTC B 值精度 ±1% "
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 131,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "正 | 待验证 |\n| CHG-4.2.6-P1-004 | P1 | MP2307 电容规格标注完整 | 待验证 |\n| CHG-4.2.6-P1-005 | P1 | NTC B 值精度 ±1% | 待验证 |\n| CHG-4.2.6-P1-006 | P1 | FRAM 双副本增加 version 字段 | 待验证 |\n| CHG-4.2.6-NEW-001 | P0 | GPIO32 冲突：CS5383C EN → GPIO5（4.7kΩ 下拉） | 待验证 |\n| CHG-4.2.6-NEW-002 | P0 | OTA FRAM 扩展至 64B + 压缩区间位图（0x0050-0x008F） | 待验证 |\n| CHG-4.2.6-NEW-003 | P0 | 5V 关断校验增加 ≥5s 延时 | 待验证 |\n| CHG-4.2.6-NEW-004 | P0 | B0509XT 启动延时 50ms → 100ms | 待验证 |\n| CHG-4.2.6-NEW-005 | P1 | FRAM 缓存满 FIFO 覆盖策略 | 待验证 |\n| CHG-4.2.6-NEW-006"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 132,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": " 启动延时 50ms → 100ms | 待验证 |\n| CHG-4.2.6-NEW-005 | P1 | FRAM 缓存满 FIFO 覆盖策略 | 待验证 |\n| CHG-4.2.6-NEW-006 | P1 | AO3401 Vgs：BZT52C12 → BZT52C10 | 待验证 |\n| CHG-4.2.6-NEW-007 | P1 | MAX3485 线间 TVS：确认保持 SMBJ12CA | 待验证 |\n| CHG-4.2.6-NEW-008 | P1 | 帧转义缓冲区 ≥64B | 待验证 |\n| CHG-4.2.6-NEW-009 | P2 | 变更管理增加优先级/验证状态列 | 待验证 |\n| CHG-4.2.6-NEW-010 | P2 | BOM 增加供应商备选列 | 待验证 |\n| CHG-4.2.6-P2-001 | P2 | ECO V3 Secure Boot V2/Flash 加密说明 | 待验证 |\n| CHG-4.2.6-P2-002 | P2 | BH1750 RC 延时方案注释 | 待验证 |\n| CHG-4.2.6-P2-003 | P2 |"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 133,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "t V2/Flash 加密说明 | 待验证 |\n| CHG-4.2.6-P2-002 | P2 | BH1750 RC 延时方案注释 | 待验证 |\n| CHG-4.2.6-P2-003 | P2 | B0509XT 容性负载说明 | 待验证 |\n| CHG-4.2.6-P2-004 | P2 | SHT30 加热功能说明 | 待验证 |\n| CHG-4.2.6-P2-005 | P2 | 看门狗喂狗点补充 | 待验证 |\n| CHG-4.2.6-P2-006 | P2 | 章节编号一致性检查 | 待验证 |"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 134,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "### 发板前必验项（28 项）"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 135,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "| 序号 | 必验项 | 验证方法 |\n|------|--------|----------|\n| 1 | 分区表无重叠 | gen_esp32part.py |\n| 2 | ADC2_CH8 配置（V4.2.7 修正） | 编译验证 |\n| 3 | 24B Payload 空中时间 | 示波器抓取 |\n| 4 | FRAM 地址三向对齐 | 头文件/文档/工具 |\n| 5 | BOM 与原理图 100% | 交叉比对 |\n| 6 | GPIO26 回读不饱和 | 5V→ADC 2.4~2.6V |\n| 7 | I²C 上拉电阻焊接 | AOI+飞针 |\n| 8 | RS485 TVS 型号 | 来料检验 SMBJ6.5CA（V4.2.7 修正，统一线间+线对地） |\n| 9 | Factory 分区 | gen_esp32part.py |\n| 10 | OVP 串联拓扑 | 原理图双人核对 |\n| 11 | Payload 24B | 编译确认 |\n| 12 | 负载开关栅极上拉 | 原理图+BOM 核对 |\n| 13 | DS3231 VBAT→VCC | 万用表导通 |\n| "
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 136,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "人核对 |\n| 11 | Payload 24B | 编译确认 |\n| 12 | 负载开关栅极上拉 | 原理图+BOM 核对 |\n| 13 | DS3231 VBAT→VCC | 万用表导通 |\n| 14 | CS5383C VSEN Rv2 | 12kΩ 确认 >10kΩ |\n| 15 | CS5383C SELC1 | **接 GND 确认（V4.2.7 修正）** |\n| 16 | STAT1/STAT2 上拉 | 100kΩ 对 3.3V |\n| 17 | BH1750 复位时序 | 示波器抓取 VCC 上升沿到 I²C 命令 ≥2ms |\n| 18 | B0509XT 低温启动 | -20°C 环境正常启动 |\n| 19 | SMBJ20A 钳位验证（V4.2.7 修正） | 浪涌测试中 VIN 钳位 <34V |\n| 20 | 射频 ESD 插入损耗 | LoRa 接收灵敏度无明显下降 |\n| 21 | CH224K CC 配置 | 确认无 5.1kΩ 下拉 |\n| 22 | DS3231 INT 上拉 | 4.7kΩ 确认 |\n| **23** | **GPIO5 CS5"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 137,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "明显下降 |\n| 21 | CH224K CC 配置 | 确认无 5.1kΩ 下拉 |\n| 22 | DS3231 INT 上拉 | 4.7kΩ 确认 |\n| **23** | **GPIO5 CS5383C EN** | **低电平使能，高电平关断，上电状态低** |\n| **24** | **GPIO5 下拉电阻** | **4.7kΩ±5% 对 GND** |\n| **25** | **5V 关断校验延时** | **MP2307 关断后 ≥15s 回读（V4.2.7 修正）** |\n| **26** | **GPIO12 悬空** | **万用表确认无上拉/下拉** |\n| **27** | **FRAM OTA 区域** | **写入 64B 验证无溢出** |\n| **28** | **BZT52C10 型号** | **来料检验确认 9.50~10.50V（数据手册确认）** |"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 138,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": " |"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 139,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "**文档结束 — V4.2.7**\n---\n---\n## 开发过程日志\n> 以下记录每次开发操作的成功、失败与经验教训，按时间线倒序排列。\n---\n### 2026-07-16 首次全面文档审查 + 向量化检索系统搭建\n- **类型**：审查 + 基础设施搭建\n- **状态**：✅ 成功\n- **关联**：[[P1_2_完成度检查报告]]\n**过程**：\n1. 读取 `/home/xuhan/文档/agri_node/` 全部文档（15 个 markdown 文件），完整掌握 V4.2.7 开发全貌\n2. 读取 `采集节点开发文档v4.2.7.md`（1316 行），理解系统架构、电源拓扑、低功耗策略、通信协议、FRAM 缓存、OTA 规范\n3. 读取 `P1_2_完成度检查报告.md`，掌握原理图完成度 54%（113/211 引脚），4 个 X 级元件待完成\n4. 读取 `原理图设计/` 全部 12 个文件，理解 8 页分页原理图结构\n5. 搭建 TF-IDF 向量化检索系统（scikit-learn + jieba），实现自然语言搜索\n**结果**："
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 140,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "| 项目 | 结果 |\n|------|------|\n| 文档读取 | ✅ 15 个文件全部成功读取 |\n| 进度掌握 | ✅ 明确完成度 54%，4 个 X 级元件（WH-L101-L/MAX3485/CP2102N/CH224K） |\n| 向量化索引 | ✅ 288 个文本块，1983 维词汇表 |\n| 搜索验证 | ✅ \"CS5383C SELC\"/\"RS485 TVS\"/\"FRAM 地址重叠\" 三个查询均命中相关内容 |\n**V4.2.7 关键修复掌握清单**："
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 141,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "| # | 修复项 | 级别 | 根因 | 修复方案 | 状态 |\n|---|--------|------|------|----------|------|\n| 1 | FRAM 地址重叠 | P0 | 休眠标记 0x0070/0x0080 与 OTA 0x0050-0x008F 完全重叠 | 迁移至 0x0090/0x00A0 | 待验证 |\n| 2 | GPIO26 ADC 通道 | P0 | 文档写 ADC2_CH9，硬件实际为 ADC2_CH8 | 修正为 ADC2_CH8 | 待验证 |\n| 3 | 5V 关断校验延时 | P0 | 5s 不够（RC τ=4.4s，需 3τ+） | 增至 ≥15s | 待验证 |\n| 4 | 看门狗复位 | P0 | 15s 等待期间 WDT 触发 | 校验前禁用 WDT | 待验证 |\n| 5 | 光伏浪涌 TVS | P0 | SMBJ22A 钳位 35.5V，裕量仅 0.5V | 改为 SMBJ20A（钳位 33.4V，裕量 2.6V） | 待验证 |\n| 6 | RS485 线间 TVS | P0 | SMBJ12CA 钳位 19"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 142,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "2A 钳位 35.5V，裕量仅 0.5V | 改为 SMBJ20A（钳位 33.4V，裕量 2.6V） | 待验证 |\n| 6 | RS485 线间 TVS | P0 | SMBJ12CA 钳位 19.9V > MAX3485 耐压 13V | 改为 SMBJ6.5CA（钳位 11.2V） | 待验证 |\n| 7 | BOM 电容清单 | P0 | 仅 2 颗电容，缺大量去耦 | 扩展至 26 颗 | 待验证 |\n| 8 | SELC 配置表 | P0 | 2S 写成 SELC0=GND/SELC1=Float（实际是 4S） | 修正为 SELC0=Float/SELC1=GND | 待验证 |"
+  },
+  {
+    "file": "采集节点开发文档v4.2.7.md",
+    "chunk_index": 143,
+    "total_chunks": 144,
+    "frontmatter": {},
+    "text": "**经验教训**：\n- **交叉验证是必须的**：V4.2.6 的 SELC 配置错误是因为没有对照数据手册验证，V4.2.7 通过 MAX3485/BZT52C10 数据手册交叉验证发现并修复了 RS485 TVS 和栅极稳压管问题\n- **器件耐压 vs 钳位电压**：选型时不能只看\"标称\"，必须核对数据手册的绝对最大额定值和实际钳位电压\n- **RC 时间常数要算到位**：5V 关断校验延时从 5s 改为 15s，是因为 τ=100kΩ×44μF=4.4s，5s 仅 1.1τ，电压远未降到安全值\n- **向量化检索有效**：TF-IDF 对中文硬件文档的检索效果良好，能精准定位到相关段落，后续每次修改文档后应重新索引\n**下一步行动**：\n1. 原理图补齐 4 个 X 级元件（WH-L101-L/MAX3485/CP2102N/CH224K）\n2. 完成后更新 P1_2 完成度检查报告\n3. 重新索引向量库"
+  }
+]
