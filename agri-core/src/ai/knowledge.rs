@@ -75,7 +75,7 @@ impl ObsidianKnowledge {
             let path = entry.path();
             if path.is_dir() {
                 self.collect_md(&path, files)?;
-            } else if path.extension().map_or(false, |e| e == "md") {
+            } else if path.extension().is_some_and(|e| e == "md") {
                 if let Ok(relative) = path.strip_prefix(&self.vault_path) {
                     files.push(relative.display().to_string());
                 }
@@ -130,7 +130,7 @@ impl ObsidianKnowledge {
             let path = entry.path();
             if path.is_dir() {
                 self.search_dir(&path, query, results)?;
-            } else if path.extension().map_or(false, |e| e == "md") {
+            } else if path.extension().is_some_and(|e| e == "md") {
                 self.search_file(&path, query, results)?;
             }
         }
@@ -308,8 +308,18 @@ fn extract_snippet(content: &str, query: &str, max_len: usize) -> String {
     let lower = content.to_lowercase();
     let q_lower = query.to_lowercase();
     if let Some(pos) = lower.find(&q_lower) {
-        let start = pos.saturating_sub(max_len / 2);
-        let end = (pos + q_lower.len() + max_len / 2).min(content.len());
+        // pos 是字节偏移；saturating_sub 可能落在多字节 UTF-8 字符中间导致切片 panic，
+        // 先回退到最近的字符边界再切片
+        let start_byte = pos.saturating_sub(max_len / 2);
+        let start = match content.char_indices().map(|(i, _)| i).find(|&i| i >= start_byte) {
+            Some(i) => i,
+            None => start_byte,
+        };
+        let want_end = (pos + q_lower.len() + max_len / 2).min(content.len());
+        let mut end = want_end;
+        while end > start && !content.is_char_boundary(end) {
+            end -= 1;
+        }
         let snippet = &content[start..end];
         let lines: Vec<&str> = snippet.lines().collect();
         let snippet = lines.into_iter().take(3).collect::<Vec<_>>().join("\n");
@@ -348,6 +358,18 @@ mod tests {
         let (_tmp, vault) = setup_test_vault();
         let content = vault.read_note("00-Crops/番茄.md").unwrap();
         assert!(content.contains("番茄"));
+    }
+
+    #[test]
+    fn test_snippet_utf8_boundary_no_panic() {
+        // 长中文内容 + 关键词在中部：截取偏移需落在多字节字符边界
+        let content = "汉".repeat(200) + "番茄" + &"汉".repeat(200);
+        let snippet = extract_snippet(&content, "番茄", 100);
+        assert!(!snippet.is_empty());
+        assert!(snippet.contains("番茄"));
+        // 关键词在开头：start=0 不应 panic
+        let snippet2 = extract_snippet(&("番茄".to_owned() + &"汉".repeat(500)), "番茄", 100);
+        assert!(snippet2.starts_with("番茄"));
     }
 
     #[test]

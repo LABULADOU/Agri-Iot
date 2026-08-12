@@ -3,7 +3,7 @@ use agri_core::ai::calibration::calibrate_ventilator;
 use agri_core::ai::emergency::{check_emergency_basic, WeatherAlertInput};
 use agri_core::ai::fertigation::analyze_ec;
 use agri_core::ai::knowledge::ObsidianKnowledge;
-use agri_core::ai::llm::{HistoryMessage, LlmProvider, AgentResponse, SYSTEM_PROMPT_AGENT};
+use agri_core::ai::llm::{LlmProvider, SYSTEM_PROMPT_AGENT};
 use agri_core::ai::retrieval::RetrievalEngine;
 use agri_core::models::{
     ControlCase, CropProfile, ECTrends, ECRecommendation,
@@ -362,7 +362,7 @@ async fn knowledge_cases(
 
     match cases {
         Ok(cases) => (StatusCode::OK, Json(serde_json::json!(cases))).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+        Err(e) => internal_err(e),
     }
 }
 
@@ -389,7 +389,7 @@ async fn knowledge_add_case(
 
     match result {
         Ok(_) => (StatusCode::CREATED, Json(serde_json::json!({"id": id, "message": "Case created"}))).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+        Err(e) => internal_err(e),
     }
 }
 
@@ -408,7 +408,7 @@ async fn ventilation_config(
     match config {
         Ok(Some(c)) => (StatusCode::OK, Json(serde_json::json!(c))).into_response(),
         Ok(None) => (StatusCode::NOT_FOUND, Json(serde_json::json!({"error": "No config found for this area"}))).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+        Err(e) => internal_err(e),
     }
 }
 
@@ -601,7 +601,7 @@ async fn obsidian_read_note(
     let vault = ObsidianKnowledge::new(&vault_path);
     match vault.read_note(&q.path) {
         Ok(content) => (StatusCode::OK, Json(serde_json::json!({"path": q.path, "content": content}))).into_response(),
-        Err(e) => not_found(Some(&e.to_string())),
+        Err(_) => not_found(Some("Note not found")),
     }
 }
 
@@ -772,8 +772,8 @@ async fn chrysanthemum_varieties(
                 });
             }
         } else if in_table {
-            // Table ended
-            break;
+            // Table ended — continue scanning (file may contain multiple tables)
+            in_table = false;
         }
     }
 
@@ -993,5 +993,32 @@ mod tests {
             .unwrap();
         let resp = router.oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
+    }
+
+    /// GET /api/v1/ai/knowledge/chrysanthemum — 解析真实品种表（多表格文件，只取品种列）
+    #[tokio::test]
+    async fn test_chrysanthemum_varieties_from_vault() {
+        let vault = std::env::var("OBSIDIAN_VAULT_PATH").unwrap_or_default();
+        if vault.is_empty() {
+            eprintln!("OBSIDIAN_VAULT_PATH not set, skipping");
+            return;
+        }
+        let pool = setup_ai_db().await;
+        let mut state = make_state(pool);
+        state.obsidian_vault_path = Some(vault);
+        let router = create_router(state);
+
+        let req = Request::builder()
+            .method("GET")
+            .uri("/api/v1/ai/knowledge/chrysanthemum")
+            .body(Body::empty())
+            .unwrap();
+        let resp = router.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(resp.into_body(), 1024 * 1024).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let varieties = json["varieties"].as_array().unwrap();
+        assert!(varieties.len() > 100, "expected 100+ varieties, got {}", varieties.len());
+        assert_eq!(varieties[0]["name"], "科隆香水");
     }
 }
