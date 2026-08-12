@@ -12,8 +12,9 @@ pub fn err_json(status: StatusCode, msg: impl ToString) -> Response {
     (status, Json(serde_json::json!({"error": msg.to_string()}))).into_response()
 }
 
-pub fn internal_err(_e: impl ToString) -> Response {
-    // 不泄露内部错误信息给客户端
+pub fn internal_err(e: impl ToString) -> Response {
+    // 记录内部错误供调试，但不泄露给客户端
+    tracing::error!("internal_err: {}", e.to_string());
     err_json(StatusCode::INTERNAL_SERVER_ERROR, "Internal server error")
 }
 

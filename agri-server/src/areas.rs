@@ -10,6 +10,7 @@ use chrono::Utc;
 use serde::Deserialize;
 use uuid::Uuid;
 
+use crate::response::internal_err;
 use crate::state::AppState;
 
 pub fn create_router(state: AppState) -> Router {
@@ -53,7 +54,7 @@ async fn create_area(
 
     match result {
         Ok(_) => (StatusCode::CREATED, Json(serde_json::json!({"id": id.to_string(), "message": "Area created"}))).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+        Err(e) => internal_err(e),
     }
 }
 
@@ -81,7 +82,7 @@ async fn list_areas(State(state): State<AppState>) -> impl IntoResponse {
         }
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({"error": e.to_string()})),
+            internal_err(e),
         )
             .into_response(),
     }
@@ -110,7 +111,7 @@ async fn get_area(State(state): State<AppState>, Path(id): Path<String>) -> impl
             .into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({"error": e.to_string()})),
+            internal_err(e),
         )
             .into_response(),
     }
@@ -137,7 +138,7 @@ async fn update_area(
             .into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({"error": e.to_string()})),
+            internal_err(e),
         )
             .into_response(),
     }
@@ -158,7 +159,7 @@ async fn delete_area(State(state): State<AppState>, Path(id): Path<String>) -> i
             .into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({"error": e.to_string()})),
+            internal_err(e),
         )
             .into_response(),
     }
@@ -189,7 +190,7 @@ async fn update_area_crop_name(
                 .execute(&state.pool)
                 .await
             {
-                return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response();
+                return (StatusCode::INTERNAL_SERVER_ERROR, internal_err(e)).into_response();
             }
             Json(serde_json::json!({"message": "Crop name updated"})).into_response()
         }
@@ -205,7 +206,7 @@ async fn update_area_crop_name(
                 .execute(&state.pool)
                 .await
             {
-                return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response();
+                return (StatusCode::INTERNAL_SERVER_ERROR, internal_err(e)).into_response();
             }
             if let Err(e) = sqlx::query("UPDATE crop_batches SET crop_id = ? WHERE id = ?")
                 .bind(&new_crop_id)
@@ -213,7 +214,7 @@ async fn update_area_crop_name(
                 .execute(&state.pool)
                 .await
             {
-                return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response();
+                return (StatusCode::INTERNAL_SERVER_ERROR, internal_err(e)).into_response();
             }
             Json(serde_json::json!({"message": "Crop created and linked"})).into_response()
         }
@@ -221,7 +222,7 @@ async fn update_area_crop_name(
             (StatusCode::NOT_FOUND, Json(serde_json::json!({"error": "No active crop batch for this area"}))).into_response()
         }
         Err(e) => {
-            (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response()
+            (StatusCode::INTERNAL_SERVER_ERROR, internal_err(e)).into_response()
         }
     }
 }
@@ -253,7 +254,7 @@ async fn create_crop(
 
     match result {
         Ok(_) => (StatusCode::CREATED, Json(serde_json::json!({"id": id.to_string(), "message": "Crop created"}))).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, internal_err(e)).into_response(),
     }
 }
 
@@ -281,7 +282,7 @@ async fn list_crops(State(state): State<AppState>) -> impl IntoResponse {
         }
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({"error": e.to_string()})),
+            internal_err(e),
         )
             .into_response(),
     }
@@ -310,7 +311,7 @@ async fn get_crop(State(state): State<AppState>, Path(id): Path<String>) -> impl
             .into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({"error": e.to_string()})),
+            internal_err(e),
         )
             .into_response(),
     }
@@ -338,7 +339,7 @@ async fn update_crop(
             .into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({"error": e.to_string()})),
+            internal_err(e),
         )
             .into_response(),
     }
@@ -359,7 +360,7 @@ async fn delete_crop(State(state): State<AppState>, Path(id): Path<String>) -> i
             .into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({"error": e.to_string()})),
+            internal_err(e),
         )
             .into_response(),
     }
@@ -395,7 +396,7 @@ async fn create_crop_batch(
 
     match result {
         Ok(_) => (StatusCode::CREATED, Json(serde_json::json!({"id": id.to_string(), "message": "Crop batch created"}))).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, internal_err(e)).into_response(),
     }
 }
 
@@ -450,7 +451,7 @@ async fn list_crop_batches(
         }
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({"error": e.to_string()})),
+            internal_err(e),
         )
             .into_response(),
     }
@@ -484,7 +485,7 @@ async fn get_crop_batch(State(state): State<AppState>, Path(id): Path<String>) -
             .into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({"error": e.to_string()})),
+            internal_err(e),
         )
             .into_response(),
     }
@@ -538,7 +539,7 @@ async fn update_crop_batch(
             .into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({"error": e.to_string()})),
+            internal_err(e),
         )
             .into_response(),
     }
@@ -559,7 +560,7 @@ async fn delete_crop_batch(State(state): State<AppState>, Path(id): Path<String>
             .into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({"error": e.to_string()})),
+            internal_err(e),
         )
             .into_response(),
     }
@@ -590,7 +591,7 @@ async fn get_crop_batch_readings(
     let area_id = match batch {
         Ok(Some(row)) => row.0,
         Ok(None) => return (StatusCode::NOT_FOUND, Json(serde_json::json!({"error": "Crop batch not found"}))).into_response(),
-        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, internal_err(e)).into_response(),
     };
 
     let has_metric = query.metric.is_some();
@@ -628,7 +629,7 @@ async fn get_crop_batch_readings(
         }
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({"error": e.to_string()})),
+            internal_err(e),
         )
             .into_response(),
     }

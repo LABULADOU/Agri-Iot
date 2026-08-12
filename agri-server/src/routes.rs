@@ -37,6 +37,7 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/v1/devices/:id", get(get_device).put(update_device).delete(delete_device))
         .route("/api/v1/devices/:id/readings", get(list_readings))
         .route("/api/v1/devices/:id/command", post(send_command))
+        .route("/api/v1/devices/:id/ota", post(trigger_ota))
         .route("/api/v1/rules", get(list_rules).post(create_rule))
         .route("/api/v1/rules/:id", put(update_rule).delete(delete_rule))
         .route("/api/v1/alerts", get(list_alerts))
@@ -285,8 +286,20 @@ async fn list_readings(
 
 async fn send_command(
     State(state): State<AppState>, Path(id): Path<String>,
+    headers: axum::http::HeaderMap,
     Json(cmd): Json<CommandPayload>,
 ) -> impl IntoResponse {
+    // API Key 认证（如果配置了 OTA_API_KEY 环境变量，command 端点也复用）
+    if let Ok(expected_key) = std::env::var("OTA_API_KEY") {
+        let provided_key = headers
+            .get("X-API-Key")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("");
+        if provided_key != expected_key {
+            return (StatusCode::UNAUTHORIZED, Json(serde_json::json!({"error": "Unauthorized"}))).into_response();
+        }
+    }
+
     let device: Option<(String, Option<String>, String)> = match sqlx::query_as::<_, (String, Option<String>, String)>(
         "SELECT status, capabilities, node_id FROM devices WHERE id = ?"
     ).bind(&id).fetch_optional(&state.pool).await {
@@ -300,7 +313,7 @@ async fn send_command(
         Some(d) => d,
         None => return not_found(Some("Device not found")),
     };
-    let has_actuator = capabilities_json.as_ref().map_or(false, |c| {
+    let has_actuator = capabilities_json.as_ref().is_some_and(|c| {
         serde_json::from_str::<Vec<String>>(c).map(|caps| caps.contains(&"actuator".to_string()))
             .unwrap_or_else(|e| {
                 tracing::warn!("Failed to parse capabilities for device {}: {}", id, e);
@@ -612,7 +625,7 @@ async fn dashboard_node_readings(State(state): State<AppState>) -> impl IntoResp
     };
 
     let mut node_latest: std::collections::BTreeMap<(String, String), serde_json::Map<String, serde_json::Value>> = std::collections::BTreeMap::new();
-    let known_metrics = ["temperature", "humidity", "soil_moisture", "soil_temperature", "ec", "light"];
+    let known_metrics = ["temperature", "humidity", "soil_moisture", "soil_temperature", "ec", "light", "dht_status"];
     let unassigned_key = "__unassigned__".to_string();
 
     for (area_id, node_id, metric, value, unit, ts) in &latest_readings {
@@ -623,7 +636,7 @@ async fn dashboard_node_readings(State(state): State<AppState>) -> impl IntoResp
 
     // 收集所有 node_id 并查询设备状态
     let mut all_node_ids: Vec<String> = Vec::new();
-    for (key, _) in &node_latest {
+    for key in node_latest.keys() {
         if !all_node_ids.contains(&key.1) {
             all_node_ids.push(key.1.clone());
         }
@@ -657,7 +670,7 @@ async fn dashboard_node_readings(State(state): State<AppState>) -> impl IntoResp
         let mut node_number = 0;
 
         let mut area_nodes: Vec<String> = Vec::new();
-        for (key, _) in &node_latest {
+        for key in node_latest.keys() {
             if key.0 == *area_id {
                 area_nodes.push(key.1.clone());
             }
@@ -987,6 +1000,105 @@ async fn ingest_telemetry_batch(
         "failed": total - inserted,
         "total": total,
     })).into_response()
+}
+
+// ==================== OTA 触发 (MQTT 方式) ====================
+
+use std::time::Duration;
+
+static OTA_FW_VERSION: &str = "20260707-161000";
+
+async fn trigger_ota(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    headers: axum::http::HeaderMap,
+) -> impl IntoResponse {
+    // 0. API Key 认证（如果配置了 OTA_API_KEY 环境变量）
+    if let Ok(expected_key) = std::env::var("OTA_API_KEY") {
+        let provided_key = headers
+            .get("X-API-Key")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("");
+        if provided_key != expected_key {
+            return (StatusCode::UNAUTHORIZED, Json(serde_json::json!({"error": "Unauthorized"}))).into_response();
+        }
+    }
+
+    // 1. 查找设备对应的 node_id
+    let node_row = sqlx::query_as::<_, (String,)>(
+        "SELECT node_id FROM devices WHERE id = ? OR node_id = ?"
+    ).bind(&id).bind(&id).fetch_optional(&state.pool).await;
+
+    let node_id = match node_row {
+        Ok(Some(row)) => row.0,
+        Ok(None) => return not_found(Some("Device not found")),
+        Err(e) => return internal_err(e),
+    };
+
+    // 2. 读取固件文件
+    let fw_path = format!("agri-server/static/firmware/firmware-{}-{}.bin", node_id, OTA_FW_VERSION);
+    let fw_data = match tokio::fs::read(&fw_path).await {
+        Ok(d) => d,
+        Err(e) => return internal_err(format!("Cannot read firmware {}: {}", fw_path, e)),
+    };
+
+    // 3. 读取 ECDSA 签名（.sig 文件）
+    let sig_path = format!("{}.sig", fw_path);
+    let sig = match tokio::fs::read_to_string(&sig_path).await {
+        Ok(s) => s.trim().to_string(),
+        Err(e) => return internal_err(format!("Cannot read signature {}: {}", sig_path, e)),
+    };
+
+    let cmd_payload = serde_json::json!({
+        "command": "ota_mqtt",
+        "params": {
+            "total_size": fw_data.len(),
+            "sig": sig,
+        }
+    });
+
+    // 4. 通过 MQTT 发布命令
+    let client = state.mqtt_client.lock().await;
+    let mqtt = match client.as_ref() {
+        Some(c) => c.clone(),
+        None => return internal_err("MQTT client not available"),
+    };
+    drop(client);
+
+    let cmd_topic = agri_core::topics::command_topic(&node_id, "ota_mqtt");
+    if let Err(e) = mqtt.publish(
+        &cmd_topic, rumqttc::QoS::AtLeastOnce, false, cmd_payload.to_string().as_bytes()
+    ).await {
+        return internal_err(format!("MQTT publish failed: {}", e));
+    }
+    tracing::info!("OTA command sent to {} via MQTT (total_size={})", node_id, fw_data.len());
+
+    // 记录返回值（clone 避免所有权冲突）
+    let resp = ok_json(serde_json::json!({
+        "message": "OTA triggered",
+        "node_id": &node_id,
+        "total_size": fw_data.len(),
+        "sig": sig,
+    }));
+
+    // 5. 异步发送固件块
+    let chunk_topic = agri_core::topics::command_topic(&node_id, "ota_chunk");
+    let chunk_node_id = node_id.clone();
+    tokio::spawn(async move {
+        let chunk_size = 4096usize;
+        for chunk in fw_data.chunks(chunk_size) {
+            if mqtt.publish(
+                &chunk_topic, rumqttc::QoS::AtMostOnce, false, chunk
+            ).await.is_err() {
+                tracing::warn!("OTA chunk send failed for {}", chunk_node_id);
+                return;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        tracing::info!("All OTA chunks sent to {} via MQTT", chunk_node_id);
+    });
+
+    resp
 }
 
 #[cfg(test)]

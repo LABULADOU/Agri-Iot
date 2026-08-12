@@ -8,9 +8,9 @@ pub fn start_broker(port: u16) -> Result<()> {
     let mut config = Config::default();
     config.id = 0;
     config.router.max_connections = 1000;
-    config.router.max_outgoing_packet_count = 1000;
-    config.router.max_segment_size = 100_000;
-    config.router.max_segment_count = 10;
+    config.router.max_outgoing_packet_count = 1_000_000;
+    config.router.max_segment_size = 1_000_000;
+    config.router.max_segment_count = 10_000;
 
     let mut servers = HashMap::new();
     servers.insert(
@@ -21,9 +21,9 @@ pub fn start_broker(port: u16) -> Result<()> {
             tls: None,
             next_connection_delay_ms: 1,
             connections: ConnectionSettings {
-                connection_timeout_ms: 10,
+                connection_timeout_ms: 60_000,
                 max_payload_size: 268_435_456,
-                max_inflight_count: 200,
+                max_inflight_count: 5000,
                 auth: None,
                 dynamic_filters: false,
             },
@@ -41,9 +41,9 @@ pub fn start_broker(port: u16) -> Result<()> {
             tls: None,
             next_connection_delay_ms: 1,
             connections: ConnectionSettings {
-                connection_timeout_ms: 10,
+                connection_timeout_ms: 60_000,
                 max_payload_size: 268_435_456,
-                max_inflight_count: 200,
+                max_inflight_count: 5000,
                 auth: None,
                 dynamic_filters: false,
             },

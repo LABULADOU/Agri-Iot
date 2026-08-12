@@ -6,7 +6,21 @@ use axum::http::{Request, Response, StatusCode};
 use rumqttc::QoS;
 use std::convert::Infallible;
 use tower::service_fn;
-use tracing::info;
+use tracing::{info, error};
+
+/// Spawn a tokio task with panic logging.
+fn spawn_tracked<F>(name: &str, future: F)
+where
+    F: std::future::Future<Output = ()> + Send + 'static,
+{
+    let name = name.to_string();
+    tokio::spawn(async move {
+        let result = tokio::task::spawn(future).await;
+        if let Err(e) = result {
+            error!("Task '{}' panicked: {}", name, e);
+        }
+    });
+}
 
 fn content_type(ext: &str) -> &'static str {
     match ext {
@@ -35,6 +49,10 @@ mod mqtt_ws;
 mod rate_limiter;
 mod decision;
 mod farm_log;
+mod inventory;
+mod mixing;
+#[path = "yield.rs"]
+mod yield_rs;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -43,6 +61,7 @@ async fn main() -> Result<()> {
             tracing_subscriber::EnvFilter::from_default_env()
                 .add_directive("agri_server=info".parse()?)
                 .add_directive("agri_mqtt=info".parse()?)
+                .add_directive("agri_core=info".parse()?)
                 .add_directive("rumqttc=warn".parse()?),
         )
         .init();
@@ -70,13 +89,13 @@ async fn main() -> Result<()> {
     // Spawn MQTT event loop listener
     let listener_pool = app_state.pool.clone();
     let listener_tx = app_state.event_tx.clone();
-    tokio::spawn(async move {
+    spawn_tracked("mqtt-listener", async move {
         agri_mqtt::handler::start_listener(eventloop, listener_pool, Some(listener_tx)).await;
     });
 
     // 定期清理限流器过期桶
     let limiter = app_state.telemetry_limiter.clone();
-    tokio::spawn(async move {
+    spawn_tracked("limiter-cleanup", async move {
         loop {
             tokio::time::sleep(std::time::Duration::from_secs(60)).await;
             limiter.cleanup();
@@ -84,7 +103,7 @@ async fn main() -> Result<()> {
     });
 
     let rule_state = app_state.clone();
-    tokio::spawn(async move {
+    spawn_tracked("rule-engine", async move {
         tokio::time::sleep(std::time::Duration::from_secs(2)).await;
         if let Err(e) = rule_engine::start(rule_state).await {
             tracing::error!("Rule engine error: {}", e);
@@ -92,7 +111,7 @@ async fn main() -> Result<()> {
     });
 
     let decision_state = app_state.clone();
-    tokio::spawn(async move {
+    spawn_tracked("decision-engine", async move {
         tokio::time::sleep(std::time::Duration::from_secs(3)).await;
         if let Err(e) = decision::start(decision_state).await {
             tracing::error!("Decision engine error: {}", e);
@@ -134,7 +153,10 @@ async fn main() -> Result<()> {
         .merge(weather_router)
         .route("/mqtt", axum::routing::get(mqtt_ws::ws_handler))
         .merge(ai_routes::create_router(app_state.clone()))
-        .merge(farm_log::create_router(app_state));
+        .merge(farm_log::create_router(app_state.clone()))
+        .merge(inventory::create_router(app_state.clone()))
+        .merge(yield_rs::create_router(app_state.clone()))
+        .merge(mixing::create_router(app_state));
 
     let static_dir = std::path::PathBuf::from("agri-server/static")
         .canonicalize()

@@ -1,13 +1,13 @@
-use agri_core::models::{FarmOpStatus, FarmOperation, FarmOpTemplate, JsonValue, UuidText};
+use agri_core::models::{FarmOpStatus, FarmOperation, FarmOpTemplate};
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
     response::IntoResponse,
-    routing::{get, post, put, delete},
+    routing::{get, put},
     Json, Router,
 };
 use chrono::Utc;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::response;

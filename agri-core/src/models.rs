@@ -55,7 +55,7 @@ pub struct Device {
 impl Device {
     /// 检查设备是否支持给定 capability
     pub fn has_capability(&self, cap: &str) -> bool {
-        self.capabilities.as_ref().and_then(|c| c.0.as_array()).map_or(false, |arr| {
+        self.capabilities.as_ref().and_then(|c| c.0.as_array()).is_some_and(|arr| {
             arr.iter().any(|v| v.as_str() == Some(cap))
         })
     }
@@ -240,7 +240,7 @@ impl SensorUtils {
 
     /// 计算湿度百分比是否在正常范围内(0-100)
     pub fn is_valid_humidity(humidity: f64) -> bool {
-        humidity >= 0.0 && humidity <= 100.0
+        (0.0..=100.0).contains(&humidity)
     }
 
     /// 检查温度是否超过阈值

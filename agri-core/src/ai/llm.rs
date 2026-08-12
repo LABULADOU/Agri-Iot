@@ -73,7 +73,7 @@ impl LlmProvider {
             model: self.model.clone(),
             messages,
             temperature: self.temperature,
-            max_tokens: self.max_tokens as u64,
+            max_tokens: self.max_tokens,
             response_format: None,
         };
 
@@ -116,7 +116,7 @@ impl LlmProvider {
                 Message { role: "user".into(), content: user.to_string() },
             ],
             temperature: self.temperature,
-            max_tokens: self.max_tokens as u64,
+            max_tokens: self.max_tokens,
             response_format: Some(ResponseFormat {
                 type_field: "json_object".into(),
             }),

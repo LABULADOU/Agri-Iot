@@ -5,6 +5,7 @@ use std::time::Instant;
 
 /// 天气预警输入
 #[derive(Debug, Clone)]
+#[derive(Default)]
 pub struct WeatherAlertInput {
     pub wind_speed_kmh: Option<f64>,
     pub precipitation_mm_per_hour: Option<f64>,
@@ -493,11 +494,3 @@ mod tests {
     }
 }
 
-impl Default for WeatherAlertInput {
-    fn default() -> Self {
-        Self {
-            wind_speed_kmh: None, precipitation_mm_per_hour: None,
-            temperature_celsius: None, snow_probability: None, humidity: None,
-        }
-    }
-}

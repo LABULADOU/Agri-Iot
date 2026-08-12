@@ -75,6 +75,12 @@ struct GwPayload {
 
 pub struct JsonPayloadAdaptor;
 
+impl Default for JsonPayloadAdaptor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl JsonPayloadAdaptor {
     pub fn new() -> Self {
         JsonPayloadAdaptor
@@ -93,8 +99,21 @@ impl PayloadAdaptor for JsonPayloadAdaptor {
         let boot_id = data.get("boot_id").and_then(|s| s.as_str()).map(String::from);
         let captured_at = data.get("captured_at").and_then(|s| s.as_i64()).filter(|t| *t > 100000);
 
+        if let Some(lc) = data.get("last_cmd") {
+            tracing::info!("[adaptor] Node {} last_cmd={:?} (from root)", node_id, lc);
+        } else {
+            tracing::info!("[adaptor] Node {}: no last_cmd in payload (seq={:?}, keys: {:?})",
+                node_id, seq, data.as_object().map(|o| o.keys().collect::<Vec<_>>()).unwrap_or_default());
+        }
+
         let metrics = match data.get("metrics").and_then(|m| m.as_object()) {
-            Some(m) => m.clone(),
+            Some(m) => {
+                let mut m = m.clone();
+                if let Some(lc) = data.get("last_cmd") {
+                    m.insert("last_cmd".to_string(), lc.clone());
+                }
+                m
+            },
             None => {
                 let mut flat = Map::new();
                 for (k, v) in obj {
@@ -163,6 +182,12 @@ impl PayloadAdaptor for JsonPayloadAdaptor {
 }
 
 pub struct ProtobufPayloadAdaptor;
+
+impl Default for ProtobufPayloadAdaptor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl ProtobufPayloadAdaptor {
     pub fn new() -> Self {
