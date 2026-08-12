@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Typography, Empty, Spin } from 'antd';
+import { Typography, Spin } from 'antd';
 import { DashboardOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useDashboardStore } from '../../stores/dashboardStore';
@@ -94,6 +94,9 @@ const Dashboard: React.FC = () => {
                   latestReadings={nr.readings}
                   anomalyCount={nr.anomalyCount}
                   anomalySeverity={nr.anomalySeverity}
+                  dht22Failed={nr.dht22Failed}
+                  updatedAt={nr.updatedAt}
+                  capturedAt={Math.max(...Object.values(nr.timestamps).filter((t): t is number => !!t), 0) || undefined}
                   onClick={() => navigate(`/zones/${nr.zoneId}`)}
                 />
               );

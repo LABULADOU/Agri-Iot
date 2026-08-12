@@ -70,9 +70,8 @@ class WsService {
     this.pendingMessages = [];
 
     for (const [id, sub] of this.subs) {
-      for (const _handler of sub.handlers) {
+      if (sub.handlers.size > 0) {
         this.ws?.send(JSON.stringify({ id, cmd: 'subscribe', type: sub.type, nodes: sub.nodes }));
-        break;
       }
     }
   }

@@ -112,54 +112,51 @@ async fn build_rule_chain(state: &AppState) -> Result<RuleChain> {
 
     for rule in &rules {
         if !rule.enabled { continue; }
-        match rule.trigger_type {
-            agri_core::models::TriggerType::Condition => {
-                if let Some(conditions) = rule.conditions.get("conditions").and_then(|c| c.as_array()) {
-                    if conditions.is_empty() { continue; }
+        if let agri_core::models::TriggerType::Condition = rule.trigger_type {
+            if let Some(conditions) = rule.conditions.get("conditions").and_then(|c| c.as_array()) {
+                if conditions.is_empty() { continue; }
 
-                    let mut conds: Vec<(String, String, f64)> = Vec::new();
-                    for c in conditions {
-                        let metric = c["metric"].as_str().unwrap_or("").to_string();
-                        let operator = c["operator"].as_str().unwrap_or(">").to_string();
-                        let threshold = c["value"].as_f64().unwrap_or(0.0);
-                        conds.push((metric, operator, threshold));
-                    }
+                let mut conds: Vec<(String, String, f64)> = Vec::new();
+                for c in conditions {
+                    let metric = c["metric"].as_str().unwrap_or("").to_string();
+                    let operator = c["operator"].as_str().unwrap_or(">").to_string();
+                    let threshold = c["value"].as_f64().unwrap_or(0.0);
+                    conds.push((metric, operator, threshold));
+                }
 
-                    let filter_idx = chain.add_node(Box::new(
-                        MsgTypeFilterNode::new(&format!("filter_{}", rule.id), &rule.name, vec![TbMsgType::Telemetry])
-                    ));
+                let filter_idx = chain.add_node(Box::new(
+                    MsgTypeFilterNode::new(&format!("filter_{}", rule.id), &rule.name, vec![TbMsgType::Telemetry])
+                ));
 
-                    let cond_idx = if conds.len() == 1 {
-                        chain.add_node(Box::new(ConditionNode::new(
-                            &format!("cond_{}", rule.id), &rule.name,
-                            &conds[0].0, &conds[0].1, conds[0].2,
-                        )))
-                    } else {
-                        chain.add_node(Box::new(MultiConditionNode::new(
-                            &format!("cond_{}", rule.id), &rule.name, conds,
-                        )))
-                    };
+                let cond_idx = if conds.len() == 1 {
+                    chain.add_node(Box::new(ConditionNode::new(
+                        &format!("cond_{}", rule.id), &rule.name,
+                        &conds[0].0, &conds[0].1, conds[0].2,
+                    )))
+                } else {
+                    chain.add_node(Box::new(MultiConditionNode::new(
+                        &format!("cond_{}", rule.id), &rule.name, conds,
+                    )))
+                };
 
-                    chain.add_edge(filter_idx, cond_idx);
-                    chain.add_edge(filter_idx, log_idx);
+                chain.add_edge(filter_idx, cond_idx);
+                chain.add_edge(filter_idx, log_idx);
 
-                    if let Some(actions) = rule.actions.get("actions").and_then(|a| a.as_array()) {
-                        for (ai, action) in actions.iter().enumerate() {
-                            let device_id = action["device_id"].as_str().unwrap_or("");
-                            let command = action["command"].as_str().unwrap_or("");
-                            let params = action["params"].clone();
-                            if device_id.is_empty() || command.is_empty() { continue; }
-                            let act_idx = chain.add_node(Box::new(ActionNode::new(
-                                &format!("act_{}_{}", rule.id, ai), &rule.name,
-                                device_id, command, params,
-                                rule.priority > 0 || rule.auto_execute,
-                            )));
-                            chain.add_edge(cond_idx, act_idx);
-                        }
+                if let Some(actions) = rule.actions.get("actions").and_then(|a| a.as_array()) {
+                    for (ai, action) in actions.iter().enumerate() {
+                        let device_id = action["device_id"].as_str().unwrap_or("");
+                        let command = action["command"].as_str().unwrap_or("");
+                        let params = action["params"].clone();
+                        if device_id.is_empty() || command.is_empty() { continue; }
+                        let act_idx = chain.add_node(Box::new(ActionNode::new(
+                            &format!("act_{}_{}", rule.id, ai), &rule.name,
+                            device_id, command, params,
+                            rule.priority > 0 || rule.auto_execute,
+                        )));
+                        chain.add_edge(cond_idx, act_idx);
                     }
                 }
             }
-            _ => {}
         }
     }
 
@@ -241,9 +238,21 @@ async fn run_timer_checks(
         use std::sync::atomic::{AtomicU8, Ordering};
         static ANOMALY_TICK: AtomicU8 = AtomicU8::new(0);
         let tick = ANOMALY_TICK.fetch_add(1, Ordering::Relaxed);
-        if tick % 2 == 0 {
+        if tick.is_multiple_of(2) {
             anomaly::run_anomaly_detection(pool, event_tx).await;
         }
+    }
+
+    // Clean up stale pending commands (>48h, handles mixed TEXT/INTEGER created_at)
+    {
+        let cutoff = Utc::now().timestamp() - 172800;
+        let _ = sqlx::query(
+            "UPDATE command_log SET status = 'expired' \
+             WHERE status = 'pending' AND CAST(created_at AS INTEGER) < ?"
+        )
+        .bind(cutoff)
+        .execute(pool)
+        .await;
     }
 
     let cutoff = Utc::now().timestamp() - 300;

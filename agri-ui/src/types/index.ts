@@ -188,6 +188,7 @@ export interface GeoCity {
   id: string;
   adm1: string;
   adm2: string;
+  country?: string;
 }
 
 export interface HourlyPrecip {
@@ -432,4 +433,120 @@ export interface AnomalyEvent {
   value_original?: number;
   message: string;
   timestamp: number;
+}
+// ==================== Inventory ====================
+export type InventoryCategory = 'seed' | 'fertilizer' | 'pesticide' | 'materiel' | 'other';
+
+export interface InventoryItem {
+  id: string;
+  name: string;
+  category: InventoryCategory;
+  unit: string;
+  price: number;
+  stock: number;
+  warning_threshold: number;
+  low_stock: boolean;
+  batch_no: string;
+  expiry_date: string;
+  manufacturer: string;
+  specs: string;
+  notes: string;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface InventoryTransaction {
+  id: string;
+  item_id: string;
+  item_name: string;
+  txn_type: 'in' | 'out' | 'adjust';
+  quantity: number;
+  operator: string;
+  related_type: string;
+  related_id: string;
+  note: string;
+  created_at: number;
+}
+
+// ==================== Yield ====================
+export interface Harvest {
+  id: string;
+  area_id: string;
+  area_name: string;
+  crop_batch_id?: string;
+  crop_name?: string;
+  harvest_date: string;
+  quantity: number;
+  unit: string;
+  grade: string;
+  price: number;
+  amount: number;
+  operator: string;
+  notes: string;
+  created_at: number;
+}
+
+export interface YieldAnalysis {
+  yield: {
+    total_quantity: number;
+    total_revenue: number;
+    total_harvests: number;
+    input_cost_estimate: number;
+    net_profit_estimate: number;
+  };
+  areas: Array<{ area_id: string; area_name: string; total_quantity: number; total_amount: number; harvest_count: number }>;
+  trend: Array<{ date: string; quantity: number; amount: number }>;
+  grades: Array<{ grade: string; quantity: number; amount: number }>;
+  operations: Record<string, number>;
+}
+
+// ==================== Mixing ====================
+export interface MixingPlan {
+  type: 'fertilizer' | 'pesticide';
+  stage?: string;
+  stage_key?: string;
+  growth_days?: number;
+  target_pest?: string;
+  severity?: string;
+  treatment?: string;
+  source: 'preset' | 'knowledge' | 'fallback' | 'base';
+  plan: {
+    items: Array<{ name: string; n?: number; p?: number; k?: number; amount?: number; unit?: string; dilution?: string }>;
+    dilution?: string;
+    water_volume?: number | string;
+    ec_target?: number;
+    safety_interval_days?: number;
+  };
+  adjustments: string[];
+  reasoning: string;
+}
+
+export interface MixingRecipe {
+  id: string;
+  area_id: string;
+  area_name: string;
+  crop_batch_id?: string;
+  mix_type: 'fertilizer' | 'pesticide';
+  stage_key: string;
+  growth_days: number;
+  result: MixingPlan;
+  status: 'generated' | 'applied';
+  farm_op_id: string;
+  created_at: number;
+}
+
+export interface MixingPreset {
+  id: string;
+  crop_id?: string;
+  mix_type: 'fertilizer' | 'pesticide';
+  stage_key: string;
+  name: string;
+  items: Array<{ name: string; dilution?: string; amount?: number; unit?: string }>;
+  dilution: string;
+  dosage_per_unit: string;
+  water_volume: string;
+  ec_target?: number;
+  safety_interval_days: number;
+  note: string;
+  created_at: number;
 }

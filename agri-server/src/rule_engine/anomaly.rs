@@ -16,6 +16,8 @@ pub enum AnomalyType {
     SpatialAnomaly,
     /// E5: A metric that was previously reporting has stopped
     MetricSilent,
+    /// E6: Device is online but has sent zero telemetry in >10 minutes
+    TelemetrySilent,
 }
 
 /// Severity
@@ -70,7 +72,7 @@ where
 {
     let dedup = DEDUP.get_or_init(|| Mutex::new(DedupTracker::new()));
     if let Ok(mut guard) = dedup.lock() {
-        f(&mut *guard);
+        f(&mut guard);
     }
 }
 
@@ -120,6 +122,10 @@ fn dispatch(dedup: &mut DedupTracker, pool: &SqlitePool, event: &AnomalyEvent, t
 
 /// Main entry: run all anomaly detectors. Called every 60s from rule engine timer.
 pub async fn run_anomaly_detection(pool: &SqlitePool, event_tx: &broadcast::Sender<String>) {
+    // E6: Telemetry silence — device online but no readings at all
+    if let Err(e) = detect_telemetry_silence(pool, event_tx).await {
+        tracing::warn!("telemetry_silence check failed: {}", e);
+    }
     // E5: Metric silence detection
     if let Err(e) = detect_metric_silence(pool, event_tx).await {
         tracing::warn!("metric_silence check failed: {}", e);
@@ -128,6 +134,55 @@ pub async fn run_anomaly_detection(pool: &SqlitePool, event_tx: &broadcast::Send
     if let Err(e) = detect_rate_and_spatial(pool, event_tx).await {
         tracing::warn!("rate/spatial check failed: {}", e);
     }
+}
+
+/// E6: Detect devices that are online but have sent zero telemetry in >10 minutes.
+/// This catches the case where the ESP32 keeps sending status keep-alives
+/// but publishTelemetry() has silently failed.
+async fn detect_telemetry_silence(
+    pool: &SqlitePool,
+    event_tx: &broadcast::Sender<String>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let now = Utc::now().timestamp();
+    let cutoff = now - 600; // 10 minutes
+
+    let rows: Vec<(String,)> = sqlx::query_as(
+        "SELECT d.node_id FROM devices d \
+         WHERE d.status = 'online' \
+         AND d.updated_at > ? \
+         AND NOT EXISTS ( \
+           SELECT 1 FROM sensor_readings sr \
+           WHERE sr.device_id = d.id AND sr.timestamp > ? \
+         )"
+    )
+    .bind(cutoff - 300)  // updated_at within last 15 min (to avoid stale "online" from old sessions)
+    .bind(cutoff)
+    .fetch_all(pool)
+    .await?;
+
+    if rows.is_empty() {
+        return Ok(());
+    }
+
+    with_dedup(|dedup| {
+        for (node_id,) in &rows {
+            let event = AnomalyEvent {
+                node_id: node_id.clone(),
+                metric: "telemetry".to_string(),
+                anomaly_type: AnomalyType::TelemetrySilent,
+                severity: Severity::Warning,
+                value_original: None,
+                message: format!(
+                    "{} is online but has not sent any telemetry in >10 minutes — possible publishTelemetry failure",
+                    node_id
+                ),
+                timestamp: now,
+            };
+            dispatch(dedup, pool, &event, event_tx);
+        }
+    });
+
+    Ok(())
 }
 
 /// E5: Detect metrics that have stopped reporting.
@@ -311,9 +366,9 @@ async fn detect_rate_and_spatial(
 
 fn median(vals: &mut Vec<f64>) -> f64 {
     if vals.is_empty() { return 0.0; }
-    vals.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    vals.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
     let len = vals.len();
-    if len % 2 == 0 {
+    if len.is_multiple_of(2) {
         (vals[len / 2 - 1] + vals[len / 2]) / 2.0
     } else {
         vals[len / 2]

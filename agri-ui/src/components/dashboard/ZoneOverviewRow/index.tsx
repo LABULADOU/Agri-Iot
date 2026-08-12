@@ -1,6 +1,6 @@
 import React from 'react';
-import { Typography, Badge, Tooltip } from 'antd';
-import { WarningOutlined, CheckCircleOutlined } from '@ant-design/icons';
+import { Typography, Badge, Tooltip, Tag } from 'antd';
+import { WarningOutlined, CheckCircleOutlined, DisconnectOutlined } from '@ant-design/icons';
 import type { Zone } from '../../../types';
 import styles from './ZoneOverviewRow.module.css';
 
@@ -29,7 +29,18 @@ interface ZoneOverviewRowProps {
   status?: string;
   anomalyCount?: number;
   anomalySeverity?: string;
+  dht22Failed?: boolean;
+  updatedAt?: number;
+  capturedAt?: number;
   onClick?: () => void;
+}
+
+function calcStaleMinutes(updatedAt?: number): number | null {
+  if (!updatedAt) return null;
+  const nowSec = Date.now() / 1000;
+  const diff = nowSec - updatedAt;
+  if (diff < 0) return null;
+  return Math.floor(diff / 60);
 }
 
 const ZoneOverviewRow: React.FC<ZoneOverviewRowProps> = ({
@@ -42,10 +53,14 @@ const ZoneOverviewRow: React.FC<ZoneOverviewRowProps> = ({
   status = 'optimal',
   anomalyCount = 0,
   anomalySeverity,
+  dht22Failed = false,
+  updatedAt,
+  capturedAt,
   onClick,
 }) => {
   const isOffline = totalCount > 0 && onlineCount === 0;
   const isAlert = status === 'danger' || status === 'warning';
+  const staleMinutes = calcStaleMinutes(updatedAt);
 
   return (
     <div
@@ -58,6 +73,11 @@ const ZoneOverviewRow: React.FC<ZoneOverviewRowProps> = ({
       </span>
       <span className={styles.nodeCol}>
         <Text>{nodeName || zone.cropType || '--'}</Text>
+        {capturedAt ? (
+          <div style={{ fontSize: 10, color: 'var(--text-secondary, #888)', marginTop: 2 }}>
+            {new Date(capturedAt * 1000).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
+          </div>
+        ) : null}
       </span>
       <span className={styles.metric} data-label="气温">
         <Text>{latestReadings.airTemp?.toFixed(1) ?? '--'}℃</Text>
@@ -77,9 +97,22 @@ const ZoneOverviewRow: React.FC<ZoneOverviewRowProps> = ({
       <span className={styles.nodes}>
         <Badge status={isOffline ? 'error' : 'success'} />
         <Text type="secondary">{onlineCount}/{totalCount}</Text>
+        {!isOffline && staleMinutes !== null && staleMinutes > 5 && (
+          <Tooltip title={`数据 ${staleMinutes} 分钟未更新（设备在线但无遥测）`}>
+            <Text type="warning" style={{ fontSize: 11, marginLeft: 4 }}>
+              过期{staleMinutes}分
+            </Text>
+          </Tooltip>
+        )}
       </span>
       <span className={styles.sensorHealth}>
-        {anomalyCount > 0 ? (
+        {dht22Failed ? (
+          <Tooltip title="DHT22 温湿度传感器故障，数据丢失">
+            <Tag color="error" style={{ margin: 0, fontSize: 11, lineHeight: '18px', padding: '0 4px' }}>
+              <DisconnectOutlined /> DHT22
+            </Tag>
+          </Tooltip>
+        ) : anomalyCount > 0 ? (
           <Tooltip title={`${anomalyCount} 个传感器异常 (${anomalySeverity || 'Warning'})`}>
             <span className={styles.anomalyBadge}>
               <WarningOutlined style={{ color: anomalySeverity === 'Critical' ? '#EF4444' : '#F59E0B' }} />

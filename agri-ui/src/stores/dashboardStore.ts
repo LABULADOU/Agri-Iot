@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Zone, Assessment, Emergency, TodoItem, Device, AnomalyEvent } from '../types';
+import type { Zone, Assessment, Emergency, TodoItem, AnomalyEvent } from '../types';
 import { zoneApi, deviceApi, aiApi } from '../services/api';
 import { wsService } from '../services/ws';
 import { useRealtimeStore } from './realtimeStore';
@@ -10,6 +10,13 @@ interface LatestReadings {
   soilTemp: number | undefined;
   soilMoisture: number | undefined;
   ec: number | undefined;
+  dhtStatus: number | undefined;
+}
+
+interface ReadingMeta {
+  value: number;
+  unit: string;
+  timestamp?: number;
 }
 
 export interface ZoneNodeReading {
@@ -18,9 +25,12 @@ export interface ZoneNodeReading {
   nodeId: string;
   nodeName: string;
   readings: LatestReadings;
+  timestamps: Partial<Record<keyof LatestReadings, number>>;
   status: string;
   anomalyCount: number;
   anomalySeverity?: string;
+  dht22Failed: boolean;
+  updatedAt?: number;
 }
 
 interface DashboardState {
@@ -92,7 +102,7 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
     try {
       const [zones, readingsData, devices] = await Promise.all([
         zoneApi.list(),
-        fetch('/api/v1/dashboard/node-readings').then(r => r.json()) as Promise<{ areas?: Array<{ area_id: string; area_name: string; nodes: Array<{ node_id: string; status: string; updated_at: number; latest: Record<string, { value: number; unit: string }> }> }> }>,
+        fetch('/api/v1/dashboard/node-readings').then(r => r.json()) as Promise<{ areas?: Array<{ area_id: string; area_name: string; nodes: Array<{ node_id: string; status: string; updated_at: number; latest: Record<string, ReadingMeta> }> }> }>,
         deviceApi.list(),
       ]);
       const deviceNameMap = new Map(devices.map(d => [d.node_id, d.name]));
@@ -100,21 +110,32 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
       const nodeReadings: ZoneNodeReading[] = [];
       for (const area of readingsData.areas || []) {
         for (const node of area.nodes) {
-          const readings: LatestReadings = { airTemp: undefined, humidity: undefined, soilTemp: undefined, soilMoisture: undefined, ec: undefined };
+          const readings: LatestReadings = { airTemp: undefined, humidity: undefined, soilTemp: undefined, soilMoisture: undefined, ec: undefined, dhtStatus: undefined };
           const latest = node.latest || {};
           if (latest.temperature?.value !== undefined) readings.airTemp = latest.temperature.value;
           if (latest.humidity?.value !== undefined) readings.humidity = latest.humidity.value;
           if (latest.soil_temperature?.value !== undefined) readings.soilTemp = latest.soil_temperature.value;
           if (latest.soil_moisture?.value !== undefined) readings.soilMoisture = latest.soil_moisture.value;
           if (latest.ec?.value !== undefined) readings.ec = latest.ec.value;
+          if (latest.dht_status?.value !== undefined) readings.dhtStatus = latest.dht_status.value;
+          const timestamps: Partial<Record<keyof LatestReadings, number>> = {};
+          if (latest.temperature?.timestamp) timestamps.airTemp = latest.temperature.timestamp;
+          if (latest.humidity?.timestamp) timestamps.humidity = latest.humidity.timestamp;
+          if (latest.soil_temperature?.timestamp) timestamps.soilTemp = latest.soil_temperature.timestamp;
+          if (latest.soil_moisture?.timestamp) timestamps.soilMoisture = latest.soil_moisture.timestamp;
+          if (latest.ec?.timestamp) timestamps.ec = latest.ec.timestamp;
+          if (latest.dht_status?.timestamp) timestamps.dhtStatus = latest.dht_status.timestamp;
           nodeReadings.push({
             zoneId: area.area_id,
             zoneName: area.area_name,
             nodeId: node.node_id,
             nodeName: deviceNameMap.get(node.node_id) || node.node_id,
             readings,
+            timestamps,
             status: node.status || 'offline',
             anomalyCount: 0,
+            dht22Failed: (readings.dhtStatus ?? 0) >= 1,
+            updatedAt: node.updated_at,
           });
         }
       }
@@ -125,35 +146,39 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
       if (!get()._realtimeUnsub) {
         const unsubRealtime = useRealtimeStore.getState().onTelemetry((msg) => {
           const nodeId = msg.node_id as string;
-          const readings = msg.readings as Array<{ metric: string; value: number }> | undefined;
+          const readings = msg.readings as Array<{ metric: string; value: number; timestamp?: number }> | undefined;
           if (!nodeId || !readings) return;
 
           set(state => {
             const updated = state.nodeReadings.map(nr => {
               if (nr.nodeId !== nodeId) return nr;
               const newReadings = { ...nr.readings };
+              const newTimestamps = { ...nr.timestamps };
               for (const r of readings) {
                 switch (r.metric) {
-                  case 'temperature': newReadings.airTemp = r.value; break;
-                  case 'humidity': newReadings.humidity = r.value; break;
-                  case 'soil_temperature': newReadings.soilTemp = r.value; break;
-                  case 'soil_moisture': newReadings.soilMoisture = r.value; break;
-                  case 'ec': newReadings.ec = r.value; break;
+                  case 'temperature': newReadings.airTemp = r.value; if (r.timestamp) newTimestamps.airTemp = r.timestamp; break;
+                  case 'humidity': newReadings.humidity = r.value; if (r.timestamp) newTimestamps.humidity = r.timestamp; break;
+                  case 'soil_temperature': newReadings.soilTemp = r.value; if (r.timestamp) newTimestamps.soilTemp = r.timestamp; break;
+                  case 'soil_moisture': newReadings.soilMoisture = r.value; if (r.timestamp) newTimestamps.soilMoisture = r.timestamp; break;
+                  case 'ec': newReadings.ec = r.value; if (r.timestamp) newTimestamps.ec = r.timestamp; break;
+                  case 'dht_status': newReadings.dhtStatus = r.value; if (r.timestamp) newTimestamps.dhtStatus = r.timestamp; break;
                 }
               }
-              return { ...nr, readings: newReadings, status: 'online' };
+              return { ...nr, readings: newReadings, timestamps: newTimestamps, status: 'online', dht22Failed: (newReadings.dhtStatus ?? 0) >= 1 };
             });
             if (!state.nodeReadings.some(nr => nr.nodeId === nodeId)) {
               const device = devices.find(d => d.node_id === nodeId);
               if (device) {
-                const newReadings: LatestReadings = { airTemp: undefined, humidity: undefined, soilTemp: undefined, soilMoisture: undefined, ec: undefined };
+                const newReadings: LatestReadings = { airTemp: undefined, humidity: undefined, soilTemp: undefined, soilMoisture: undefined, ec: undefined, dhtStatus: undefined };
+                const newTimestamps: Partial<Record<keyof LatestReadings, number>> = {};
                 for (const r of readings) {
                   switch (r.metric) {
-                    case 'temperature': newReadings.airTemp = r.value; break;
-                    case 'humidity': newReadings.humidity = r.value; break;
-                    case 'soil_temperature': newReadings.soilTemp = r.value; break;
-                    case 'soil_moisture': newReadings.soilMoisture = r.value; break;
-                    case 'ec': newReadings.ec = r.value; break;
+                    case 'temperature': newReadings.airTemp = r.value; if (r.timestamp) newTimestamps.airTemp = r.timestamp; break;
+                    case 'humidity': newReadings.humidity = r.value; if (r.timestamp) newTimestamps.humidity = r.timestamp; break;
+                    case 'soil_temperature': newReadings.soilTemp = r.value; if (r.timestamp) newTimestamps.soilTemp = r.timestamp; break;
+                    case 'soil_moisture': newReadings.soilMoisture = r.value; if (r.timestamp) newTimestamps.soilMoisture = r.timestamp; break;
+                    case 'ec': newReadings.ec = r.value; if (r.timestamp) newTimestamps.ec = r.timestamp; break;
+                    case 'dht_status': newReadings.dhtStatus = r.value; if (r.timestamp) newTimestamps.dhtStatus = r.timestamp; break;
                   }
                 }
                 updated.push({
@@ -162,8 +187,10 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
                   nodeId: device.node_id,
                   nodeName: device.name || device.node_id,
                   readings: newReadings,
+                  timestamps: newTimestamps,
                   status: 'online',
                   anomalyCount: 0,
+                  dht22Failed: (newReadings.dhtStatus ?? 0) >= 1,
                 });
               }
             }
