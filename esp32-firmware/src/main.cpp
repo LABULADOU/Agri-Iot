@@ -55,7 +55,7 @@ const char* FUNNEL_PATH = "/mqtt";
 #error "NODE_ID_STR must be defined via -DNODE_ID_STR=\"esp32-node-00x\""
 #endif
 const char* NODE_ID = NODE_ID_STR;
-const char* FW_VERSION = "4.0.1";
+const char* FW_VERSION = "4.0.3";
 const char* MQTT_CLIENT_ID = NODE_ID;
 const char* MQTT_USER = "";
 const char* MQTT_PASS = "";
@@ -79,8 +79,9 @@ uint32_t soilBaud = 4800;
 #define SOIL_TIMEOUT 1000
 
 // 采集间隔
-const unsigned long READ_INTERVAL = 10000;
+const unsigned long READ_INTERVAL = 300000;  // 5 分钟
 const unsigned long MQTT_RECONNECT_INTERVAL = 5000;
+const unsigned long TELEMETRY_SILENT_TIMEOUT = 600000;  // 10 分钟（需 > READ_INTERVAL）
 
 // 离线缓冲区
 #define BUFFER_FILE "/buffer.dat"
@@ -89,7 +90,7 @@ const unsigned long MQTT_RECONNECT_INTERVAL = 5000;
 // 断线后采集间隔逐步降低(10s→60s→300s)，有效覆盖时间远超 2 小时
 #define BUFFER_MAX_LINES 800
 #define BUFFER_FLUSH_BATCH 20
-#define MQTT_BUF_SIZE 512
+#define MQTT_BUF_SIZE 5120
 
 // ==================== 全局变量 ====================
 
@@ -107,7 +108,17 @@ bool relayState = false;
 wl_status_t lastWifiStatus = WL_CONNECTED;  // loop() 启动时 WiFi 已连接
 unsigned long lastWifiOnline = 0;           // 上次 WiFi 在线的时间戳
 unsigned long mqttSeq = 0;
+unsigned long lastTelemetryOk = 0;      // 上次遥测发布成功的时间戳（看门狗用）
 const char* lastCmdResult = "";  // OTA/命令执行结果反馈
+
+// MQTT 流式 OTA 状态（通过现有 WebSocket MQTT 连接接收固件块）
+bool otaMqttMode = false;
+size_t otaMqttTotal = 0;
+size_t otaMqttReceived = 0;
+char otaMqttSig[128] = {0};
+mbedtls_sha256_context otaMqttCtx;
+bool otaMqttCtxInit = false;
+int otaMqttLastPct = -1;
 
 // 连接模式枚举
 enum MqttTransport {
@@ -139,7 +150,7 @@ void flashFlushBuffer();
 void handleMqttCommand(const char* json);
 void resolveLanHost();
 void appendToBuffer(const char* line);
-bool otaUpdate(const char* url, const char* sig);
+
 
 // ==================== Modbus CRC16 ====================
 
@@ -382,6 +393,14 @@ static bool wsSendMqttPublish(const char* topic, const uint8_t* payload, size_t 
     uint16_t packetId = seq & 0xFFFF;
     
     uint16_t remaining = 2 + topicLen + (qos > 0 ? 2 : 0) + payloadLen;
+    
+    // 边界检查：防止栈缓冲区溢出
+    size_t totalNeeded = 4 + topicLen + 2 + payloadLen;  // header(4 max) + topic + pktId + payload
+    if (totalNeeded > 512) {
+        Serial.printf("MQTT PUBLISH: packet too large (%u bytes)\n", (unsigned)totalNeeded);
+        return false;
+    }
+    
     uint8_t packet[512];
     size_t pos = 0;
     
@@ -442,11 +461,12 @@ static void wsSendMqttDisconnect() {
 }
 
 // 解析 MQTT 剩余长度（varint）
-static size_t parseMqttRemaining(const uint8_t* buf, size_t& consumed) {
+static size_t parseMqttRemaining(const uint8_t* buf, size_t len, size_t& consumed) {
+    if (len < 2) { consumed = 0; return 0; }
     size_t value = 0;
     int multiplier = 1;
     consumed = 0;
-    for (int i = 1; i < 5; i++) {
+    for (int i = 1; i < 5 && (size_t)i < len; i++) {
         uint8_t byte = buf[i];
         value += (byte & 0x7F) * multiplier;
         multiplier *= 128;
@@ -462,7 +482,7 @@ static void handleMqttPacket(const uint8_t* data, size_t len) {
     uint8_t type = data[0] & 0xF0;
     
     size_t rlConsumed = 0;
-    size_t remaining = parseMqttRemaining(data, rlConsumed);
+    size_t remaining = parseMqttRemaining(data, len, rlConsumed);
     size_t headerLen = 1 + rlConsumed;
     
     if (len < headerLen + remaining) return; // incomplete
@@ -502,25 +522,112 @@ static void handleMqttPacket(const uint8_t* data, size_t len) {
             break;
         }
         case MQTT_PUBLISH: {
-            // 收到命令！解析 topic 和 payload
+            // 提取 topic
             size_t off = headerLen;
             if (off + 2 > len) break;
             uint16_t tlen = (data[off] << 8) | data[off + 1];
             off += 2;
             if (off + tlen > len) break;
-            // topic = agri/node/{node_id}/command/{cmd_id}
-            off += tlen; // skip topic
-            // Handle QoS if needed
+            char topic[96];
+            size_t topicCpLen = tlen < sizeof(topic)-1 ? tlen : sizeof(topic)-1;
+            memcpy(topic, data + off, topicCpLen);
+            topic[topicCpLen] = '\0';
+            off += tlen;
+
+            // OTA MQTT 固件块：二进制 payload 直接写入 Flash
+            if (strstr(topic, "ota_chunk")) {
+                size_t poff = off;
+                uint8_t qos = (data[0] & 0x06) >> 1;
+                if (qos > 0) {
+                    if (poff + 2 > len) break;
+                    uint16_t pktId = (data[poff] << 8) | data[poff + 1];
+                    poff += 2;
+                    uint8_t ack[] = { MQTT_PUBACK, 0x02, (uint8_t)(pktId >> 8), (uint8_t)(pktId & 0xFF) };
+                    webSocket.sendBIN(ack, sizeof(ack));
+                }
+                size_t payloadLen = len - poff;
+                if (!otaMqttMode) {
+                    Serial.print("Z");
+                    break;
+                }
+                // 双通道防重复：LAN TCP 通时 WebSocket 路径跳过 OTA chunk，防止 SHA256 被更新两次
+                if (mqtt.connected()) {
+                    break;
+                }
+                Serial.print("+");  // 确认 chunk handler 执行
+                // SHA256 更新
+                mbedtls_sha256_update(&otaMqttCtx, data + poff, payloadLen);
+                // 写入 Flash (const cast needed — Update.write takes non-const uint8_t*)
+                size_t written = Update.write(const_cast<uint8_t*>(data + poff), payloadLen);
+                if (written != payloadLen) {
+                    Serial.printf("!WF(%d/%d)", written, payloadLen);
+                    lastCmdResult = "ota:write_fail";
+                    Update.abort();
+                    if (otaMqttCtxInit) { mbedtls_sha256_free(&otaMqttCtx); otaMqttCtxInit = false; }
+                    otaMqttMode = false;
+                    break;
+                }
+                Serial.print(".");
+                otaMqttReceived += written;
+                int pct = (int)((long long)otaMqttReceived * 100 / otaMqttTotal);
+                int newPct = (pct / 10) * 10;
+                if (newPct != otaMqttLastPct && newPct % 10 == 0 && newPct > 0) {
+                    Serial.print("OTA:"); Serial.print(newPct); Serial.print("% ");
+                    otaMqttLastPct = newPct;
+                }
+                // 最后一块：验证签名 + 完成 OTA
+                if (otaMqttReceived >= otaMqttTotal) {
+                    Serial.println("OTA MQTT: 接收完成，验证签名...");
+                    uint8_t hash[32];
+                    mbedtls_sha256_finish(&otaMqttCtx, hash);
+                    mbedtls_sha256_free(&otaMqttCtx);
+                    otaMqttCtxInit = false;
+                    mbedtls_pk_context pk;
+                    mbedtls_pk_init(&pk);
+                    int ret = mbedtls_pk_parse_public_key(&pk, ota_public_der, ota_public_der_len);
+                    if (ret != 0) {
+                        lastCmdResult = "ota:pubkey_fail";
+                        Serial.printf("OTA: 解析公钥失败 %d\n", ret);
+                        Update.abort(); mbedtls_pk_free(&pk); otaMqttMode = false; break;
+                    }
+                    size_t sigLen;
+                    uint8_t sigBuf[128];
+                    ret = mbedtls_base64_decode(sigBuf, sizeof(sigBuf), &sigLen,
+                        (const unsigned char*)otaMqttSig, strlen(otaMqttSig));
+                    if (ret != 0) {
+                        lastCmdResult = "ota:b64_fail";
+                        Serial.printf("OTA: base64 解码失败 %d\n", ret);
+                        mbedtls_pk_free(&pk); Update.abort(); otaMqttMode = false; break;
+                    }
+                    ret = mbedtls_pk_verify(&pk, MBEDTLS_MD_SHA256, hash, 32, sigBuf, sigLen);
+                    mbedtls_pk_free(&pk);
+                    if (ret != 0) {
+                        lastCmdResult = "ota:sign_fail";
+                        Serial.printf("OTA: 签名验证失败 %d\n", ret);
+                        Update.abort(); otaMqttMode = false; break;
+                    }
+                    Serial.println("OTA: 签名验证通过");
+                    if (!Update.end(true)) {
+                        lastCmdResult = "ota:end_fail";
+                        Serial.printf("OTA: Update.end 失败 (error=%d)\n", Update.getError());
+                        otaMqttMode = false; break;
+                    }
+                    Serial.println("OTA: 成功，即将重启");
+                    lastCmdResult = "ota:rebooting";
+                    ESP.restart();
+                }
+                break;
+            }
+
+            // 普通 JSON 指令
             uint8_t qos = (data[0] & 0x06) >> 1;
             if (qos > 0) {
                 if (off + 2 > len) break;
                 uint16_t pktId = (data[off] << 8) | data[off + 1];
                 off += 2;
-                // Send PUBACK
                 uint8_t ack[] = { MQTT_PUBACK, 0x02, (uint8_t)(pktId >> 8), (uint8_t)(pktId & 0xFF) };
                 webSocket.sendBIN(ack, sizeof(ack));
             }
-            // Parse JSON payload
             size_t payloadLen = len - off;
             if (payloadLen == 0) break;
             char json[768];
@@ -542,6 +649,15 @@ void webSocketEvent(WStype_t type, uint8_t* payload, size_t length) {
             Serial.println("WebSocket: 断开连接");
             wanWsConnected = false;
             wanMqttConnected = false;
+            if (otaMqttMode) {
+                Serial.print("!DISC");
+                Update.abort();
+                otaMqttMode = false;
+                if (otaMqttCtxInit) {
+                    mbedtls_sha256_free(&otaMqttCtx);
+                    otaMqttCtxInit = false;
+                }
+            }
             break;
         case WStype_CONNECTED:
             Serial.printf("WebSocket: 已连接 (agri-server MQTT bridge)\n");
@@ -564,6 +680,72 @@ void webSocketEvent(WStype_t type, uint8_t* payload, size_t length) {
 // ==================== MQTT LAN 回调 ====================
 
 void mqttLanCallback(char* topic, byte* payload, unsigned int length) {
+    // OTA MQTT 固件块：二进制 payload 直接写入 Flash (LAN TCP path)
+    if (strstr(topic, "ota_chunk")) {
+        if (!otaMqttMode) { Serial.print("Z"); return; }
+        Serial.print("+");
+        mbedtls_sha256_update(&otaMqttCtx, payload, length);
+        size_t written = Update.write(payload, length);
+        if (written != length) {
+            Serial.printf("!WF(%d/%d)", written, length);
+            lastCmdResult = "ota:write_fail";
+            Update.abort();
+            if (otaMqttCtxInit) { mbedtls_sha256_free(&otaMqttCtx); otaMqttCtxInit = false; }
+            otaMqttMode = false;
+            return;
+        }
+        Serial.print(".");
+        otaMqttReceived += written;
+        int pct = (int)((long long)otaMqttReceived * 100 / otaMqttTotal);
+        int newPct = (pct / 10) * 10;
+        if (newPct != otaMqttLastPct && newPct % 10 == 0 && newPct > 0) {
+            Serial.print("OTA:"); Serial.print(newPct); Serial.print("% ");
+            otaMqttLastPct = newPct;
+        }
+        if (otaMqttReceived >= otaMqttTotal) {
+            Serial.println("OTA MQTT: 接收完成，验证签名...");
+            uint8_t hash[32];
+            mbedtls_sha256_finish(&otaMqttCtx, hash);
+            mbedtls_sha256_free(&otaMqttCtx);
+            otaMqttCtxInit = false;
+            mbedtls_pk_context pk;
+            mbedtls_pk_init(&pk);
+            int ret = mbedtls_pk_parse_public_key(&pk, ota_public_der, ota_public_der_len);
+            if (ret != 0) {
+                lastCmdResult = "ota:pubkey_fail";
+                Serial.printf("OTA: 解析公钥失败 %d\n", ret);
+                Update.abort(); mbedtls_pk_free(&pk); otaMqttMode = false; return;
+            }
+            size_t sigLen;
+            uint8_t sigBuf[128];
+            ret = mbedtls_base64_decode(sigBuf, sizeof(sigBuf), &sigLen,
+                (const unsigned char*)otaMqttSig, strlen(otaMqttSig));
+            if (ret != 0) {
+                lastCmdResult = "ota:b64_fail";
+                Serial.printf("OTA: base64 解码失败 %d\n", ret);
+                mbedtls_pk_free(&pk); Update.abort(); otaMqttMode = false; return;
+            }
+            ret = mbedtls_pk_verify(&pk, MBEDTLS_MD_SHA256, hash, 32, sigBuf, sigLen);
+            mbedtls_pk_free(&pk);
+            if (ret != 0) {
+                lastCmdResult = "ota:sign_fail";
+                Serial.printf("OTA: 签名验证失败 %d\n", ret);
+                Update.abort(); otaMqttMode = false; return;
+            }
+            Serial.println("OTA: 签名验证通过");
+            if (!Update.end(true)) {
+                lastCmdResult = "ota:end_fail";
+                Serial.printf("OTA: Update.end 失败 (error=%d)\n", Update.getError());
+                otaMqttMode = false; return;
+            }
+            Serial.println("OTA: 成功，即将重启");
+            lastCmdResult = "ota:rebooting";
+            ESP.restart();
+        }
+        return;
+    }
+
+    // 普通 JSON 指令
     Serial.printf("收到 MQTT 包: topic=%s, len=%d\n", topic, length);
     char json[768];
     size_t copyLen = length < sizeof(json)-1 ? length : sizeof(json)-1;
@@ -575,7 +757,7 @@ void mqttLanCallback(char* topic, byte* payload, unsigned int length) {
 // ==================== 命令处理（共享） ====================
 
 void handleMqttCommand(const char* json) {
-    StaticJsonDocument<768> doc;
+    StaticJsonDocument<384> doc;
     DeserializationError err = deserializeJson(doc, json);
     if (err) {
         Serial.printf("指令 JSON 解析失败: %s, json=%s\n", err.c_str(), json);
@@ -596,24 +778,35 @@ void handleMqttCommand(const char* json) {
     else if (strcmp(command, "set_interval") == 0) {
         Serial.printf("采集间隔调整请求 (当前: %dms)\n", READ_INTERVAL);
     }
-    else if (strcmp(command, "ota") == 0) {
-        const char* url = params["url"] | "";
+    else if (strcmp(command, "ota_mqtt") == 0) {
+        // MQTT 流式 OTA：固件通过现有 MQTT 连接分块传输，绕过 Funnel TLS 限制
+        otaMqttTotal = params["total_size"] | 0;
         const char* sig = params["sig"] | "";
-        if (strlen(url) == 0 || strlen(sig) == 0) {
+        if (otaMqttTotal == 0 || strlen(sig) == 0) {
             lastCmdResult = "ota:missing_params";
-            Serial.println("OTA: 缺少 url 或 sig");
+            Serial.println("OTA MQTT: 缺少 total_size 或 sig");
             return;
         }
-        lastCmdResult = "ota:started";
-        Serial.printf("OTA: 收到命令，url=%s\n", url);
-        bool ok = otaUpdate(url, sig);
-        if (ok) {
-            lastCmdResult = "ota:rebooting";
-        } else if (strcmp(lastCmdResult, "ota:started") == 0) {
-            // otaUpdate returned false but didn't set a specific error
-            lastCmdResult = "ota:failed";
+        lastCmdResult = "ota:mqtt_started";
+        strncpy(otaMqttSig, sig, sizeof(otaMqttSig) - 1);
+        otaMqttSig[sizeof(otaMqttSig) - 1] = '\0';
+        otaMqttReceived = 0;
+        mbedtls_sha256_init(&otaMqttCtx);
+        mbedtls_sha256_starts(&otaMqttCtx, 0);
+        otaMqttCtxInit = true;
+        if (!Update.begin(otaMqttTotal, U_FLASH)) {
+            int updateErr = Update.getError();
+            Serial.printf("OTA MQTT: Update.begin 失败 (error=%d)\n", updateErr);
+            static char errBuf[32];
+            snprintf(errBuf, sizeof(errBuf), "ota:beg_fail_%d", updateErr);
+            lastCmdResult = errBuf;
+            otaMqttMode = false;
+            if (otaMqttCtxInit) { mbedtls_sha256_free(&otaMqttCtx); otaMqttCtxInit = false; }
+            return;
         }
-        // else: otaUpdate set a specific error (ota:http_err, etc.), keep it
+        otaMqttMode = true;
+        otaMqttLastPct = -1;
+        Serial.printf("OTA MQTT: 开始接收 %d bytes\n", otaMqttTotal);
     }
 }
 
@@ -645,8 +838,8 @@ bool connectLanMqtt() {
         statusTopic(statTopic, sizeof(statTopic));
         mqtt.publish(statTopic, status);
         activeTransport = TRANSPORT_LAN_TCP;
-        // 回放缓冲区
-        flashFlushBuffer();
+        // 不在连接建立时 flush 缓冲区 —— 连续 20 条 publish 会淹没 TCP 连接。
+        // 缓冲区将在下次 publishTelemetry() 成功时自然 flush。
         return true;
     }
     Serial.printf("MQTT LAN: 连接失败 (rc=%d)\n", mqtt.state());
@@ -769,20 +962,32 @@ void publishMqttTelemetry(const char* jsonPayload) {
     
     bool ok = false;
     if (activeTransport == TRANSPORT_LAN_TCP) {
+        // 先刷新 MQTT 状态，确保 connected() 准确
+        mqtt.loop();
         ok = mqtt.publish(topic, jsonPayload);
     } else if (activeTransport == TRANSPORT_WAN_WS) {
         ok = wsSendMqttPublish(topic, (const uint8_t*)jsonPayload, strlen(jsonPayload), (uint16_t)mqttSeq);
         // Pump WebSocket to send
         webSocket.loop();
     }
-    
+
     if (ok) {
+        lastTelemetryOk = millis();
         Serial.print(" | MQTT: 成功 (seq=");
         Serial.print(mqttSeq);
         Serial.print(")");
         flashFlushBuffer();
     } else {
         Serial.print(" | MQTT: 发送失败");
+        // 不在这里重置 lastMqttReconnect —— 那会导致 ensureMqttConnected()
+        // 在每个 loop() 迭代中触发（now-0>=5000 永远为 true），
+        // 连接刚建好就被 lanTcp.stop() 关掉，产生30ms重连风暴。
+        // 让正常间隔逻辑处理重连。
+        if (activeTransport == TRANSPORT_LAN_TCP && !mqtt.connected()) {
+            Serial.print("，连接已断开，等待重连...");
+            activeTransport = TRANSPORT_NONE;
+        }
+        // 写缓冲区
         appendToBuffer(jsonPayload);
     }
 }
@@ -793,13 +998,30 @@ void publishTelemetry() {
     // Do NOT call ensureMqttConnected() here — TLS handshake on the 10s
     // sensor-read path blows the loopTask stack (4KB default).
     // Connection is maintained by loop() every 5s.
+    // 但 mqtt.loop() 是安全的——仅刷新状态，不发起握手
+    if (activeTransport == TRANSPORT_LAN_TCP) {
+        mqtt.loop();
+        if (!mqtt.connected()) {
+            activeTransport = TRANSPORT_NONE;
+        }
+    } else if (activeTransport == TRANSPORT_WAN_WS) {
+        webSocket.loop();
+        if (!wanMqttConnected) {
+            activeTransport = TRANSPORT_NONE;
+        }
+    }
     
     StaticJsonDocument<448> doc;
     doc["node_id"] = NODE_ID;
     doc["boot_id"] = bootId;
     doc["seq"] = mqttSeq + 1;
     doc["fw_version"] = FW_VERSION;
-    doc["captured_at"] = (long long)time(nullptr);
+    {
+        time_t t = time(nullptr);
+        if (t > 1700000000) {  // 2023-11-14 之后的时间戳才有效
+            doc["captured_at"] = (long long)t;
+        }
+    }
     doc["ota_status"] = "idle";
     if (strlen(lastCmdResult) > 0) doc["last_cmd"] = lastCmdResult;
     JsonObject metrics = doc["metrics"].to<JsonObject>();
@@ -811,10 +1033,22 @@ void publishTelemetry() {
               && airTemp > -40.0f && airTemp < 80.0f
               && !(airTemp == 0.0f && airHum == 0.0f);  // E1: dual-zero = hardware fault
     
+    // Retry once after 50ms if first read fails (WiFi interrupt can disrupt DHT22 timing)
+    if (!dhtOk) {
+        delay(50);
+        airTemp = dht.readTemperature();
+        airHum = dht.readHumidity();
+        dhtOk = !isnan(airTemp) && !isnan(airHum)
+              && airTemp > -40.0f && airTemp < 80.0f
+              && !(airTemp == 0.0f && airHum == 0.0f);
+        if (dhtOk) Serial.print("DHT22 retry OK | ");
+    }
+    
     if (dhtOk) {
         dhtFailCount = 0;
         metrics["air_temp"] = roundf(airTemp * 100.0f) / 100.0f;
         metrics["air_humidity"] = roundf(airHum * 100.0f) / 100.0f;
+        metrics["dht_status"] = "ok";
         Serial.printf("气温: %.1f℃ | 气湿: %.1f%% | ", airTemp, airHum);
     } else {
         dhtFailCount++;
@@ -861,38 +1095,41 @@ void publishTelemetry() {
 // ==================== 离线缓冲区 ====================
 
 void appendToBuffer(const char* line) {
+    // 写入前检查剩余空间，不足时截断缓冲区
+    if (LittleFS.totalBytes() - LittleFS.usedBytes() < 2048) {
+        Serial.println("缓冲区空间不足，截断中...");
+        File rf = LittleFS.open(BUFFER_FILE, "r");
+        if (!rf) { LittleFS.remove(BUFFER_FILE); }
+        else {
+            // 统计行数
+            int totalLines = 0, c;
+            while ((c = rf.read()) >= 0) { if (c == '\n') totalLines++; }
+            rf.close();
+            if (totalLines > BUFFER_MAX_LINES / 2) {
+                int skip = totalLines - BUFFER_MAX_LINES / 2;
+                rf = LittleFS.open(BUFFER_FILE, "r");
+                File wf = LittleFS.open(BUFFER_TMP, "w");
+                if (rf && wf) {
+                    char buf[384]; int lineNo = 0;
+                    while (rf.available()) {
+                        size_t len = rf.readBytesUntil('\n', buf, sizeof(buf)-1);
+                        if (len == 0) continue; buf[len] = '\0'; lineNo++;
+                        if (lineNo > skip) wf.println(buf);
+                    }
+                    rf.close(); wf.close();
+                    LittleFS.remove(BUFFER_FILE);
+                    LittleFS.rename(BUFFER_TMP, BUFFER_FILE);
+                } else {
+                    if (rf) rf.close(); if (wf) wf.close();
+                    LittleFS.remove(BUFFER_FILE);
+                }
+            }
+        }
+    }
     File f = LittleFS.open(BUFFER_FILE, "a");
     if (!f) { Serial.println("缓冲区写入失败"); return; }
     f.println(line);
     f.close();
-}
-
-void trimBufferTail() {
-    File rf = LittleFS.open(BUFFER_TMP, "r");
-    if (!rf) return;
-    int totalLines = 0;
-    int c;
-    while ((c = rf.read()) >= 0) { if (c == '\n') totalLines++; }
-    if (totalLines <= BUFFER_MAX_LINES) {
-        rf.close();
-        LittleFS.rename(BUFFER_TMP, BUFFER_FILE);
-        return;
-    }
-    int skip = totalLines - BUFFER_MAX_LINES;
-    rf.seek(0);
-    File wf = LittleFS.open(BUFFER_FILE, "w");
-    if (!wf) { rf.close(); return; }
-    char line[384];
-    int lineNo = 0;
-    while (rf.available()) {
-        size_t len = rf.readBytesUntil('\n', line, sizeof(line)-1);
-        if (len == 0) continue;
-        line[len] = '\0';
-        lineNo++;
-        if (lineNo > skip) wf.println(line);
-    }
-    rf.close(); wf.close();
-    LittleFS.remove(BUFFER_TMP);
 }
 
 void flashFlushBuffer() {
@@ -901,8 +1138,13 @@ void flashFlushBuffer() {
     
     File rf = LittleFS.open(BUFFER_FILE, "r");
     if (!rf) return;
+    
+    // 空文件直接删除
+    if (rf.available() == 0) { rf.close(); LittleFS.remove(BUFFER_FILE); return; }
+    
+    // 尝试创建临时文件（空间不足时降级为丢弃模式）
     File wf = LittleFS.open(BUFFER_TMP, "w");
-    if (!wf) { rf.close(); return; }
+    bool canSave = wf;
     
     char line[384];
     int sent = 0, remaining = 0;
@@ -913,29 +1155,36 @@ void flashFlushBuffer() {
         line[len] = '\0';
         if (len > 0 && line[len-1] == '\r') line[--len] = '\0';
         
-        if (sent < BUFFER_FLUSH_BATCH) {
-            // Re-publish via MQTT instead of HTTP
+        {
             char topic[64];
             telemetryTopic(topic, sizeof(topic));
             bool ok = false;
             if (activeTransport == TRANSPORT_LAN_TCP) {
                 ok = mqtt.publish(topic, line);
+                mqtt.loop();  // 泵出 TCP 缓冲区，给下一条腾空间
             } else if (activeTransport == TRANSPORT_WAN_WS) {
                 ok = wsSendMqttPublish(topic, (uint8_t*)line, strlen(line), (uint16_t)(++mqttSeq));
                 webSocket.loop();
             }
-            if (ok) { sent++; continue; }
+            if (ok) { sent++; if (sent % 50 == 0) delay(1); continue; }
+            delay(1);  // 发布失败时也让出 CPU
         }
-        wf.println(line);
-        remaining++;
+        if (canSave) { wf.println(line); remaining++; }
     }
     
-    rf.close(); wf.close();
+    rf.close();
+    if (canSave) wf.close();
     LittleFS.remove(BUFFER_FILE);
-    if (remaining > 0) trimBufferTail();
-    else LittleFS.remove(BUFFER_TMP);
     
-    if (sent > 0) Serial.printf("缓冲区: %d条已发送, %d条剩余\n", sent, remaining);
+    if (canSave && remaining > 0) {
+        LittleFS.rename(BUFFER_TMP, BUFFER_FILE);
+    } else if (canSave) {
+        LittleFS.remove(BUFFER_TMP);
+    }
+    // cannotSave 模式：直接丢弃剩余数据，避免原地死锁
+    
+    if (sent > 0) Serial.printf("缓冲区: %d条已发送, %d条%s\n", sent, remaining,
+        canSave ? "保留" : "丢弃(空间不足)");
 }
 
 // ==================== WiFi ====================
@@ -978,96 +1227,10 @@ void setupWiFi() {
     ESP.restart();
 }
 
-// ==================== OTA 升级 ====================
-
-bool otaUpdate(const char* url, const char* sig_b64) {
-    Serial.printf("OTA: 开始升级 %s\n", url);
-    bool isHttps = (strncmp(url, "https://", 8) == 0);
-    HTTPClient http;
-    http.setTimeout(30000);
-    if (isHttps) {
-        WiFiClientSecure* tls = new WiFiClientSecure();
-        tls->setInsecure();
-        http.begin(*tls, url);
-    } else {
-        http.begin(url);
-    }
-    int code = http.GET();
-    if (code != 200) {
-        Serial.printf("OTA: HTTP %d\n", code);
-        lastCmdResult = "ota:http_err";
-        http.end(); return false;
-    }
-    int totalSize = http.getSize();
-    Serial.printf("OTA: 下载 %d bytes\n", totalSize);
-    if (!Update.begin(totalSize, U_FLASH)) {
-        Serial.printf("OTA: Update.begin 失败 (error=%d)\n", Update.getError());
-        lastCmdResult = "ota:update_beg_fail";
-        http.end(); return false;
-    }
-    WiFiClient* stream = http.getStreamPtr();
-    mbedtls_sha256_context ctx;
-    mbedtls_sha256_init(&ctx);
-    mbedtls_sha256_starts(&ctx, 0);
-    uint8_t buf[512];
-    int written = 0, lastPct = 0;
-    unsigned long dlStart = millis();
-    while (http.connected() && written < totalSize) {
-        if (millis() - dlStart > 120000) {  // 2 分钟超时
-            Serial.println("OTA: 下载超时");
-            lastCmdResult = "ota:dl_timeout";
-            Update.abort(); http.end(); return false;
-        }
-        int avail = stream->available();
-        if (avail <= 0) { delay(1); continue; }
-        int toRead = min(avail, (int)sizeof(buf));
-        int r = stream->readBytes(buf, toRead);
-        if (r <= 0) continue;
-        mbedtls_sha256_update(&ctx, buf, r);
-        if (Update.write(buf, r) != r) {
-            Serial.println("OTA: 写入失败");
-            lastCmdResult = "ota:write_fail";
-            Update.abort(); http.end(); return false;
-        }
-        written += r;
-        int pct = written * 100 / totalSize;
-        if (pct - lastPct >= 10) { Serial.printf("OTA: %d%%\n", pct); lastPct = pct; }
-    }
-    uint8_t hash[32];
-    mbedtls_sha256_finish(&ctx, hash);
-    mbedtls_sha256_free(&ctx);
-    http.end();
-    if (written != totalSize) {
-        Serial.printf("OTA: 下载不完整 %d/%d\n", written, totalSize);
-        lastCmdResult = "ota:partial";
-        Update.abort(); return false;
-    }
-    mbedtls_pk_context pk;
-    mbedtls_pk_init(&pk);
-    int ret = mbedtls_pk_parse_public_key(&pk, ota_public_der, ota_public_der_len);
-    if (ret != 0) { lastCmdResult = "ota:pubkey_fail"; Serial.printf("OTA: 解析公钥失败 %d\n", ret); Update.abort(); return false; }
-    size_t sig_len;
-    uint8_t sig_buf[128];
-    ret = mbedtls_base64_decode(sig_buf, sizeof(sig_buf), &sig_len,
-                                (const unsigned char*)sig_b64, strlen(sig_b64));
-    if (ret != 0) {
-        lastCmdResult = "ota:b64_fail";
-        Serial.printf("OTA: base64 解码失败 %d\n", ret);
-        mbedtls_pk_free(&pk); Update.abort(); return false;
-    }
-    ret = mbedtls_pk_verify(&pk, MBEDTLS_MD_SHA256, hash, 32, sig_buf, sig_len);
-    mbedtls_pk_free(&pk);
-    if (ret != 0) { lastCmdResult = "ota:sign_fail"; Serial.printf("OTA: 签名验证失败 %d\n", ret); Update.abort(); return false; }
-    Serial.println("OTA: 签名验证通过");
-    if (!Update.end(true)) {
-        lastCmdResult = "ota:end_fail";
-        Serial.printf("OTA: Update.end 失败 (error=%d)\n", Update.getError());
-        return false;
-    }
-    Serial.println("OTA: 成功，即将重启");
-    ESP.restart();
-    return true;
-}
+// ==================== OTA 升级（MQTT 流式）====================
+// 固件通过现有 WebSocket MQTT 连接以 MQTT PUBLISH 消息分块接收，
+// 在 handleMqttPacket() 中直接写入 Flash。无需 HTTP/TLS 连接，
+// 绕过了 Funnel 同一 IP 并发 TLS 连接限制。
 
 // ==================== 初始化与主循环 ====================
 
@@ -1085,21 +1248,22 @@ void setup() {
     dht.begin();
     wanTls.setInsecure();
     
-    mqtt.setBufferSize(512);
+    mqtt.setBufferSize(MQTT_BUF_SIZE);
     Serial.printf("MQTT 缓冲区: %d\n", mqtt.getBufferSize());
     
     scanSoilSensor();
     
+    // LittleFS 挂载。挂载失败时格式化（旧数据可能损坏），挂载成功则保留缓冲数据跨重启恢复。
     if (!LittleFS.begin()) {
-        Serial.println("LittleFS 初始化失败，尝试格式化...");
+        Serial.println("LittleFS 挂载失败，格式化...");
         LittleFS.format();
-        if (LittleFS.begin()) {
-            Serial.println("LittleFS 格式化成功");
+        if (!LittleFS.begin()) {
+            Serial.println("LittleFS 格式化后仍挂载失败");
         } else {
-            Serial.println("LittleFS 仍然失败");
+            Serial.println("LittleFS 格式化并挂载成功");
         }
     } else {
-        Serial.println("LittleFS 就绪");
+        Serial.println("LittleFS 挂载成功，保留缓冲数据");
     }
     
     // 生成本次启动的唯一标识
@@ -1109,9 +1273,7 @@ void setup() {
 
     // 保留旧缓冲区 (/buffer.dat) 跨重启恢复数据。
     // 连接建立后 flashFlushBuffer() 会自动回放。
-    if (LittleFS.exists(BUFFER_FILE)) {
-        Serial.printf("离线缓冲区存在，待回放\n");
-    }
+    // (格式化后缓冲区为空，无数据回放)
 
     setupWiFi();
 
@@ -1167,7 +1329,24 @@ void loop() {
             ensureMqttConnected();
         }
     }
+
+    // OTA 由 WebSocket MQTT 事件中的 handleMqttPacket() 直接处理，
+    // 固件块在回调中写入 Flash。无需在主循环中做额外处理。
     
+    // 遥测静默看门狗：TELEMETRY_SILENT_TIMEOUT 无成功发布则强制重连
+    if (curWifi == WL_CONNECTED && lastTelemetryOk > 0
+        && now - lastTelemetryOk > TELEMETRY_SILENT_TIMEOUT
+        && now - lastRead > 30000)  // 避免 DHT22 采集期间误触发
+    {
+        Serial.printf("看门狗: 遥测静默 %lus，强制重连\n", (now - lastTelemetryOk) / 1000);
+        lastTelemetryOk = now;  // 给下次重连一个宽限期
+        lastRead = now;         // 重置读周期，避免立即再触发
+        activeTransport = TRANSPORT_NONE;
+        lanTcp.stop();
+        wanWsConnected = false;
+        wanMqttConnected = false;
+    }
+
     // 传感器采集间隔：WiFi 在线时 10s，断线时逐步降频省电
     unsigned long readInterval = READ_INTERVAL;
     if (curWifi != WL_CONNECTED && lastWifiOnline > 0) {
