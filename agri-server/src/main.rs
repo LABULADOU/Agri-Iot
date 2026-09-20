@@ -51,6 +51,7 @@ mod decision;
 mod farm_log;
 mod inventory;
 mod mixing;
+mod stock;
 #[path = "yield.rs"]
 mod yield_rs;
 
