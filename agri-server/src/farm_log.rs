@@ -8,6 +8,7 @@ use axum::{
 };
 use chrono::Utc;
 use serde::Deserialize;
+use sqlx::Row;
 use uuid::Uuid;
 
 use crate::response;
@@ -104,6 +105,11 @@ async fn create_operation(
     let now = Utc::now().timestamp();
     let details = serde_json::to_string(&req.details.unwrap_or(serde_json::json!({}))).unwrap_or_default();
 
+    let mut tx = match state.pool.begin().await {
+        Ok(tx) => tx,
+        Err(e) => return response::internal_err(e),
+    };
+
     let result = sqlx::query(
         "INSERT INTO farm_operations (id, area_id, log_date, log_time, category, content, operator, status, weather, crop_status, notes, details, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
@@ -121,11 +127,38 @@ async fn create_operation(
     .bind(&details)
     .bind(now)
     .bind(now)
-    .execute(&state.pool)
+    .execute(&mut *tx)
     .await;
 
-    match result {
-        Ok(_) => (StatusCode::CREATED, Json(serde_json::json!({"id": id.to_string(), "message": "Operation created"}))).into_response(),
+    if let Err(e) = result {
+        let _ = tx.rollback().await;
+        return response::internal_err(e);
+    }
+
+    // 农事记录自动出库联动（打药/施肥）
+    let details_json = serde_json::from_str::<serde_json::Value>(&details).unwrap_or(serde_json::json!({}));
+    let warnings = match crate::stock::apply_op_deductions(
+        &mut tx,
+        &id.to_string(),
+        &req.category,
+        &details_json,
+        req.operator.as_deref().unwrap_or(""),
+    )
+    .await
+    {
+        Ok(w) => w,
+        Err(e) => {
+            let _ = tx.rollback().await;
+            return response::internal_err(e);
+        }
+    };
+
+    match tx.commit().await {
+        Ok(_) => (
+            StatusCode::CREATED,
+            Json(serde_json::json!({"id": id.to_string(), "message": "Operation created", "warnings": warnings})),
+        )
+            .into_response(),
         Err(e) => response::internal_err(e),
     }
 }
@@ -168,6 +201,32 @@ async fn update_operation(
     let now = Utc::now().timestamp();
     let details = req.details.map(|d| serde_json::to_string(&d).unwrap_or_default());
 
+    let mut tx = match state.pool.begin().await {
+        Ok(tx) => tx,
+        Err(e) => return response::internal_err(e),
+    };
+
+    // 先确认操作存在，回滚旧出库流水（若失败说明 id 不存在）
+    if let Err(e) = crate::stock::revert_op_deductions(&mut tx, &id).await {
+        let _ = tx.rollback().await;
+        return response::internal_err(e);
+    }
+    let exists = match sqlx::query("SELECT 1 FROM farm_operations WHERE id = ?")
+        .bind(&id)
+        .fetch_optional(&mut *tx)
+        .await
+    {
+        Ok(r) => r.is_some(),
+        Err(e) => {
+            let _ = tx.rollback().await;
+            return response::internal_err(e);
+        }
+    };
+    if !exists {
+        let _ = tx.rollback().await;
+        return response::not_found(Some("Operation not found"));
+    }
+
     let result = sqlx::query(
         "UPDATE farm_operations SET log_time = COALESCE(?, log_time), content = COALESCE(?, content), operator = COALESCE(?, operator), status = COALESCE(?, status), weather = COALESCE(?, weather), crop_status = COALESCE(?, crop_status), notes = COALESCE(?, notes), details = COALESCE(?, details), updated_at = ? WHERE id = ?",
     )
@@ -181,11 +240,55 @@ async fn update_operation(
     .bind(&details)
     .bind(now)
     .bind(&id)
-    .execute(&state.pool)
+    .execute(&mut *tx)
     .await;
 
-    match result {
-        Ok(_) => Json(serde_json::json!({"message": "Operation updated"})).into_response(),
+    if let Err(e) = result {
+        let _ = tx.rollback().await;
+        return response::internal_err(e);
+    }
+
+    // 取更新后的权威数据，重新应用出库联动
+    let row = match sqlx::query("SELECT category, operator, details FROM farm_operations WHERE id = ?")
+        .bind(&id)
+        .fetch_optional(&mut *tx)
+        .await
+    {
+        Ok(Some(r)) => r,
+        Ok(None) => {
+            let _ = tx.rollback().await;
+            return response::not_found(Some("Operation not found"));
+        }
+        Err(e) => {
+            let _ = tx.rollback().await;
+            return response::internal_err(e);
+        }
+    };
+    let category: String = row.try_get("category").unwrap_or_default();
+    let op_operator: String = row.try_get("operator").unwrap_or_default();
+    let op_details: Option<String> = row.try_get("details").unwrap_or(None);
+    let details_json = op_details
+        .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
+        .unwrap_or(serde_json::json!({}));
+
+    let warnings = match crate::stock::apply_op_deductions(
+        &mut tx,
+        &id,
+        &category,
+        &details_json,
+        &op_operator,
+    )
+    .await
+    {
+        Ok(w) => w,
+        Err(e) => {
+            let _ = tx.rollback().await;
+            return response::internal_err(e);
+        }
+    };
+
+    match tx.commit().await {
+        Ok(_) => Json(serde_json::json!({"message": "Operation updated", "warnings": warnings})).into_response(),
         Err(e) => response::internal_err(e),
     }
 }
@@ -194,12 +297,28 @@ async fn delete_operation(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> impl IntoResponse {
+    let mut tx = match state.pool.begin().await {
+        Ok(tx) => tx,
+        Err(e) => return response::internal_err(e),
+    };
+
+    // 先回滚出库流水恢复库存
+    if let Err(e) = crate::stock::revert_op_deductions(&mut tx, &id).await {
+        let _ = tx.rollback().await;
+        return response::internal_err(e);
+    }
+
     let result = sqlx::query("DELETE FROM farm_operations WHERE id = ?")
         .bind(&id)
-        .execute(&state.pool)
+        .execute(&mut *tx)
         .await;
 
-    match result {
+    if let Err(e) = result {
+        let _ = tx.rollback().await;
+        return response::internal_err(e);
+    }
+
+    match tx.commit().await {
         Ok(_) => Json(serde_json::json!({"message": "Operation deleted"})).into_response(),
         Err(e) => response::internal_err(e),
     }
@@ -351,4 +470,197 @@ fn op_to_json(op: FarmOperation) -> serde_json::Value {
         "created_at": op.created_at.timestamp(),
         "updated_at": op.updated_at.timestamp(),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::{body::Body, http::Request, http::StatusCode};
+    use sqlx::SqlitePool;
+    use tower::ServiceExt;
+
+    async fn setup_db() -> SqlitePool {
+        let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+        for path in [
+            concat!(env!("CARGO_MANIFEST_DIR"), "/../agri-core/migrations/001_init.sql"),
+            concat!(env!("CARGO_MANIFEST_DIR"), "/../agri-core/migrations/009_farm_operations.sql"),
+            concat!(env!("CARGO_MANIFEST_DIR"), "/../agri-core/migrations/012_inventory.sql"),
+        ] {
+            let schema = std::fs::read_to_string(path).unwrap();
+            for stmt in schema.split(';').filter(|s| !s.trim().is_empty()) {
+                sqlx::query(stmt).execute(&pool).await.unwrap();
+            }
+        }
+        pool
+    }
+
+    fn test_state(pool: SqlitePool) -> AppState {
+        let (tx, _rx) = tokio::sync::broadcast::channel(16);
+        AppState {
+            pool,
+            event_tx: tx,
+            mqtt_client: std::sync::Arc::new(tokio::sync::Mutex::new(None)),
+            rules_cache: std::sync::Arc::new(tokio::sync::Mutex::new(Vec::new())),
+            obsidian_vault_path: None,
+            emergency_ctx: std::sync::Arc::new(tokio::sync::Mutex::new(agri_core::ai::emergency::EmergencyContext::new())),
+            telemetry_limiter: std::sync::Arc::new(crate::rate_limiter::RateLimiter::new(60, 1)),
+        }
+    }
+
+    async fn seed_area(pool: &SqlitePool) {
+        sqlx::query("INSERT INTO areas (id, name, created_at) VALUES ('a1', '主大棚', 0)")
+            .execute(pool)
+            .await
+            .unwrap();
+    }
+
+    async fn seed_fertilizer(pool: &SqlitePool, name: &str, stock: f64) {
+        sqlx::query(
+            "INSERT INTO inventory_items (id, name, category, unit, price, stock, warning_threshold, created_at, updated_at) VALUES (?, ?, 'fertilizer', 'kg', 0, ?, 0, 0, 0)",
+        )
+        .bind(Uuid::new_v4().to_string())
+        .bind(name)
+        .bind(stock)
+        .execute(pool)
+        .await
+        .unwrap();
+    }
+
+    async fn stock_of(pool: &SqlitePool, name: &str) -> f64 {
+        sqlx::query_scalar::<_, f64>("SELECT stock FROM inventory_items WHERE name = ?")
+            .bind(name)
+            .fetch_one(pool)
+            .await
+            .unwrap()
+    }
+
+    async fn op_txns(pool: &SqlitePool, op_id: &str) -> i64 {
+        sqlx::query_scalar::<_, i64>(
+            "SELECT COUNT(*) FROM inventory_transactions WHERE related_type = 'farm_operation' AND related_id = ?",
+        )
+        .bind(op_id)
+        .fetch_one(pool)
+        .await
+        .unwrap()
+    }
+
+    const CREATE_OP: &str = r#"{"area_id":"a1","log_date":"2026-08-20","category":"施肥","content":"施用尿素","operator":"张三","details":{"items":[{"name":"尿素","amount":"10 kg"}]}}"#;
+
+    #[tokio::test]
+    async fn create_fertilizer_op_auto_deducts_inventory() {
+        let pool = setup_db().await;
+        seed_area(&pool).await;
+        seed_fertilizer(&pool, "尿素", 100.0).await;
+        let app = create_router(test_state(pool.clone())).into_service();
+
+        let res = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/farm/operations")
+                    .header("content-type", "application/json")
+                    .body(Body::from(CREATE_OP))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::CREATED);
+        let body = axum::body::to_bytes(res.into_body(), usize::MAX).await.unwrap();
+        let parsed: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let op_id = parsed["id"].as_str().unwrap().to_string();
+        assert!(parsed["warnings"].as_array().unwrap().is_empty());
+
+        assert_eq!(stock_of(&pool, "尿素").await, 90.0);
+        assert_eq!(op_txns(&pool, &op_id).await, 1);
+    }
+
+    #[tokio::test]
+    async fn update_fertilizer_op_recomputes_deductions() {
+        let pool = setup_db().await;
+        seed_area(&pool).await;
+        seed_fertilizer(&pool, "尿素", 100.0).await;
+        let app = create_router(test_state(pool.clone())).into_service();
+
+        let res = app.clone().oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/v1/farm/operations")
+                .header("content-type", "application/json")
+                .body(Body::from(CREATE_OP))
+                .unwrap(),
+        ).await.unwrap();
+        let body = axum::body::to_bytes(res.into_body(), usize::MAX).await.unwrap();
+        let parsed: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let op_id = parsed["id"].as_str().unwrap().to_string();
+        assert_eq!(stock_of(&pool, "尿素").await, 90.0);
+
+        // 编辑为 25kg → 回滚 10kg 再扣 25kg，最终 75
+        let res = app.clone().oneshot(
+            Request::builder()
+                .method("PUT")
+                .uri(format!("/api/v1/farm/operations/{}", op_id))
+                .header("content-type", "application/json")
+                .body(Body::from(r#"{"details":{"items":[{"name":"尿素","amount":"25 kg"}]}}"#))
+                .unwrap(),
+        ).await.unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(res.into_body(), usize::MAX).await.unwrap();
+        let parsed: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert!(parsed["warnings"].as_array().unwrap().is_empty());
+
+        assert_eq!(stock_of(&pool, "尿素").await, 75.0);
+        assert_eq!(op_txns(&pool, &op_id).await, 1);
+    }
+
+    #[tokio::test]
+    async fn delete_fertilizer_op_restores_stock() {
+        let pool = setup_db().await;
+        seed_area(&pool).await;
+        seed_fertilizer(&pool, "尿素", 100.0).await;
+        let app = create_router(test_state(pool.clone())).into_service();
+
+        let res = app.clone().oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/v1/farm/operations")
+                .header("content-type", "application/json")
+                .body(Body::from(CREATE_OP))
+                .unwrap(),
+        ).await.unwrap();
+        let body = axum::body::to_bytes(res.into_body(), usize::MAX).await.unwrap();
+        let parsed: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let op_id = parsed["id"].as_str().unwrap().to_string();
+        assert_eq!(stock_of(&pool, "尿素").await, 90.0);
+
+        let res = app.oneshot(
+            Request::builder()
+                .method("DELETE")
+                .uri(format!("/api/v1/farm/operations/{}", op_id))
+                .body(Body::empty())
+                .unwrap(),
+        ).await.unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+
+        assert_eq!(stock_of(&pool, "尿素").await, 100.0);
+        assert_eq!(op_txns(&pool, &op_id).await, 0);
+    }
+
+    #[tokio::test]
+    async fn non_input_category_op_does_not_deduct() {
+        let pool = setup_db().await;
+        seed_area(&pool).await;
+        seed_fertilizer(&pool, "尿素", 100.0).await;
+        let app = create_router(test_state(pool.clone())).into_service();
+
+        let res = app.oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/v1/farm/operations")
+                .header("content-type", "application/json")
+                .body(Body::from(r#"{"area_id":"a1","log_date":"2026-08-20","category":"灌溉","content":"浇水","details":{"items":[{"name":"尿素","amount":"10 kg"}]}}"#))
+                .unwrap(),
+        ).await.unwrap();
+        assert_eq!(res.status(), StatusCode::CREATED);
+        assert_eq!(stock_of(&pool, "尿素").await, 100.0);
+    }
 }
