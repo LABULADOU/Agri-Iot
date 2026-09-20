@@ -52,6 +52,7 @@ mod farm_log;
 mod inventory;
 mod mixing;
 mod stock;
+mod labor;
 #[path = "yield.rs"]
 mod yield_rs;
 
@@ -157,7 +158,8 @@ async fn main() -> Result<()> {
         .merge(farm_log::create_router(app_state.clone()))
         .merge(inventory::create_router(app_state.clone()))
         .merge(yield_rs::create_router(app_state.clone()))
-        .merge(mixing::create_router(app_state));
+        .merge(mixing::create_router(app_state.clone()))
+        .merge(labor::create_router(app_state));
 
     let static_dir = std::path::PathBuf::from("agri-server/static")
         .canonicalize()

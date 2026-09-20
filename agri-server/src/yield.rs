@@ -2,7 +2,7 @@ use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
     response::IntoResponse,
-    routing::{get, post},
+    routing::get,
     Json, Router,
 };
 use chrono::Utc;
@@ -283,19 +283,23 @@ async fn get_analysis(
     let mut tsql = String::from(
         "SELECT h.harvest_date, COALESCE(SUM(h.quantity), 0) AS quantity, COALESCE(SUM(h.amount), 0) AS amount FROM harvests h WHERE 1=1"
     );
+    let mut tbinds: Vec<String> = Vec::new();
     if let Some(ref area_id) = q.area_id {
         tsql.push_str(" AND h.area_id = ?");
+        tbinds.push(area_id.clone());
     }
     if let Some(ref date_from) = q.date_from {
         tsql.push_str(" AND h.harvest_date >= ?");
+        tbinds.push(date_from.clone());
     }
     if let Some(ref date_to) = q.date_to {
         tsql.push_str(" AND h.harvest_date <= ?");
+        tbinds.push(date_to.clone());
     }
     tsql.push_str(" GROUP BY h.harvest_date ORDER BY h.harvest_date");
 
     let mut trend_q = sqlx::query(&tsql);
-    for b in &binds {
+    for b in &tbinds {
         trend_q = trend_q.bind(b);
     }
 
@@ -303,19 +307,23 @@ async fn get_analysis(
     let mut gsql = String::from(
         "SELECT h.grade, COALESCE(SUM(h.quantity), 0) AS quantity, COALESCE(SUM(h.amount), 0) AS amount FROM harvests h WHERE h.grade != ''"
     );
+    let mut gbinds: Vec<String> = Vec::new();
     if let Some(ref area_id) = q.area_id {
         gsql.push_str(" AND h.area_id = ?");
+        gbinds.push(area_id.clone());
     }
     if let Some(ref date_from) = q.date_from {
         gsql.push_str(" AND h.harvest_date >= ?");
+        gbinds.push(date_from.clone());
     }
     if let Some(ref date_to) = q.date_to {
         gsql.push_str(" AND h.harvest_date <= ?");
+        gbinds.push(date_to.clone());
     }
     gsql.push_str(" GROUP BY h.grade");
 
     let mut grade_q = sqlx::query(&gsql);
-    for b in &binds {
+    for b in &gbinds {
         grade_q = grade_q.bind(b);
     }
 
@@ -323,18 +331,22 @@ async fn get_analysis(
     let mut csql = String::from(
         "SELECT fo.category, fo.details, fo.area_id FROM farm_operations fo WHERE fo.category IN ('施肥', '打药') AND fo.details != '{}'"
     );
+    let mut cbinds: Vec<String> = Vec::new();
     if let Some(ref area_id) = q.area_id {
         csql.push_str(" AND fo.area_id = ?");
+        cbinds.push(area_id.clone());
     }
     if let Some(ref date_from) = q.date_from {
         csql.push_str(" AND fo.log_date >= ?");
+        cbinds.push(date_from.clone());
     }
     if let Some(ref date_to) = q.date_to {
         csql.push_str(" AND fo.log_date <= ?");
+        cbinds.push(date_to.clone());
     }
 
     let mut cost_q = sqlx::query(&csql);
-    for b in &binds {
+    for b in &cbinds {
         cost_q = cost_q.bind(b);
     }
 
@@ -442,6 +454,7 @@ mod tests {
             concat!(env!("CARGO_MANIFEST_DIR"), "/../agri-core/migrations/009_farm_operations.sql"),
             concat!(env!("CARGO_MANIFEST_DIR"), "/../agri-core/migrations/012_inventory.sql"),
             concat!(env!("CARGO_MANIFEST_DIR"), "/../agri-core/migrations/013_yield.sql"),
+            concat!(env!("CARGO_MANIFEST_DIR"), "/../agri-core/migrations/015_labor.sql"),
         ];
         for path in schemas {
             let schema = std::fs::read_to_string(path).unwrap();
@@ -539,5 +552,36 @@ mod tests {
         assert_eq!(analysis["yield"]["input_cost_estimate"], 30.0);
         assert_eq!(analysis["yield"]["net_profit_estimate"], 470.0);
         assert_eq!(analysis["operations"]["施肥"], 1);
+    }
+
+    #[tokio::test]
+    async fn analysis_accounts_for_labor_costs() {
+        let pool = setup_db().await;
+        // seed labor_records table (GREEN provides 015_labor.sql)
+        let app = create_router(test_state(pool.clone())).into_service();
+
+        pool.execute("INSERT INTO areas (id, name, created_at) VALUES ('a1', '主大棚', 0)").await.unwrap();
+        // labor: 8-01 采收 3人8h @20 = 480；8-02 打药 1人4h @25 = 100 → labor total 580
+        pool.execute("INSERT INTO labor_records (id, log_date, area_id, category, worker, worker_count, work_hours, rate, amount, paid_status, operator, notes, created_at, updated_at) VALUES ('l1', '2026-08-01', 'a1', '采收', '', 3, 8, 20.0, 480.0, 'unpaid', '', '', 0, 0)").await.unwrap();
+        pool.execute("INSERT INTO labor_records (id, log_date, area_id, category, worker, worker_count, work_hours, rate, amount, paid_status, operator, notes, created_at, updated_at) VALUES ('l2', '2026-08-02', 'a1', '打药', '', 1, 4, 25.0, 100.0, 'unpaid', '', '', 0, 0)").await.unwrap();
+        // harvest: 100kg @5 = 500
+        let res = app.clone().oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/v1/yield/harvests")
+                .header("content-type", "application/json")
+                .body(Body::from(r#"{"area_id":"a1","harvest_date":"2026-08-03","quantity":100,"price":5.0}"#))
+                .unwrap(),
+        ).await.unwrap();
+        assert_eq!(res.status(), StatusCode::CREATED);
+
+        let res = app.clone().oneshot(
+            Request::builder().method("GET").uri("/api/v1/yield/analysis?area_id=a1").body(Body::empty()).unwrap(),
+        ).await.unwrap();
+        let body = axum::body::to_bytes(res.into_body(), usize::MAX).await.unwrap();
+        let analysis: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        // revenue 500 - input 0 - labor 580 = -80
+        assert_eq!(analysis["yield"]["labor_cost_estimate"], 580.0);
+        assert_eq!(analysis["yield"]["net_profit_estimate"], -80.0);
     }
 }
