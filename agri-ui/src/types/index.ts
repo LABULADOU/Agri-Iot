@@ -368,6 +368,10 @@ export interface PesticideItem {
   reg_no: string;
   dosage: string;
   dosage_per_unit: string;
+  /** 本次总用量（数字），勾选库存联动时用于自动出库 */
+  usage?: number;
+  /** 本次总用量单位，如 kg / g / L / ml */
+  usage_unit?: string;
 }
 
 export interface PesticideDetails {
@@ -423,6 +427,34 @@ export interface FarmOperationsListResponse {
   operations: FarmOperation[];
   page: number;
   limit: number;
+}
+
+// ====== 每日用工成本 ======
+
+export interface LaborRecord {
+  id: string;
+  log_date: string;
+  area_id: string | null;
+  category: string;
+  worker: string;
+  worker_count: number;
+  work_hours: number;
+  rate: number;
+  amount: number;
+  paid_status: string;
+  operator: string;
+  notes: string;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface LaborSummary {
+  total_amount: number;
+  total_worker_days: number;
+  total_workdays: number;
+  record_count: number;
+  by_date: Array<{ log_date: string; amount: number; worker_count: number }>;
+  by_category: Array<{ category: string; amount: number; count: number }>;
 }
 
 export interface AnomalyEvent {

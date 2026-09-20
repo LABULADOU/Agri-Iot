@@ -193,4 +193,15 @@ export const mixingApi = {
   deletePreset: (id: string) => api.delete(`/mixing/presets/${id}`),
 };
 
+// Labor (用工) APIs
+export const laborApi = {
+  listRecords: (params?: { date_from?: string; date_to?: string; area_id?: string; category?: string; page?: number; limit?: number }) =>
+    api.get<{ records: import('../types').LaborRecord[]; page: number; limit: number; total: number }>('/labor/records', { params }).then(res => res.data),
+  createRecord: (data: Record<string, unknown>) => api.post('/labor/records', data).then(res => res.data),
+  updateRecord: (id: string, data: Record<string, unknown>) => api.put(`/labor/records/${id}`, data).then(res => res.data),
+  deleteRecord: (id: string) => api.delete(`/labor/records/${id}`),
+  getSummary: (params?: { date_from?: string; date_to?: string; area_id?: string }) =>
+    api.get<{ summary: import('../types').LaborSummary }>('/labor/summary', { params }).then(res => res.data),
+};
+
 export default api;

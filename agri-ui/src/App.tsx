@@ -1,22 +1,32 @@
-import React, { useEffect } from 'react';
+import React, { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { ConfigProvider } from 'antd';
+import { ConfigProvider, Spin } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import { antdTheme } from './theme/antdConfig';
 import ErrorBoundary from './components/common/ErrorBoundary';
 import { AppLayout } from './components/Layout';
 import { useRealtimeStore } from './stores/realtimeStore';
-import Dashboard from './pages/Dashboard';
-import ZoneDetail from './pages/ZoneDetail';
-import NodeList from './pages/NodeList';
-import DataQuery from './pages/DataQuery';
-import AI from './pages/AI';
-import KnowledgeBase from './pages/KnowledgeBase';
-import Settings from './pages/Settings';
-import FarmLog from './pages/FarmLog';
-import Inventory from './pages/Inventory';
-import Yield from './pages/Yield';
-import Mixing from './pages/Mixing';
+
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const ZoneDetail = lazy(() => import('./pages/ZoneDetail'));
+const NodeList = lazy(() => import('./pages/NodeList'));
+const DataQuery = lazy(() => import('./pages/DataQuery'));
+const AI = lazy(() => import('./pages/AI'));
+const KnowledgeBase = lazy(() => import('./pages/KnowledgeBase'));
+const Settings = lazy(() => import('./pages/Settings'));
+const FarmLog = lazy(() => import('./pages/FarmLog'));
+const Inventory = lazy(() => import('./pages/Inventory'));
+const Yield = lazy(() => import('./pages/Yield'));
+const Mixing = lazy(() => import('./pages/Mixing'));
+const Labor = lazy(() => import('./pages/Labor'));
+
+const loadingFallback = (
+  <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
+    <Spin tip="加载中..." />
+  </div>
+);
+
+const withBoundary = (node: React.ReactNode) => <ErrorBoundary>{node}</ErrorBoundary>;
 
 const App: React.FC = () => {
   useEffect(() => {
@@ -29,17 +39,18 @@ const App: React.FC = () => {
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<AppLayout />}>
-              <Route index element={<Dashboard />} />
-              <Route path="zones/:id" element={<ZoneDetail />} />
-              <Route path="nodes" element={<NodeList />} />
-              <Route path="query" element={<DataQuery />} />
-              <Route path="ai" element={<AI />} />
-              <Route path="knowledge" element={<KnowledgeBase />} />
-              <Route path="farm-logs" element={<FarmLog />} />
-              <Route path="inventory" element={<Inventory />} />
-              <Route path="yield" element={<Yield />} />
-              <Route path="mixing" element={<Mixing />} />
-              <Route path="settings" element={<Settings />} />
+              <Route index element={withBoundary(<Suspense fallback={loadingFallback}><Dashboard /></Suspense>)} />
+              <Route path="zones/:id" element={withBoundary(<Suspense fallback={loadingFallback}><ZoneDetail /></Suspense>)} />
+              <Route path="nodes" element={withBoundary(<Suspense fallback={loadingFallback}><NodeList /></Suspense>)} />
+              <Route path="query" element={withBoundary(<Suspense fallback={loadingFallback}><DataQuery /></Suspense>)} />
+              <Route path="ai" element={withBoundary(<Suspense fallback={loadingFallback}><AI /></Suspense>)} />
+              <Route path="knowledge" element={withBoundary(<Suspense fallback={loadingFallback}><KnowledgeBase /></Suspense>)} />
+              <Route path="farm-logs" element={withBoundary(<Suspense fallback={loadingFallback}><FarmLog /></Suspense>)} />
+              <Route path="inventory" element={withBoundary(<Suspense fallback={loadingFallback}><Inventory /></Suspense>)} />
+              <Route path="yield" element={withBoundary(<Suspense fallback={loadingFallback}><Yield /></Suspense>)} />
+              <Route path="mixing" element={withBoundary(<Suspense fallback={loadingFallback}><Mixing /></Suspense>)} />
+              <Route path="labor" element={withBoundary(<Suspense fallback={loadingFallback}><Labor /></Suspense>)} />
+              <Route path="settings" element={withBoundary(<Suspense fallback={loadingFallback}><Settings /></Suspense>)} />
               <Route path="automation" element={<Navigate to="/settings?tab=rules" replace />} />
               <Route path="agent" element={<Navigate to="/ai?tab=chat" replace />} />
               <Route path="*" element={<Navigate to="/" replace />} />

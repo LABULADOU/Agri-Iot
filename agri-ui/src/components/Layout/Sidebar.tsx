@@ -11,6 +11,7 @@ import {
   InboxOutlined,
   BarChartOutlined,
   ExperimentOutlined,
+  TeamOutlined,
 } from '@ant-design/icons';
 import styles from './Sidebar.module.css';
 
@@ -31,6 +32,7 @@ const menuItems: MenuItem[] = [
   { key: '/inventory', icon: <InboxOutlined />, label: '库存' },
   { key: '/yield', icon: <BarChartOutlined />, label: '产量收益' },
   { key: '/mixing', icon: <ExperimentOutlined />, label: '配肥配药' },
+  { key: '/labor', icon: <TeamOutlined />, label: '用工成本' },
   { key: '/settings', icon: <SettingOutlined />, label: '设置' },
 ];
 

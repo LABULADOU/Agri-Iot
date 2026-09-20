@@ -9,7 +9,7 @@ import {
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { farmApi, zoneApi } from '../../services/api';
-import type { FarmOperation, Zone, FarmOpCategory, FarmOpTemplate } from '../../types';
+import type { FarmOperation, Zone, FarmOpCategory, FarmOpTemplate, PesticideItem, FertilizerItem } from '../../types';
 import PesticideForm from './PesticideForm';
 import FertilizerForm from './FertilizerForm';
 import styles from './FarmLog.module.css';
@@ -55,6 +55,51 @@ interface OpFormData {
   details: Record<string, unknown>;
 }
 
+interface TemplateDetailShape {
+  target_pest?: string;
+  items?: Array<{ name: string }>;
+}
+
+interface PesticideFormValue {
+  items: PesticideItem[];
+  water_volume: string;
+  target_pest: string;
+  application_method: string;
+}
+
+interface FertilizerFormValue {
+  items: FertilizerItem[];
+  method: string;
+  total_volume: string;
+  ec: string;
+  ph: string;
+}
+
+interface OperationDetailShape {
+  target_pest?: string;
+  application_method?: string;
+  water_volume?: string;
+  method?: string;
+  total_volume?: string;
+  ec?: string;
+  ph?: string;
+  items?: Array<{
+    formulation?: string;
+    ingredient?: string;
+    brand?: string;
+    reg_no?: string;
+    dosage?: string;
+    dosage_per_unit?: string;
+    usage?: number;
+    usage_unit?: string;
+    name?: string;
+    amount?: string;
+    n?: string;
+    p?: string;
+    k?: string;
+  }>;
+}
+
 const emptyForm: OpFormData = {
   area_id: '',
   log_date: dayjs().format('YYYY-MM-DD'),
@@ -84,14 +129,6 @@ const FarmLog: React.FC = () => {
 
   const [detailDrawer, setDetailDrawer] = useState<FarmOperation | null>(null);
 
-  const loadZones = useCallback(async () => {
-    try {
-      const data = await zoneApi.list();
-      setZones(data);
-      if (!areaId && data.length > 0) setAreaId(data[0].id);
-    } catch { /* ignore */ }
-  }, []);
-
   const loadOps = useCallback(async () => {
     try {
       const params: Record<string, string> = {};
@@ -104,25 +141,40 @@ const FarmLog: React.FC = () => {
     } catch { message.error('加载农事日志失败'); }
   }, [areaId, dateRange, categoryFilter]);
 
-  const loadTemplates = useCallback(async () => {
-    try {
-      const data = await farmApi.listTemplates();
-      setTemplates(data);
-    } catch { /* ignore */ }
+  useEffect(() => {
+    let cancelled = false;
+    zoneApi.list()
+      .then(data => { if (!cancelled) setZones(data); })
+      .catch(() => {});
+    farmApi.listTemplates()
+      .then(data => { if (!cancelled) setTemplates(data); })
+      .catch(() => {});
+    return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
-    loadZones();
-    loadTemplates();
-  }, []);
-
-  useEffect(() => {
-    if (areaId) {
+    let cancelled = false;
+    (async () => {
+      if (!areaId) {
+        if (!cancelled) setLoading(false);
+        return;
+      }
       setLoading(true);
-      loadOps().finally(() => setLoading(false));
-    } else {
-      setLoading(false);
-    }
+      try {
+        const params: Record<string, string> = {};
+        if (areaId) params.area_id = areaId;
+        if (dateRange[0]) params.date_from = dateRange[0].format('YYYY-MM-DD');
+        if (dateRange[1]) params.date_to = dateRange[1].format('YYYY-MM-DD');
+        if (categoryFilter) params.category = categoryFilter;
+        const data = await farmApi.listOps(params);
+        if (!cancelled) setOperations(data.operations);
+      } catch {
+        if (!cancelled) message.error('加载农事日志失败');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
   }, [areaId, dateRange, categoryFilter]);
 
   const openCreate = (category?: FarmOpCategory) => {
@@ -155,15 +207,17 @@ const FarmLog: React.FC = () => {
   };
 
   const applyTemplate = (template: FarmOpTemplate) => {
+    const d = template.details as TemplateDetailShape;
+    const content = d.target_pest
+      ? `防治${d.target_pest}`
+      : d.items?.[0]?.name
+        ? `施用${d.items.map(i => i.name).join('、')}`
+        : template.name;
     setFormData(prev => ({
       ...prev,
       category: template.category,
       details: template.details as Record<string, unknown>,
-      content: (template.details as any)?.target_pest
-        ? `防治${(template.details as any).target_pest}`
-        : (template.details as any)?.items?.[0]?.name
-          ? `施用${(template.details as any).items.map((i: any) => i.name).join('、')}`
-          : template.name,
+      content,
     }));
   };
 
@@ -179,11 +233,13 @@ const FarmLog: React.FC = () => {
         details: formData.category === '打药' || formData.category === '施肥' ? formData.details : undefined,
       };
       if (editingId) {
-        await farmApi.updateOp(editingId, payload);
+        const res = await farmApi.updateOp(editingId, payload) as { warnings?: string[] };
         message.success('已更新');
+        if (res?.warnings?.length) showStockWarnings(res.warnings);
       } else {
-        await farmApi.createOp(payload as any);
+        const res = await farmApi.createOp(payload) as { warnings?: string[] };
         message.success('已创建');
+        if (res?.warnings?.length) showStockWarnings(res.warnings);
       }
       setDrawerOpen(false);
       loadOps();
@@ -192,6 +248,20 @@ const FarmLog: React.FC = () => {
     } finally {
       setSaving(false);
     }
+  };
+
+  const showStockWarnings = (warnings: string[]) => {
+    message.warning({
+      content: (
+        <div>
+          {warnings.map((w, i) => (
+            <div key={i} style={{ fontSize: 13 }}>{w}</div>
+          ))}
+        </div>
+      ),
+      duration: 6,
+      style: { whiteSpace: 'pre-line' },
+    });
   };
 
   const handleDelete = async (id: string) => {
@@ -217,6 +287,8 @@ const FarmLog: React.FC = () => {
     acc[t.category].push(t);
     return acc;
   }, {}) : {};
+
+  const detailDetails = (detailDrawer?.details ?? {}) as OperationDetailShape;
 
   return (
     <div className={styles.container}>
@@ -306,7 +378,7 @@ const FarmLog: React.FC = () => {
         title={editingId ? '编辑操作' : '新建操作'}
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
-        width={640}
+        width="min(640px, 94vw)"
         extra={
           <Button type="primary" onClick={handleSave} loading={saving}>
             {editingId ? '更新' : '保存'}
@@ -365,7 +437,7 @@ const FarmLog: React.FC = () => {
                 <BugOutlined /> 打药记录详情
               </div>
               <PesticideForm
-                value={formData.details as any}
+                value={formData.details as unknown as PesticideFormValue}
                 onChange={val => setFormData(prev => ({ ...prev, details: val }))}
               />
             </div>
@@ -377,7 +449,7 @@ const FarmLog: React.FC = () => {
                 <EnvironmentOutlined /> 施肥记录详情
               </div>
               <FertilizerForm
-                value={formData.details as any}
+                value={formData.details as unknown as FertilizerFormValue}
                 onChange={val => setFormData(prev => ({ ...prev, details: val }))}
               />
             </div>
@@ -394,7 +466,7 @@ const FarmLog: React.FC = () => {
         title="操作详情"
         open={!!detailDrawer}
         onClose={() => setDetailDrawer(null)}
-        width={480}
+        width="min(480px, 94vw)"
       >
         {detailDrawer && (
           <Space direction="vertical" style={{ width: '100%' }} size={16}>
@@ -420,24 +492,24 @@ const FarmLog: React.FC = () => {
             )}
 
             {/* Pesticide details */}
-            {detailDrawer.category === '打药' && detailDrawer.details && (detailDrawer.details as any).items?.length > 0 && (
+            {detailDrawer.category === '打药' && detailDrawer.details && (detailDetails.items ?? []).length > 0 && (
               <div className={styles.detailSection}>
                 <div className={styles.detailSectionTitle}>
                   <BugOutlined /> 打药记录
                 </div>
                 <div className={styles.detailGrid}>
-                  <div><div className={styles.detailLabel}>防治对象</div><div className={styles.detailValue}>{(detailDrawer.details as any).target_pest || '--'}</div></div>
-                  <div><div className={styles.detailLabel}>施药方式</div><div className={styles.detailValue}>{(detailDrawer.details as any).application_method || '--'}</div></div>
-                  <div><div className={styles.detailLabel}>用水量</div><div className={styles.detailValue}>{(detailDrawer.details as any).water_volume || '--'}</div></div>
+                  <div><div className={styles.detailLabel}>防治对象</div><div className={styles.detailValue}>{detailDetails.target_pest || '--'}</div></div>
+                  <div><div className={styles.detailLabel}>施药方式</div><div className={styles.detailValue}>{detailDetails.application_method || '--'}</div></div>
+                  <div><div className={styles.detailLabel}>用水量</div><div className={styles.detailValue}>{detailDetails.water_volume || '--'}</div></div>
                 </div>
                 <table className={styles.detailTable}>
                   <thead>
                     <tr>
-                      <th>剂型</th><th>有效成分</th><th>品牌</th><th>登记证号</th><th>稀释倍数</th><th>亩用量</th>
+                      <th>剂型</th><th>有效成分</th><th>品牌</th><th>登记证号</th><th>稀释倍数</th><th>亩用量</th><th>总用量</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {(detailDrawer.details as any).items.map((item: any, i: number) => (
+                    {detailDetails.items && detailDetails.items.map((item, i) => (
                       <tr key={i}>
                         <td>{item.formulation}</td>
                         <td>{item.ingredient}</td>
@@ -445,6 +517,7 @@ const FarmLog: React.FC = () => {
                         <td style={{ fontFamily: 'monospace', fontSize: 11 }}>{item.reg_no}</td>
                         <td>{item.dosage}</td>
                         <td>{item.dosage_per_unit}</td>
+                        <td>{item.usage != null ? `${item.usage}${item.usage_unit ?? ''}` : '--'}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -453,16 +526,16 @@ const FarmLog: React.FC = () => {
             )}
 
             {/* Fertilizer details */}
-            {detailDrawer.category === '施肥' && detailDrawer.details && (detailDrawer.details as any).items?.length > 0 && (
+            {detailDrawer.category === '施肥' && detailDrawer.details && (detailDetails.items ?? []).length > 0 && (
               <div className={styles.detailSection}>
                 <div className={styles.detailSectionTitle}>
                   <EnvironmentOutlined /> 施肥记录
                 </div>
                 <div className={styles.detailGrid}>
-                  <div><div className={styles.detailLabel}>施肥方式</div><div className={styles.detailValue}>{(detailDrawer.details as any).method || '--'}</div></div>
-                  <div><div className={styles.detailLabel}>总液量</div><div className={styles.detailValue}>{(detailDrawer.details as any).total_volume || '--'}</div></div>
-                  <div><div className={styles.detailLabel}>EC</div><div className={styles.detailValue}>{(detailDrawer.details as any).ec || '--'}</div></div>
-                  <div><div className={styles.detailLabel}>pH</div><div className={styles.detailValue}>{(detailDrawer.details as any).ph || '--'}</div></div>
+                  <div><div className={styles.detailLabel}>施肥方式</div><div className={styles.detailValue}>{detailDetails.method || '--'}</div></div>
+                  <div><div className={styles.detailLabel}>总液量</div><div className={styles.detailValue}>{detailDetails.total_volume || '--'}</div></div>
+                  <div><div className={styles.detailLabel}>EC</div><div className={styles.detailValue}>{detailDetails.ec || '--'}</div></div>
+                  <div><div className={styles.detailLabel}>pH</div><div className={styles.detailValue}>{detailDetails.ph || '--'}</div></div>
                 </div>
                 <table className={styles.detailTable}>
                   <thead>
@@ -471,7 +544,7 @@ const FarmLog: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {(detailDrawer.details as any).items.map((item: any, i: number) => (
+                    {detailDetails.items && detailDetails.items.map((item, i) => (
                       <tr key={i}>
                         <td>{item.name}</td>
                         <td>{item.amount}</td>

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Form, Input, Select, Button, Space } from 'antd';
+import { Form, Input, InputNumber, Select, Button, Space } from 'antd';
 import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 
 interface PesticideItem {
@@ -9,6 +9,8 @@ interface PesticideItem {
   reg_no: string;
   dosage: string;
   dosage_per_unit: string;
+  usage?: number;
+  usage_unit?: string;
 }
 
 interface PesticideFormProps {
@@ -34,6 +36,13 @@ const methodOptions = [
   { value: '涂抹', label: '涂抹' },
 ];
 
+const usageUnitOptions = [
+  { value: 'g', label: 'g' },
+  { value: 'ml', label: 'ml' },
+  { value: 'L', label: 'L' },
+  { value: 'kg', label: 'kg' },
+];
+
 const PesticideForm: React.FC<PesticideFormProps> = ({ value, onChange }) => {
   const items = value?.items || [];
   const water_volume = value?.water_volume || '';
@@ -51,7 +60,7 @@ const PesticideForm: React.FC<PesticideFormProps> = ({ value, onChange }) => {
   };
 
   const addItem = () => {
-    update({ items: [...items, { formulation: '', ingredient: '', brand: '', reg_no: '', dosage: '', dosage_per_unit: '' }] });
+    update({ items: [...items, { formulation: '', ingredient: '', brand: '', reg_no: '', dosage: '', dosage_per_unit: '', usage_unit: 'ml' }] });
   };
 
   const removeItem = (i: number) => {
@@ -93,6 +102,12 @@ const PesticideForm: React.FC<PesticideFormProps> = ({ value, onChange }) => {
           </Form.Item>
           <Form.Item label="亩用量" style={{ marginBottom: 0, width: 80 }}>
             <Input value={item.dosage_per_unit} onChange={e => updateItem(i, { dosage_per_unit: e.target.value })} placeholder="如：30ml" size="small" />
+          </Form.Item>
+          <Form.Item label="总用量" style={{ marginBottom: 0, width: 90 }} tooltip="本次全部用量，填写后保存自动关联库存出库">
+            <InputNumber value={item.usage} onChange={v => updateItem(i, { usage: v ?? undefined })} placeholder="如：300" size="small" min={0} style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item style={{ marginBottom: 0, width: 70 }}>
+            <Select value={item.usage_unit} onChange={v => updateItem(i, { usage_unit: v })} options={usageUnitOptions} size="small" allowClear placeholder="单位" />
           </Form.Item>
           <Button type="text" danger icon={<DeleteOutlined />} onClick={() => removeItem(i)} style={{ marginTop: 28 }} />
         </Space>
