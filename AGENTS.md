@@ -198,6 +198,8 @@ ESP32 → POST /api/v1/telemetry → process_telemetry() → DB写入
 | GET | `/api/v1/weather/indices` | 生活指数 |
 | GET | `/api/v1/weather/warning` | 灾害预警 |
 | GET | `/api/v1/weather/geo` | 城市查找 |
+| CRUD | `/api/v1/labor/records` | 每日用工记录 |
+| GET | `/api/v1/labor/summary` | 用工汇总（按日/按类别/人天） |
 
 ## 启动方式
 
@@ -1300,3 +1302,61 @@ Open-Meteo Geocoding 基于 GeoNames 库，对中国**县级地名覆盖不全**
 - init.sh 收到 shutdown 后不会重启（监护进程退出），需重新启动整套
 - yield harvest_date 是**字符串**（"2026-08-13"）非时间戳；crops 必须带 comfort_config；crop-batches plant_date 是 i64 时间戳——三个 CRUD 字段要求各不相同
 - 运行中服务用旧二进制时 restart 无效：`cargo build` 后必须确认静态产物 mtime 晚于启动时间
+
+## 农事出库联动 + 用工成本模块（2026-09-20）
+
+### 背景
+FarmLog 手动登记打药/施肥时**不自动扣库存**（此前只有 mixing 一键配方自动出库）；产量收益分析只含投入品成本，缺**每日用工成本**。
+
+### Part1: 农事记录自动出库联动
+
+```
+FarmLog 登记打药/施肥 (details.items)
+  → farm_log.rs 事务内调 apply_op_deductions()
+  → 按 name →(备选名) 匹配 inventory_items
+  → 单位换算 (kg↔g/t, L↔ml) + 稀释单位(倍/ppm/%)拒绝
+  → 出库流水 related_type='farm_operation', related_id=<op_id>
+  → 库存不足 → 静默截断到实际库存 + warnings 返回
+  → 编辑 = 回滚(revert) + 重扣；删除 = 回滚恢复库存
+```
+
+| 文件 | 内容 |
+|------|------|
+| `agri-server/src/stock.rs` | `parse_amount`/`convert_amount`/`parse_usage_items`/`apply_op_deductions`/`revert_op_deductions`（13 测试） |
+| `agri-server/src/farm_log.rs` | create/update/delete 改为事务内联动（4 集成测试） |
+
+规则：
+- 仅 `打药`/`施肥` 类别联动；mixing 生成的 details 为 `{recipe_id,result}` 无顶层 items → 天然跳过不重复扣
+- 农药 item 匹配 `name → (ingredient/brand)`；需前端录入显式 `usage` + `usage_unit`（areas 无面积字段，无法按亩推导总用量）
+- `举报 functions` 取 `Transaction<'_, sqlx::Sqlite>`，执行器用 `&mut **tx`（sqlx 0.7 `&mut Transaction` 不实现 Executor）
+- 前端 `PesticideForm` 增"总用量"数字+单位；保存后通过 `res.warnings` 以 message.warning 展示截断提示
+
+### Part2: 独立用工成本模块
+
+```
+daily_labor: labor_records 表 (id, log_date, area_id?, category, worker?, worker_count, work_hours, rate, amount, paid_status, operator, notes)
+  amount = worker_count × work_hours × rate (自动计算)
+  → GET/POST /api/v1/labor/records、GET/PUT/DELETE :id、GET /summary
+  → summary: 总成本 / 用工天数 / 总人天 / 按日趋势 / 按类别分布
+  → yield 净利 = 收入 − 投入品成本 − 人工成本
+```
+
+| 文件 | 内容 |
+|------|------|
+| `agri-core/migrations/015_labor.sql` | labor_records 表 + log_date/area_id 索引 |
+| `agri-server/src/labor.rs` | CRUD + summary（6 测试） |
+| `agri-server/src/yield.rs` | `get_analysis` 增加 `labor_cost_estimate`，净利 = 收入 − input − labor（+1 测试） |
+| `agri-ui/src/pages/Labor/` | 用工页面：汇总卡片 + 每日成本条 + 类别分布 + 记录表格 + 录工弹窗 |
+| `agri-ui` 路由/菜单 | `/labor`（Sidebar + MobileTabBar） |
+
+### 测试统计（Part2 GREEN 后）
+- `agri-server`: 70 测试（+12：stock 6 + farm_log 4 + labor 6 + yield 1，- 原 63 基线中部分归类调整）
+- `agri-core`: 136 测试（不变）
+- `agri-mqtt`: 22 测试（不变）
+
+### 踩坑记录
+- sqlx 0.7 中 `Transaction` 只通过 `Deref` 到连接才是 `Executor`，`.execute(&mut *tx)` 报 "trait bound not satisfied"，必须 `&mut **tx`
+- sed 替换时 `&` 在 replacement 中是"整段匹配"元字符，需写作 `\&` 转义，否则会生成 `&mut *txmut **tx` 这类被污染文本
+- InputNumber `onChange` 回调值是 `number | null`，写入 `usage?: number` 需 `v ?? undefined`
+- labor records 与 yield/farm 的日期过滤统一用字符串 `YYYY-MM-DD` 比较（页面 `log_date` 用 dayjs format）
+- `static/` 重建会清空旧 assets（vite `emptyOutDir: true`），提交时需连同 static/ 一起提交，否则部署产物与源码不同步
