@@ -350,15 +350,32 @@ async fn get_analysis(
         cost_q = cost_q.bind(b);
     }
 
-    let (yield_res, trend_res, grade_res, ops_res) = tokio::join!(
+    // 5. labor cost estimate from labor_records
+    let mut lsql = String::from(
+        "SELECT COALESCE(SUM(amount), 0) AS labor_cost FROM labor_records WHERE log_date >= ? AND log_date <= ?"
+    );
+    let mut lbinds: Vec<String> = Vec::new();
+    lbinds.push(q.date_from.clone().unwrap_or_else(|| "0000-00-00".to_string()));
+    lbinds.push(q.date_to.clone().unwrap_or_else(|| "9999-12-31".to_string()));
+    if let Some(ref area_id) = q.area_id {
+        lsql.push_str(" AND area_id = ?");
+        lbinds.push(area_id.clone());
+    }
+    let mut labor_q = sqlx::query(&lsql);
+    for b in &lbinds {
+        labor_q = labor_q.bind(b);
+    }
+
+    let (yield_res, trend_res, grade_res, ops_res, labor_res) = tokio::join!(
         yield_q.fetch_all(&state.pool),
         trend_q.fetch_all(&state.pool),
         grade_q.fetch_all(&state.pool),
         cost_q.fetch_all(&state.pool),
+        labor_q.fetch_one(&state.pool),
     );
 
-    match (yield_res, trend_res, grade_res, ops_res) {
-        (Ok(yrows), Ok(trows), Ok(grows), Ok(orows)) => {
+    match (yield_res, trend_res, grade_res, ops_res, labor_res) {
+        (Ok(yrows), Ok(trows), Ok(grows), Ok(orows), Ok(lrow)) => {
             let mut input_cost = 0.0f64;
             let mut op_counts: serde_json::Map<String, serde_json::Value> = serde_json::Map::new();
 
@@ -406,6 +423,7 @@ async fn get_analysis(
 
             let total_quantity: f64 = areas.iter().map(|a| a["total_quantity"].as_f64().unwrap_or(0.0)).sum();
             let total_revenue: f64 = areas.iter().map(|a| a["total_amount"].as_f64().unwrap_or(0.0)).sum();
+            let labor_cost: f64 = lrow.try_get("labor_cost").unwrap_or(0.0);
 
             Json(serde_json::json!({
                 "yield": {
@@ -413,7 +431,8 @@ async fn get_analysis(
                     "total_revenue": total_revenue,
                     "total_harvests": areas.iter().map(|a| a["harvest_count"].as_i64().unwrap_or(0)).sum::<i64>(),
                     "input_cost_estimate": input_cost,
-                    "net_profit_estimate": total_revenue - input_cost,
+                    "labor_cost_estimate": labor_cost,
+                    "net_profit_estimate": total_revenue - input_cost - labor_cost,
                 },
                 "areas": areas,
                 "trend": trend,
