@@ -784,7 +784,6 @@ async fn update_preset(
     Path(id): Path<String>,
     Json(req): Json<UpdatePresetRequest>,
 ) -> impl IntoResponse {
-    let now = Utc::now().timestamp();
     let items = req.items.map(|v| serde_json::to_string(&v).unwrap_or_default());
 
     let result = sqlx::query(

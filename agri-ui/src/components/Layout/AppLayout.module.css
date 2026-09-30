@@ -3,7 +3,7 @@
 }
 
 .content {
-  padding: 16px 24px;
+  padding: var(--space-4) var(--content-padding);
   background: var(--bg-page, #F8FAFC);
   overflow-y: auto;
   height: calc(100vh - var(--topbar-height, 80px));
@@ -11,8 +11,8 @@
 
 @media (max-width: 767px) {
   .content {
-    padding: 12px;
+    padding: var(--content-padding-mobile);
     height: calc(100vh - var(--topbar-height, 80px) - var(--tabbar-height, 56px));
-    padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: calc(var(--content-padding-mobile) + env(safe-area-inset-bottom, 0px));
   }
 }

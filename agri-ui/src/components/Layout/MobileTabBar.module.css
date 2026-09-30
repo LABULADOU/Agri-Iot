@@ -4,7 +4,7 @@
   bottom: 0;
   left: 0;
   right: 0;
-  height: 56px;
+  height: var(--tabbar-height);
   background: #fff;
   border-top: 1px solid var(--border-color, #E5E7EB);
   z-index: 1000;

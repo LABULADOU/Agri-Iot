@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import dayjs from 'dayjs';
 import { nodeApi, apiLong } from '../services/api';
 import { wsService } from '../services/ws';
@@ -31,27 +31,22 @@ export function useRealtimeReadings({
 }: UseRealtimeReadingsOptions): UseRealtimeReadingsResult {
   const [loading, setLoading] = useState(false);
   const [lastUpdate, setLastUpdate] = useState(0);
-  const [tick, setTick] = useState(0);
+  const [buffer, setBuffer] = useState<SensorReading[]>([]);
 
-  const bufferRef = useRef<SensorReading[]>([]);
   const seenKeysRef = useRef<Set<string>>(new Set());
   const metricsRef = useRef(metrics);
   const dateRangeRef = useRef(dateRange);
-  metricsRef.current = metrics;
-  dateRangeRef.current = dateRange;
-
-  const bump = useCallback(() => setTick(t => t + 1), []);
 
   useEffect(() => {
-    if (!enabled) {
-      bufferRef.current = [];
-      seenKeysRef.current.clear();
-      return;
-    }
+    metricsRef.current = metrics;
+  }, [metrics]);
 
-    bufferRef.current = [];
-    seenKeysRef.current.clear();
-    bump();
+  useEffect(() => {
+    dateRangeRef.current = dateRange;
+  }, [dateRange]);
+
+  useEffect(() => {
+    if (!enabled) return;
 
     let cancelled = false;
 
@@ -113,13 +108,12 @@ export function useRealtimeReadings({
         // 3. Merge: aggregate data first (coarse, covers full range),
         //    then raw data (granular, overwrites aggregates at same time)
         const merged = [...aggReadings, ...rawReadings.reverse()];
-        bufferRef.current = merged;
+        setBuffer(merged);
         merged.forEach(r => seenKeysRef.current.add(`${r.metric}:${r.id}`));
         setLastUpdate(Date.now());
-        bump();
-      } catch (e) {
+      } catch {
         if (!cancelled) {
-          console.error('[useRealtimeReadings] fetch error:', e);
+          // fetch failed silently
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -144,45 +138,44 @@ export function useRealtimeReadings({
 
       if (!readings.length) return;
 
-      const prev = bufferRef.current;
-      const next = [
-        ...prev,
-        ...readings.filter(r => {
-          const key = `${r.metric}:${r.id}`;
-          if (seenKeysRef.current.has(key)) return false;
-          seenKeysRef.current.add(key);
-          return true;
-        }),
-      ];
+      setBuffer(prev => {
+        const next = [
+          ...prev,
+          ...readings.filter(r => {
+            const key = `${r.metric}:${r.id}`;
+            if (seenKeysRef.current.has(key)) return false;
+            seenKeysRef.current.add(key);
+            return true;
+          }),
+        ];
 
-      if (next.length > maxBuffer) {
-        const removed = next.slice(0, next.length - maxBuffer);
-        removed.forEach(r => seenKeysRef.current.delete(`${r.metric}:${r.id}`));
-        bufferRef.current = next.slice(-maxBuffer);
-      } else {
-        bufferRef.current = next;
-      }
+        if (next.length > maxBuffer) {
+          const removed = next.slice(0, next.length - maxBuffer);
+          removed.forEach(r => seenKeysRef.current.delete(`${r.metric}:${r.id}`));
+          return next.slice(-maxBuffer);
+        }
+        return next;
+      });
       setLastUpdate(Date.now());
-      bump();
     });
 
     return () => {
       cancelled = true;
       unsub();
     };
-  }, [enabled, deviceId, nodeId, maxBuffer, bump]);
+  }, [enabled, deviceId, nodeId, maxBuffer]);
 
   const filteredReadings = useMemo(() => {
     if (!enabled) return [];
     const start = dateRange[0].valueOf();
     const end = dayjs().valueOf();
-    return bufferRef.current
+    return buffer
       .filter(r => {
         const ts = dayjs(r.timestamp).valueOf();
         return metrics.includes(r.metric) && ts >= start && ts <= end;
       })
       .sort((a, b) => dayjs(a.timestamp).valueOf() - dayjs(b.timestamp).valueOf());
-  }, [enabled, tick, metrics, dateRange]);
+  }, [enabled, buffer, metrics, dateRange]);
 
   const readings = useMemo(() => {
     return filteredReadings.map(r => ({
@@ -200,6 +193,6 @@ export function useRealtimeReadings({
     filteredReadings,
     loading,
     lastUpdate,
-    rawCount: bufferRef.current.length,
+    rawCount: enabled ? buffer.length : 0,
   };
 }

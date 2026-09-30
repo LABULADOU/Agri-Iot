@@ -5,7 +5,7 @@ import { dataApi, nodeApi } from '../../services/api';
 import LineChart from '../../components/Charts/LineChart';
 import { metricSelectOptions, METRIC_CONFIG } from '../../config/metrics';
 import { useRealtimeReadings } from '../../hooks/useRealtimeReadings';
-import type { SensorNode, AggregatedReading, ViewMode } from '../../types';
+import type { SensorNode, AggregatedReading, SensorReading, ViewMode, QueryParams } from '../../types';
 import styles from './DataQuery.module.css';
 
 const { Title, Text } = Typography;
@@ -38,6 +38,40 @@ const DataQuery: React.FC = () => {
   const isRealtime = viewMode === 'realtime';
   const cfg = viewModes[viewMode];
 
+  useEffect(() => {
+    let cancelled = false;
+    nodeApi.list()
+      .then(result => {
+        if (cancelled) return;
+        setNodes(result);
+        if (result.length > 0) setSelectedNode(result[0].id);
+      })
+      .catch(() => {
+        if (!cancelled) setNodes([]);
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    if (isRealtime) return;
+    let cancelled = false;
+    const params: Record<string, unknown> = {
+      period: cfg.period,
+      start: dateRange[0].toISOString(),
+      end: dayjs().toISOString(),
+    };
+    if (selectedNode && selectedNode !== 'all') params.node_id = selectedNode;
+    if (selectedMetrics.length > 0) params.metric = selectedMetrics.join(',');
+    dataApi.query(params as unknown as QueryParams)
+      .then(result => {
+        if (!cancelled) setData(result);
+      })
+      .catch(() => {
+        if (!cancelled) setData([]);
+      });
+    return () => { cancelled = true; };
+  }, [isRealtime, selectedNode, selectedMetrics, dateRange, cfg.period]);
+
   const {
     readings: realtimeReadings,
     filteredReadings: realtimeTableData,
@@ -52,47 +86,6 @@ const DataQuery: React.FC = () => {
     dateRange,
   });
 
-  useEffect(() => {
-    fetchNodes();
-  }, []);
-
-  useEffect(() => {
-    setDateRange([dayjs().subtract(cfg.defaultRangeHours, 'hour'), dayjs()]);
-  }, [viewMode]);
-
-  useEffect(() => {
-    if (isRealtime) return;
-    fetchData();
-  }, [selectedNode, selectedMetrics, viewMode, dateRange]);
-
-  const fetchNodes = async () => {
-    try {
-      const result = await nodeApi.list();
-      setNodes(result);
-      if (result.length > 0) {
-        setSelectedNode(result[0].id);
-      }
-    } catch {
-      setNodes([]);
-    }
-  };
-
-  const fetchData = async () => {
-    try {
-      const params: Record<string, unknown> = {
-        period: cfg.period,
-        start: dateRange[0].toISOString(),
-        end: dayjs().toISOString(),
-      };
-      if (selectedNode && selectedNode !== 'all') params.node_id = selectedNode;
-      if (selectedMetrics.length > 0) params.metric = selectedMetrics.join(',');
-      const result = await dataApi.query(params as unknown as import('../../types').QueryParams);
-      setData(result);
-    } catch {
-      setData([]);
-    }
-  };
-
   const chartData = useMemo(() => {
     if (isRealtime) return realtimeReadings;
     if (!selectedMetrics.length) return [];
@@ -104,26 +97,23 @@ const DataQuery: React.FC = () => {
   const statsData = useMemo(() => {
     const source = isRealtime ? realtimeTableData : data;
     return selectedMetrics.map(metric => {
-      const rows = source.filter((r: any) => r.metric === metric);
+      const rows = source.filter(r => r.metric === metric);
       if (!rows.length) return null;
       const values = isRealtime
-        ? rows.map((r: any) => r.value)
-        : rows.flatMap((r: any) => [r.max, r.min, r.avg]);
+        ? (rows as SensorReading[]).map(r => r.value)
+        : (rows as AggregatedReading[]).flatMap(r => [r.max, r.min, r.avg]);
       const allMax = Math.max(...values);
       const allMin = Math.min(...values);
       const avg = isRealtime
         ? values[values.length - 1]
-        : values.reduce((a: number, b: number) => a + b, 0) / values.length;
+        : values.reduce((a, b) => a + b, 0) / values.length;
       return { metric, max: allMax, min: allMin, avg };
     }).filter(Boolean);
   }, [isRealtime, realtimeTableData, data, selectedMetrics]);
 
   const [tablePage, setTablePage] = useState(1);
-
-  useEffect(() => {
-    if (!isRealtime || !lastUpdate) return;
-    setTablePage(1);
-  }, [lastUpdate, isRealtime]);
+  const tableDataSource: (SensorReading | AggregatedReading)[] = isRealtime ? realtimeTableData : data;
+  const effectiveTablePage = Math.min(tablePage, Math.max(1, Math.ceil(tableDataSource.length / 20)));
 
   const tableColumns = isRealtime
     ? [
@@ -171,7 +161,11 @@ const DataQuery: React.FC = () => {
               <Text type="secondary" className={styles.filterLabel}>展示粒度</Text>
               <Segmented
                 value={viewMode}
-                onChange={(v) => setViewMode(v as ViewMode)}
+                onChange={(v) => {
+                  const mode = v as ViewMode;
+                  setViewMode(mode);
+                  setDateRange([dayjs().subtract(viewModes[mode].defaultRangeHours, 'hour'), dayjs()]);
+                }}
                 options={[
                   { value: 'realtime', label: '实时' },
                   { value: 'ten_min',  label: '按小时' },
@@ -250,11 +244,11 @@ const DataQuery: React.FC = () => {
         </Text>
         <Table
           columns={tableColumns}
-          dataSource={(isRealtime ? realtimeTableData : chartData).slice().reverse() as any}
+          dataSource={tableDataSource.slice().reverse()}
           rowKey={(_record, index) => `${index}`}
           loading={isRealtime ? realtimeLoading : false}
           size="small"
-          pagination={{ pageSize: 20, showSizeChanger: true, current: tablePage, onChange: (p) => setTablePage(p) }}
+          pagination={{ pageSize: 20, showSizeChanger: true, current: effectiveTablePage, onChange: (p) => setTablePage(p) }}
           scroll={{ x: 700 }}
         />
       </div>

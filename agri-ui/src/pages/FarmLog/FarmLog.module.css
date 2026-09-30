@@ -175,3 +175,61 @@
   padding: 4px 8px;
   border-bottom: 1px solid var(--border-color, #E5E7EB);
 }
+
+@media (max-width: 767px) {
+  .toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .toolbarLeft {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .toolbarLeft > * {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .opCard {
+    grid-template-columns: auto 1fr auto;
+    gap: 6px;
+    padding: 10px 12px;
+  }
+
+  .opTime {
+    font-size: 11px;
+    align-self: center;
+  }
+
+  .opCategory {
+    justify-self: start;
+    font-size: 11px;
+    padding: 1px 8px;
+  }
+
+  .opContent {
+    grid-column: 1 / -1;
+    order: 3;
+    font-size: 13px;
+  }
+
+  .opMeta {
+    justify-content: flex-end;
+    grid-column: 1 / -1;
+    order: 4;
+    border-top: 1px dashed var(--border-color-light, #F3F4F6);
+    padding-top: 6px;
+  }
+
+  .detailGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .detailTable {
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+}

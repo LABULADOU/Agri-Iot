@@ -252,8 +252,8 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
         });
         set({ _anomalyUnsub: unsubAnomaly });
       }
-    } catch (e) {
-      console.error('Dashboard fetchAll failed:', e);
+    } catch {
+      // dashboard fetch failed silently
     }
   },
 
@@ -307,8 +307,8 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
     }));
   },
 
-  executeRecommendation: async (item: TodoItem) => {
-    console.log('Executing:', item.id, item.aiRecommendation);
+  executeRecommendation: async (): Promise<void> => {
+    // TODO: implement recommendation execution
   },
 
   setHealthScore: (score: number) => {

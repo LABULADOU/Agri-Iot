@@ -24,18 +24,22 @@ struct EmbedRequest {
 #[derive(Deserialize)]
 struct EmbedResponse {
     data: Vec<EmbedData>,
+    #[allow(dead_code)]
     model: String,
+    #[allow(dead_code)]
     usage: EmbedUsage,
 }
 
 #[derive(Deserialize)]
 struct EmbedData {
     embedding: Vec<f64>,
+    #[allow(dead_code)]
     index: usize,
 }
 
 #[derive(Deserialize)]
 struct EmbedUsage {
+    #[allow(dead_code)]
     total_tokens: u32,
 }
 

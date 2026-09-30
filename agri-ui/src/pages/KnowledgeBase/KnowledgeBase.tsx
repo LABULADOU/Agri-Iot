@@ -95,7 +95,6 @@ const KnowledgeBase: React.FC = () => {
 
   // Load notes
   useEffect(() => {
-    setLoading(true);
     aiApi.listKnowledgeBase()
       .then(data => setNotes(data.notes))
       .catch(() => setError('加载知识库失败'))
@@ -171,7 +170,7 @@ const KnowledgeBase: React.FC = () => {
 
   const handleTocClick = useCallback((id: string) => {
     setTocDrawerOpen(false);
-    const el = contentRef.current?.querySelector(`#${CSS.escape(id)}`);
+    const el = document.getElementById(id);
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, []);
 
@@ -365,11 +364,11 @@ const KnowledgeBase: React.FC = () => {
                   {selectedNote.knowledge_type && (
                     <Tag color={TYPE_COLORS[selectedNote.knowledge_type] || 'default'}>{selectedNote.knowledge_type}</Tag>
                   )}
-                  {(selectedNote as any)['适用作物'] && (
-                    <Tag>{(selectedNote as any)['适用作物']}</Tag>
+                  {selectedNote['适用作物'] && (
+                    <Tag>{selectedNote['适用作物']}</Tag>
                   )}
-                  {(selectedNote as any)['知识领域'] && (
-                    <Tag color="geekblue">{(selectedNote as any)['知识领域']}</Tag>
+                  {selectedNote['知识领域'] && (
+                    <Tag color="geekblue">{selectedNote['知识领域']}</Tag>
                   )}
                 </div>
 

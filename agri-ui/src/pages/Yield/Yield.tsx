@@ -5,8 +5,8 @@ import {
 } from 'antd';
 import { PlusOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
-import { yieldApi, zoneApi, farmApi } from '../../services/api';
-import type { Harvest, YieldAnalysis, FarmOperation } from '../../types';
+import { yieldApi, zoneApi } from '../../services/api';
+import type { Harvest, YieldAnalysis } from '../../types';
 
 const { Title, Text } = Typography;
 
@@ -38,7 +38,27 @@ const Yield: React.FC = () => {
     }
   }, [areaId, dateRange]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const params: Record<string, string> = {};
+        if (areaId) params.area_id = areaId;
+        if (dateRange[0]) params.date_from = dateRange[0].format('YYYY-MM-DD');
+        if (dateRange[1]) params.date_to = dateRange[1].format('YYYY-MM-DD');
+        const [h, a] = await Promise.all([yieldApi.listHarvests(params), yieldApi.getAnalysis(params)]);
+        if (!cancelled) {
+          setHarvests(h.harvests);
+          setAnalysis(a);
+        }
+      } catch {
+        if (!cancelled) message.error('加载产量数据失败');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [areaId, dateRange]);
 
   useEffect(() => {
     zoneApi.list().then(setZones).catch(() => {});
@@ -114,11 +134,11 @@ const Yield: React.FC = () => {
     <div style={{ padding: 16 }}>
       <Title level={4} style={{ margin: 0, marginBottom: 16 }}>📈 产量与收益</Title>
 
-      <Row gutter={16} style={{ marginBottom: 16 }}>
-        <Col span={6}><Card><Statistic title="总产量" value={analysis?.yield.total_quantity || 0} precision={1} suffix="kg" /></Card></Col>
-        <Col span={6}><Card><Statistic title="总收入" value={analysis?.yield.total_revenue || 0} precision={2} prefix="¥" /></Card></Col>
-        <Col span={6}><Card><Statistic title="投入品成本(估)" value={analysis?.yield.input_cost_estimate || 0} precision={2} prefix="¥" valueStyle={{ color: '#cf1322' }} /></Card></Col>
-        <Col span={6}>
+      <Row gutter={[16, 12]} style={{ marginBottom: 16 }}>
+        <Col xs={12} sm={6}><Card><Statistic title="总产量" value={analysis?.yield.total_quantity || 0} precision={1} suffix="kg" /></Card></Col>
+        <Col xs={12} sm={6}><Card><Statistic title="总收入" value={analysis?.yield.total_revenue || 0} precision={2} prefix="¥" /></Card></Col>
+        <Col xs={12} sm={6}><Card><Statistic title="投入品成本(估)" value={analysis?.yield.input_cost_estimate || 0} precision={2} prefix="¥" valueStyle={{ color: '#cf1322' }} /></Card></Col>
+        <Col xs={12} sm={6}>
           <Card>
             <Statistic
               title="净利润(估)"
@@ -131,8 +151,8 @@ const Yield: React.FC = () => {
         </Col>
       </Row>
 
-      <Row gutter={16} style={{ marginBottom: 16 }}>
-        <Col span={10}>
+      <Row gutter={[16, 12]} style={{ marginBottom: 16 }}>
+        <Col xs={24} md={10}>
           <Card title="产量趋势（按日）" size="small" styles={{ body: { maxHeight: 200, overflowY: 'auto' } }}>
             {trend.length === 0 ? <Empty description="暂无数据" /> : (
               <div>
@@ -152,7 +172,7 @@ const Yield: React.FC = () => {
             )}
           </Card>
         </Col>
-        <Col span={7}>
+        <Col xs={24} md={7}>
           <Card title="区域汇总" size="small" styles={{ body: { maxHeight: 200, overflowY: 'auto' } }}>
             {(analysis?.areas || []).map(a => (
               <div key={a.area_id} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: 13 }}>
@@ -162,7 +182,7 @@ const Yield: React.FC = () => {
             ))}
           </Card>
         </Col>
-        <Col span={7}>
+        <Col xs={24} md={7}>
           <Card title="成本构成（农事操作）" size="small" styles={{ body: { maxHeight: 200, overflowY: 'auto' } }}>
             {Object.entries(analysis?.operations || {}).map(([k, v]) => (
               <div key={k} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: 13 }}>
@@ -177,9 +197,9 @@ const Yield: React.FC = () => {
       <Card
         title="采收记录"
         extra={
-          <Space>
+          <Space wrap style={{ justifyContent: 'flex-end' }}>
             <Select
-              placeholder="区域" allowClear style={{ width: 140 }}
+              placeholder="区域" allowClear style={{ width: 120 }}
               value={areaId || undefined}
               onChange={v => setAreaId(v || '')}
               onClear={() => setAreaId('')}
@@ -190,7 +210,7 @@ const Yield: React.FC = () => {
           </Space>
         }
       >
-        <Table rowKey="id" columns={columns} dataSource={harvests} loading={loading} pagination={{ pageSize: 10 }} size="middle" />
+        <Table rowKey="id" columns={columns} dataSource={harvests} loading={loading} pagination={{ pageSize: 10 }} size="middle" scroll={{ x: 'max-content' }} />
       </Card>
 
       <Modal
@@ -207,13 +227,13 @@ const Yield: React.FC = () => {
             <DatePicker style={{ width: '100%' }} />
           </Form.Item>
           <Row gutter={12}>
-            <Col span={8}><Form.Item name="quantity" label="产量" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} min={0} /></Form.Item></Col>
-            <Col span={8}><Form.Item name="unit" label="单位"><Input defaultValue="kg" /></Form.Item></Col>
-            <Col span={8}><Form.Item name="grade" label="等级"><Select allowClear options={[{ value: 'A' }, { value: 'B' }, { value: 'C' }]} /></Form.Item></Col>
+            <Col xs={24} sm={8}><Form.Item name="quantity" label="产量" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} min={0} /></Form.Item></Col>
+            <Col xs={12} sm={8}><Form.Item name="unit" label="单位"><Input defaultValue="kg" /></Form.Item></Col>
+            <Col xs={12} sm={8}><Form.Item name="grade" label="等级"><Select allowClear options={[{ value: 'A' }, { value: 'B' }, { value: 'C' }]} /></Form.Item></Col>
           </Row>
           <Row gutter={12}>
-            <Col span={12}><Form.Item name="price" label="单价（元/单位）"><InputNumber style={{ width: '100%' }} min={0} /></Form.Item></Col>
-            <Col span={12}><Form.Item name="operator" label="操作人"><Input /></Form.Item></Col>
+            <Col xs={24} sm={12}><Form.Item name="price" label="单价（元/单位）"><InputNumber style={{ width: '100%' }} min={0} /></Form.Item></Col>
+            <Col xs={24} sm={12}><Form.Item name="operator" label="操作人"><Input /></Form.Item></Col>
           </Row>
           <Form.Item name="notes" label="备注"><Input.TextArea rows={2} /></Form.Item>
         </Form>

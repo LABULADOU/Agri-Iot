@@ -37,7 +37,7 @@
 
 // WiFi 配置
 const char* WIFI_SSID = "iPhone";
-const char* WIFI_PASSWORD = "12345678";
+const char* WIFI_PASSWORD = "xhf426359";
 
 // 局域网 MQTT 配置（通过 mDNS 动态解析）
 #define MQTT_LAN_PORT 1883

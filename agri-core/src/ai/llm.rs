@@ -195,17 +195,20 @@ struct ResponseFormat {
 #[derive(Deserialize)]
 struct ChatResponse {
     choices: Vec<Choice>,
+    #[allow(dead_code)]
     usage: Option<Usage>,
 }
 
 #[derive(Deserialize)]
 struct Choice {
     message: Message,
+    #[allow(dead_code)]
     finish_reason: Option<String>,
 }
 
 #[derive(Deserialize)]
 struct Usage {
+    #[allow(dead_code)]
     total_tokens: u32,
 }
 

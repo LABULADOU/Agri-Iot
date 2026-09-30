@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Typography, Card, Row, Col, Button, Form, Input, InputNumber, Select, Space, Tag,
   Table, Tabs, Popconfirm, Modal, message, Alert, Descriptions, Spin,
@@ -7,8 +7,8 @@ import {
   ExperimentOutlined, BugOutlined, ThunderboltOutlined, CheckCircleOutlined,
   PlusOutlined, DeleteOutlined,
 } from '@ant-design/icons';
-import { mixingApi, zoneApi, farmApi } from '../../services/api';
-import type { MixingPlan, MixingRecipe, MixingPreset, FarmOperation } from '../../types';
+import { mixingApi, zoneApi } from '../../services/api';
+import type { MixingPlan, MixingRecipe, MixingPreset } from '../../types';
 
 const { Title, Text } = Typography;
 
@@ -49,7 +49,7 @@ const PlanView: React.FC<{ plan: MixingPlan; onApply: () => void; applying: bool
         ) : applied ? <Tag color="green" icon={<CheckCircleOutlined />}>已应用</Tag> : null
       }
     >
-      <Descriptions size="small" column={2} style={{ marginBottom: 8 }}>
+      <Descriptions size="small" column={{ xs: 1, sm: 2 }} style={{ marginBottom: 8 }}>
         {plan.plan?.dilution && <Descriptions.Item label="稀释比例">{plan.plan.dilution}</Descriptions.Item>}
         {plan.plan?.ec_target !== undefined && <Descriptions.Item label="EC 目标">{plan.plan.ec_target} mS/cm</Descriptions.Item>}
         {plan.plan?.water_volume !== undefined && <Descriptions.Item label="用水量">{plan.plan.water_volume}{typeof plan.plan.water_volume === 'number' ? ' L' : ''}</Descriptions.Item>}
@@ -63,6 +63,7 @@ const PlanView: React.FC<{ plan: MixingPlan; onApply: () => void; applying: bool
         size="small"
         dataSource={items}
         pagination={false}
+        scroll={{ x: 'max-content' }}
         columns={[
           { title: '投入品', dataIndex: 'name', render: (v: string) => <Text strong>{v || '-'}</Text> },
           { title: 'N', dataIndex: 'n', width: 60, render: (v?: number) => v !== undefined ? `${v}%` : '-' },
@@ -103,8 +104,12 @@ const Mixing: React.FC = () => {
 
   useEffect(() => {
     zoneApi.list().then(setZones).catch(() => {});
-    loadRecipes();
-    loadPresets();
+    mixingApi.listRecipes()
+      .then(data => setRecipes(data.recipes || []))
+      .catch(() => {});
+    mixingApi.listPresets()
+      .then(data => setPresets(data.presets || []))
+      .catch(() => {});
   }, []);
 
   const loadRecipes = async () => {
@@ -267,8 +272,8 @@ const Mixing: React.FC = () => {
             key: 'fertilizer',
             label: <span><ExperimentOutlined /> 配肥</span>,
             children: (
-              <Row gutter={16}>
-                <Col span={10}>
+              <Row gutter={[16, 12]}>
+                <Col xs={24} md={10}>
                   <Card title="环境与作物信息" size="small">
                     <Form form={fertiForm} layout="vertical" initialValues={{ growth_days: 20 }}>
                       <Form.Item name="area_id" label="区域" rules={[{ required: true }]}>
@@ -286,7 +291,7 @@ const Mixing: React.FC = () => {
                     </Form>
                   </Card>
                 </Col>
-                <Col span={14}>
+                <Col xs={24} md={14}>
                   {loadingF ? <div style={{ textAlign: 'center', padding: 60 }}><Spin tip="生成中" /></div> : (
                     fertiPlan ? (
                       <PlanView
@@ -310,8 +315,8 @@ const Mixing: React.FC = () => {
             key: 'pesticide',
             label: <span><BugOutlined /> 配药</span>,
             children: (
-              <Row gutter={16}>
-                <Col span={10}>
+              <Row gutter={[16, 12]}>
+                <Col xs={24} md={10}>
                   <Card title="病虫害信息" size="small">
                     <Form form={pestForm} layout="vertical" initialValues={{ target_pest: '白粉虱' }}>
                       <Form.Item name="area_id" label="区域" rules={[{ required: true }]}>
@@ -329,7 +334,7 @@ const Mixing: React.FC = () => {
                     </Form>
                   </Card>
                 </Col>
-                <Col span={14}>
+                <Col xs={24} md={14}>
                   {loadingP ? <div style={{ textAlign: 'center', padding: 60 }}><Spin tip="生成中" /></div> : (
                     pestPlan ? (
                       <PlanView
@@ -352,7 +357,7 @@ const Mixing: React.FC = () => {
           {
             key: 'recipes',
             label: '方案历史',
-            children: <Table rowKey="id" size="middle" columns={recipeColumns} dataSource={recipes} pagination={{ pageSize: 10 }} />,
+            children: <Table rowKey="id" size="middle" columns={recipeColumns} dataSource={recipes} pagination={{ pageSize: 10 }} scroll={{ x: 'max-content' }} />,
           },
           {
             key: 'presets',
@@ -367,7 +372,7 @@ const Mixing: React.FC = () => {
                     setPresetModal(true);
                   }}>新增预设</Button>
                 </div>
-                <Table rowKey="id" size="middle" columns={presetColumns} dataSource={presets} pagination={false} />
+                <Table rowKey="id" size="middle" columns={presetColumns} dataSource={presets} pagination={false} scroll={{ x: 'max-content' }} />
               </div>
             ),
           },
@@ -391,8 +396,8 @@ const Mixing: React.FC = () => {
             <Select allowClear options={STAGE_OPTIONS} />
           </Form.Item>
           <Row gutter={12}>
-            <Col span={12}><Form.Item name="dilution" label="稀释比例"><Input placeholder="如：2000倍" /></Form.Item></Col>
-            <Col span={12}><Form.Item name="safety_interval_days" label="安全间隔期（天，配药）"><InputNumber style={{ width: '100%' }} min={0} /></Form.Item></Col>
+            <Col xs={24} sm={12}><Form.Item name="dilution" label="稀释比例"><Input placeholder="如：2000倍" /></Form.Item></Col>
+            <Col xs={24} sm={12}><Form.Item name="safety_interval_days" label="安全间隔期（天，配药）"><InputNumber style={{ width: '100%' }} min={0} /></Form.Item></Col>
           </Row>
           <Form.Item name="note" label="备注"><Input.TextArea rows={2} /></Form.Item>
         </Form>

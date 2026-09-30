@@ -116,7 +116,7 @@ async fn handle_readings_query(
     params: &HashMap<String, serde_json::Value>,
 ) -> Result<serde_json::Value, String> {
     let device_id = params.get("device_id").and_then(|v| v.as_str()).ok_or("missing device_id")?;
-    let limit = params.get("limit").and_then(|v| v.as_i64()).unwrap_or(100).max(1).min(5000);
+    let limit = params.get("limit").and_then(|v| v.as_i64()).unwrap_or(100).clamp(1, 5000);
 
     let rows = sqlx::query_as::<_, (i64, String, String, f64, String, i64)>(
         "SELECT id, device_id, metric, value, unit, timestamp FROM sensor_readings \

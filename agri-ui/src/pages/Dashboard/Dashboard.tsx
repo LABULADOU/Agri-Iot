@@ -18,13 +18,17 @@ const Dashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    useDashboardStore.getState().fetchAll();
+    let cancelled = false;
+    useDashboardStore.getState().fetchAll()
+      .then(() => {
+        if (!cancelled) setLoading(false);
+      });
     useDashboardStore.getState().fetchEmergencies();
-    setLoading(false);
     const timer = setInterval(() => {
       useDashboardStore.getState().fetchEmergencies();
     }, 30000);
     return () => {
+      cancelled = true;
       clearInterval(timer);
       useDashboardStore.getState().stopRealtimeUpdates();
     };

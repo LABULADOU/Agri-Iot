@@ -70,7 +70,30 @@ const Inventory: React.FC = () => {
     }
   }, [categoryFilter, search, lowOnly]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      const params: Record<string, string | boolean> = {};
+      if (categoryFilter) params.category = categoryFilter;
+      if (search) params.search = search;
+      if (lowOnly) params.low_stock = true;
+      try {
+        const [itemData, summaryData] = await Promise.all([
+          inventoryApi.listItems(params),
+          inventoryApi.getSummary(),
+        ]);
+        if (cancelled) return;
+        setItems(itemData.items);
+        setSummary(summaryData.summary);
+      } catch {
+        if (!cancelled) message.error('加载库存失败');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [categoryFilter, search, lowOnly]);
 
   const openCreate = () => {
     setEditItem(null);
@@ -126,8 +149,9 @@ const Inventory: React.FC = () => {
       message.success(`操作成功，当前库存 ${res.new_stock}`);
       setTxnModal(null);
       load();
-    } catch (e: any) {
-      message.error(e?.response?.data?.error || '操作失败');
+    } catch (e) {
+      const err = e as { response?: { data?: { error?: string } } };
+      message.error(err.response?.data?.error || '操作失败');
     }
   };
 
@@ -184,10 +208,10 @@ const Inventory: React.FC = () => {
   return (
     <div style={{ padding: 16 }}>
       <Title level={4} style={{ margin: 0, marginBottom: 16 }}>📦 库存与投入品</Title>
-      <Row gutter={16} style={{ marginBottom: 16 }}>
-        <Col span={8}><Card><Statistic title="投入品种类" value={summary.total_items} /></Card></Col>
-        <Col span={8}><Card><Statistic title="库存总价值（元）" value={summary.total_value} precision={2} /></Card></Col>
-        <Col span={8}>
+      <Row gutter={[16, 12]} style={{ marginBottom: 16 }}>
+        <Col xs={24} sm={8}><Card><Statistic title="投入品种类" value={summary.total_items} /></Card></Col>
+        <Col xs={24} sm={8}><Card><Statistic title="库存总价值（元）" value={summary.total_value} precision={2} /></Card></Col>
+        <Col xs={24} sm={8}>
           <Card>
             <Statistic title="低库存预警" value={summary.low_stock_count} valueStyle={summary.low_stock_count > 0 ? { color: '#cf1322' } : {}} />
           </Card>
@@ -197,15 +221,15 @@ const Inventory: React.FC = () => {
       <Card
         title="物品清单"
         extra={
-          <Space>
+          <Space wrap style={{ justifyContent: 'flex-end' }}>
             <Select
-              placeholder="分类" allowClear style={{ width: 120 }}
+              placeholder="分类" allowClear style={{ width: 110 }}
               value={categoryFilter || undefined}
               onChange={v => setCategoryFilter(v || '')}
               onClear={() => setCategoryFilter('')}
               options={Object.entries(CATEGORY_LABEL).map(([value, label]) => ({ value, label }))}
             />
-            <Input.Search placeholder="搜索名称/厂家/批次" style={{ width: 200 }} onSearch={setSearch} allowClear />
+            <Input.Search placeholder="搜索名称/厂家/批次" style={{ width: 180 }} onSearch={setSearch} allowClear />
             <Button type={lowOnly ? 'primary' : 'default'} size="middle" onClick={() => setLowOnly(v => !v)}>
               仅看低库存
             </Button>
@@ -213,7 +237,7 @@ const Inventory: React.FC = () => {
           </Space>
         }
       >
-        <Table rowKey="id" columns={columns} dataSource={items} loading={loading} pagination={{ pageSize: 12 }} size="middle" />
+        <Table rowKey="id" columns={columns} dataSource={items} loading={loading} pagination={{ pageSize: 12 }} size="middle" scroll={{ x: 'max-content' }} />
       </Card>
 
       <Modal
@@ -225,32 +249,32 @@ const Inventory: React.FC = () => {
       >
         <Form form={form} layout="vertical">
           <Row gutter={12}>
-            <Col span={14}>
+            <Col xs={24} sm={14}>
               <Form.Item name="name" label="名称" rules={[{ required: true }]}>
                 <Input placeholder="如：高氮型水溶肥(30-10-20)" />
               </Form.Item>
             </Col>
-            <Col span={10}>
+            <Col xs={24} sm={10}>
               <Form.Item name="category" label="分类" rules={[{ required: true }]}>
                 <Select options={Object.entries(CATEGORY_LABEL).map(([value, label]) => ({ value, label }))} />
               </Form.Item>
             </Col>
           </Row>
           <Row gutter={12}>
-            <Col span={8}><Form.Item name="unit" label="单位"><Input placeholder="kg/瓶/袋" /></Form.Item></Col>
-            <Col span={8}><Form.Item name="price" label="单价（元）"><InputNumber style={{ width: '100%' }} min={0} /></Form.Item></Col>
+            <Col xs={12} sm={8}><Form.Item name="unit" label="单位"><Input placeholder="kg/瓶/袋" /></Form.Item></Col>
+            <Col xs={12} sm={8}><Form.Item name="price" label="单价（元）"><InputNumber style={{ width: '100%' }} min={0} /></Form.Item></Col>
             {!editItem && (
-              <Col span={8}><Form.Item name="stock" label="初始库存"><InputNumber style={{ width: '100%' }} min={0} /></Form.Item></Col>
+              <Col xs={24} sm={8}><Form.Item name="stock" label="初始库存"><InputNumber style={{ width: '100%' }} min={0} /></Form.Item></Col>
             )}
           </Row>
           <Row gutter={12}>
-            <Col span={8}><Form.Item name="warning_threshold" label="低库存阈值"><InputNumber style={{ width: '100%' }} min={0} /></Form.Item></Col>
-            <Col span={8}><Form.Item name="batch_no" label="批次号"><Input /></Form.Item></Col>
-            <Col span={8}><Form.Item name="expiry_date" label="保质期"><Input placeholder="YYYY-MM-DD" /></Form.Item></Col>
+            <Col xs={24} sm={8}><Form.Item name="warning_threshold" label="低库存阈值"><InputNumber style={{ width: '100%' }} min={0} /></Form.Item></Col>
+            <Col xs={24} sm={8}><Form.Item name="batch_no" label="批次号"><Input /></Form.Item></Col>
+            <Col xs={24} sm={8}><Form.Item name="expiry_date" label="保质期"><Input placeholder="YYYY-MM-DD" /></Form.Item></Col>
           </Row>
           <Row gutter={12}>
-            <Col span={12}><Form.Item name="manufacturer" label="厂家"><Input /></Form.Item></Col>
-            <Col span={12}><Form.Item name="specs" label="规格"><Input placeholder="如：25kg/袋" /></Form.Item></Col>
+            <Col xs={24} sm={12}><Form.Item name="manufacturer" label="厂家"><Input /></Form.Item></Col>
+            <Col xs={24} sm={12}><Form.Item name="specs" label="规格"><Input placeholder="如：25kg/袋" /></Form.Item></Col>
           </Row>
           <Form.Item name="notes" label="备注"><Input.TextArea rows={2} /></Form.Item>
         </Form>
@@ -284,7 +308,7 @@ const Inventory: React.FC = () => {
         title={`${txnDrawer?.name || ''} 出入库流水`}
         open={!!txnDrawer}
         onClose={() => setTxnDrawer(null)}
-        width={520}
+        width="min(520px, 94vw)"
       >
         <Table
           rowKey="id"
@@ -294,7 +318,7 @@ const Inventory: React.FC = () => {
           columns={[
             {
               title: '类型', dataIndex: 'txn_type', width: 80,
-              render: (v: string, r) => {
+              render: (v: string) => {
                 const color = v === 'in' ? 'green' : v === 'out' ? 'red' : 'orange';
                 const label = v === 'in' ? '入库' : v === 'out' ? '出库' : '盘点';
                 return <Tag color={color}>{label}</Tag>;

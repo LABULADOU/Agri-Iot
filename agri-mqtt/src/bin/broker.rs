@@ -30,54 +30,62 @@ fn main() {
         .parse()
         .unwrap_or(std::net::IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED));
 
-    let mut config = Config::default();
-    config.id = 0;
-    config.router.max_connections = 1000;
-    config.router.max_outgoing_packet_count = 1_000_000;
-    config.router.max_segment_size = 1_000_000;
-    config.router.max_segment_count = 10_000;
-
-    let mut v4 = HashMap::new();
-    v4.insert(
-        "tcp".to_string(),
-        ServerSettings {
-            name: "tcp".to_string(),
-            listen: SocketAddr::new(bind_ip, port),
-            tls: None,
-            next_connection_delay_ms: 1,
-            connections: ConnectionSettings {
-                connection_timeout_ms: 60_000,
-                max_payload_size: 268_435_456,
-                max_inflight_count: 5000,
-                auth: None,
-                dynamic_filters: false,
-            },
+    let config = Config {
+        id: 0,
+        router: rumqttd::RouterConfig {
+            max_connections: 1000,
+            max_outgoing_packet_count: 1_000_000,
+            max_segment_size: 1_000_000,
+            max_segment_count: 10_000,
+            ..Default::default()
         },
-    );
-    config.v4 = v4;
-
-    let mut ws_listeners = HashMap::new();
-    ws_listeners.insert(
-        "ws".to_string(),
-        ServerSettings {
-            name: "ws".to_string(),
-            listen: SocketAddr::from(([127, 0, 0, 1], ws_port)),
-            tls: None,
-            next_connection_delay_ms: 1,
-            connections: ConnectionSettings {
-                connection_timeout_ms: 60_000,
-                max_payload_size: 268_435_456,
-                max_inflight_count: 5000,
-                auth: None,
-                dynamic_filters: false,
-            },
+        v4: {
+            let mut v4 = HashMap::new();
+            v4.insert(
+                "tcp".to_string(),
+                ServerSettings {
+                    name: "tcp".to_string(),
+                    listen: SocketAddr::new(bind_ip, port),
+                    tls: None,
+                    next_connection_delay_ms: 1,
+                    connections: ConnectionSettings {
+                        connection_timeout_ms: 60_000,
+                        max_payload_size: 268_435_456,
+                        max_inflight_count: 5000,
+                        auth: None,
+                        dynamic_filters: false,
+                    },
+                },
+            );
+            v4
         },
-    );
-    config.ws = Some(ws_listeners);
-
-    // Use port 0 for console to avoid port collision panics
-    // The console HTTP server will pick a random ephemeral port
-    config.console.listen = "0.0.0.0:0".to_string();
+        ws: Some({
+            let mut ws_listeners = HashMap::new();
+            ws_listeners.insert(
+                "ws".to_string(),
+                ServerSettings {
+                    name: "ws".to_string(),
+                    listen: SocketAddr::from(([127, 0, 0, 1], ws_port)),
+                    tls: None,
+                    next_connection_delay_ms: 1,
+                    connections: ConnectionSettings {
+                        connection_timeout_ms: 60_000,
+                        max_payload_size: 268_435_456,
+                        max_inflight_count: 5000,
+                        auth: None,
+                        dynamic_filters: false,
+                    },
+                },
+            );
+            ws_listeners
+        }),
+        console: {
+            let mut cs = rumqttd::ConsoleSettings::default();
+            cs.listen = "0.0.0.0:0".to_string();
+            cs
+        },
+        ..Default::default()
+    };
 
     tracing::info!(
         "MQTT Broker starting — TCP {}:{}, WS 127.0.0.1:{} (in-memory, no disk persistence)",

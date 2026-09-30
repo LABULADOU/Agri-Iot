@@ -63,7 +63,7 @@ const iconMap: Record<string, string> = {
   '999': '🌤️',
 };
 
-function weatherIcon(icon: string, _text: string): string {
+function weatherIcon(icon: string): string {
   return iconMap[icon] || iconMap['999'];
 }
 
@@ -97,6 +97,7 @@ function buildPinyinCandidates(q: string): string[] {
 const TopBar: React.FC = () => {
   const { connected, lastUpdate } = useRealtimeStore();
   const { location, setLocation } = useWeatherStore();
+  const locationId = location.id;
   const [now, setNow] = useState<WeatherData | null>(null);
   const [forecast, setForecast] = useState<WeatherForecastDay[]>([]);
   const [minutely, setMinutely] = useState<MinutelyForecast | null>(null);
@@ -113,10 +114,10 @@ const TopBar: React.FC = () => {
     setLoading(true);
     try {
       const [nowRaw, f3d, minRaw, warnRaw] = await Promise.all([
-        weatherApi.getNow(location.id),
-        weatherApi.getForecast3d(location.id),
-        weatherApi.getMinutely(location.id),
-        weatherApi.getWarning(location.id),
+        weatherApi.getNow(locationId),
+        weatherApi.getForecast3d(locationId),
+        weatherApi.getMinutely(locationId),
+        weatherApi.getWarning(locationId),
       ]);
       if (nowRaw?.now) setNow(normalizeNow(nowRaw.now));
       if (f3d?.daily) setForecast(f3d.daily.map(normalizeDaily));
@@ -129,13 +130,38 @@ const TopBar: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [location.id]);
+  }, [locationId]);
 
   useEffect(() => {
-    fetchAll();
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      try {
+        const [nowRaw, f3d, minRaw, warnRaw] = await Promise.all([
+          weatherApi.getNow(locationId),
+          weatherApi.getForecast3d(locationId),
+          weatherApi.getMinutely(locationId),
+          weatherApi.getWarning(locationId),
+        ]);
+        if (cancelled) return;
+        if (nowRaw?.now) setNow(normalizeNow(nowRaw.now));
+        if (f3d?.daily) setForecast(f3d.daily.map(normalizeDaily));
+        if (minRaw) setMinutely({ summary: minRaw.summary, hourly: minRaw.hourly || [] });
+        if (warnRaw?.warning) setWarnings(warnRaw.warning.map(normalizeWarning));
+        else setWarnings([]);
+        setWeatherLastRefresh(new Date().toLocaleTimeString('zh-CN'));
+      } catch {
+        // keep last state
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
     const timer = setInterval(fetchAll, 300000);
-    return () => clearInterval(timer);
-  }, [fetchAll]);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [fetchAll, locationId]);
 
   const handleSearch = useCallback((query: string) => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -214,7 +240,7 @@ const TopBar: React.FC = () => {
           )}
           {now && (
             <span className={styles.mobileWeatherInline}>
-              <span className={styles.inlineIcon}>{weatherIcon(now.icon, now.text)}</span>
+              <span className={styles.inlineIcon}>{weatherIcon(now.icon)}</span>
               <span className={styles.inlineTemp}>{now.temp}℃</span>
               <span className={styles.inlineMeta}>💧{now.humidity}%</span>
               <span className={styles.inlineMeta}>🌬️{now.windDir}{now.windScale}级</span>
@@ -265,7 +291,7 @@ const TopBar: React.FC = () => {
             {/* Current conditions */}
             <div className={styles.currentBlock}>
               <Text className={styles.currentIcon}>
-                {now ? weatherIcon(now.icon, now.text) : '🌤️'}
+                {now ? weatherIcon(now.icon) : '🌤️'}
               </Text>
               <div className={styles.currentData}>
                 <Text strong className={styles.currentTemp}>
@@ -291,7 +317,7 @@ const TopBar: React.FC = () => {
               {forecast.slice(0, 3).map(day => (
                 <div key={day.date} className={styles.forecastDay}>
                   <Text className={styles.forecastDate}>{formatDate(day.date)}</Text>
-                  <Text className={styles.forecastIcon}>{weatherIcon(day.iconDay, day.textDay)}</Text>
+                  <Text className={styles.forecastIcon}>{weatherIcon(day.iconDay)}</Text>
                   <Text className={styles.forecastText}>{day.textDay}</Text>
                   <Text className={styles.forecastTemp}>
                     <span className={styles.tempHigh}>{day.tempMax}°</span>
@@ -317,7 +343,7 @@ const TopBar: React.FC = () => {
                       return (
                         <div key={h.time} className={styles.hourlyItem}>
                           <Text className={styles.hourlyTime}>{hh}:00</Text>
-                          <Text className={styles.hourlyIcon}>{weatherIcon('999', h.text)}</Text>
+                          <Text className={styles.hourlyIcon}>{weatherIcon('999')}</Text>
                           <Text className={styles.hourlyPop} data-rain={pop > 30 ? 'true' : 'false'}>
                             {pop}%
                           </Text>

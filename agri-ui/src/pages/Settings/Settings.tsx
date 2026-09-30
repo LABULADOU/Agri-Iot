@@ -16,7 +16,19 @@ const ComfortTab: React.FC = () => {
   const [form] = Form.useForm();
 
   useEffect(() => {
-    fetchZones();
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      try {
+        const data = await zoneApi.list();
+        if (!cancelled) setZones(data);
+      } catch {
+        if (!cancelled) message.error('获取配置失败');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
   }, []);
 
   const fetchZones = async () => {
@@ -54,8 +66,8 @@ const ComfortTab: React.FC = () => {
       message.success('保存成功');
       setModalVisible(false);
       fetchZones();
-    } catch (err) {
-      console.error(err);
+    } catch {
+      // validation or submit error handled by form
     }
   };
 
@@ -158,7 +170,19 @@ const RulesTab: React.FC = () => {
   const [form] = Form.useForm();
 
   useEffect(() => {
-    fetchRules();
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      try {
+        const data = await ruleApi.list();
+        if (!cancelled) setRules(data);
+      } catch {
+        if (!cancelled) message.error('获取规则列表失败');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
   }, []);
 
   const fetchRules = async () => {
@@ -217,8 +241,8 @@ const RulesTab: React.FC = () => {
       }
       setModalVisible(false);
       fetchRules();
-    } catch (err) {
-      console.error(err);
+    } catch {
+      // validation or submit error handled by form
     }
   };
 

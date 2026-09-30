@@ -3,7 +3,7 @@ import {
   Typography, Table, Card, Row, Col, Button, Modal, Form, Input, InputNumber, DatePicker,
   Tag, Space, Popconfirm, Select, message, Statistic, Empty, Alert,
 } from 'antd';
-import { PlusOutlined, DeleteOutlined, EditOutlined, TeamOutlined, DollarOutlined, CalendarOutlined, UserOutlined } from '@ant-design/icons';
+import { PlusOutlined, DeleteOutlined, EditOutlined, DollarOutlined, CalendarOutlined, UserOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { laborApi, zoneApi } from '../../services/api';
 import type { LaborRecord, LaborSummary } from '../../types';

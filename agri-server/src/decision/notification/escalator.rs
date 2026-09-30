@@ -38,7 +38,7 @@ impl EscalationChain {
                 EscalationStep {
                     level: 2,
                     contacts: vec![],
-                    channels: vec![ChannelType::SMS],
+                    channels: vec![ChannelType::Sms],
                     timeout_secs: 120,
                 },
                 EscalationStep {

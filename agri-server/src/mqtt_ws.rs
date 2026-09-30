@@ -163,10 +163,7 @@ async fn handle_socket(mut socket: WebSocket) {
                                     .lock()
                                     .await;
                                 let current = map.get(node_id).cloned();
-                                (match &current {
-                                    Some(v) if v == FW_VERSION => false,
-                                    _ => true,
-                                }, current)
+                                (!matches!(&current, Some(v) if v == FW_VERSION), current)
                             };
                             let always_inject = std::env::var("OTA_FORCE_REINJECT").is_ok();
                             if should || always_inject {

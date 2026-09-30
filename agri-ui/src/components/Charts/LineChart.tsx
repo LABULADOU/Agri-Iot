@@ -13,24 +13,23 @@ interface LineChartProps {
 
 const LineChart: React.FC<LineChartProps> = ({ data, height, showLegend = true }) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [chartHeight, setChartHeight] = useState(height ?? 400);
+  const isFixedHeight = height !== undefined;
+  const [autoHeight, setAutoHeight] = useState(() =>
+    typeof window !== 'undefined' && window.innerWidth < 768 ? 220 : 400
+  );
 
   useEffect(() => {
-    if (height) {
-      setChartHeight(height);
-      return;
-    }
-    // Responsive: calculate height based on container width
+    if (isFixedHeight) return;
     const updateHeight = () => {
       if (containerRef.current) {
         const width = containerRef.current.offsetWidth;
-        setChartHeight(width < 768 ? 220 : 400);
+        setAutoHeight(width < 768 ? 220 : 400);
       }
     };
-    updateHeight();
     window.addEventListener('resize', updateHeight);
     return () => window.removeEventListener('resize', updateHeight);
-  }, [height]);
+  }, [isFixedHeight]);
+  const chartHeight = isFixedHeight ? (height ?? 400) : autoHeight;
   const metrics = [...new Set(data.map(d => d.metric))];
   const timestamps = [...new Set(data.map(d => d.timestamp))].sort();
 

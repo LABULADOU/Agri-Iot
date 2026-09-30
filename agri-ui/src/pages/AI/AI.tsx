@@ -149,7 +149,6 @@ const AIDecisionsTab: React.FC = () => {
 const AgentChatTab: React.FC = () => {
   const [messages, setMessages] = useState<ChatMessage[]>(loadMessages);
   const messagesRef = useRef(messages);
-  messagesRef.current = messages;
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -159,6 +158,7 @@ const AgentChatTab: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    messagesRef.current = messages;
     scrollToBottom();
   }, [messages, scrollToBottom]);
 

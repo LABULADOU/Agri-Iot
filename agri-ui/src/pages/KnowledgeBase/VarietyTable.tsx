@@ -30,7 +30,6 @@ const VarietyTable: React.FC = () => {
   const tableRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    setLoading(true);
     aiApi.chrysanthemumVarieties()
       .then(res => setVarieties(res.varieties))
       .catch(() => {})
@@ -53,10 +52,6 @@ const VarietyTable: React.FC = () => {
       .map((v, i) => searchPredicate(v, search) ? i : -1)
       .filter(i => i >= 0);
   }, [search, varieties, searchPredicate]);
-
-  useEffect(() => {
-    setMatchIdx(0);
-  }, [search]);
 
   const targetIndex = matchIndices.length > 0 ? matchIndices[matchIdx] ?? matchIndices[0] : -1;
 
@@ -142,7 +137,10 @@ const VarietyTable: React.FC = () => {
         prefix={<SearchOutlined />}
         allowClear
         value={search}
-        onChange={e => setSearch(e.target.value)}
+        onChange={e => {
+          setSearch(e.target.value);
+          setMatchIdx(0);
+        }}
         size="middle"
       />
       <div className={styles.navBar}>

@@ -83,48 +83,75 @@ const ZoneDetail: React.FC = () => {
     }
   }, [id]);
 
-  const fetchReadings = useCallback(async (deviceId: string) => {
-    setReadingsLoading(true);
-    try {
-      const data = await nodeApi.getReadings(deviceId, { limit: 50 });
-      const latestByMetric = new Map<string, SensorReading>();
-      for (const r of data) {
-        const existing = latestByMetric.get(r.metric);
-        if (!existing || r.id > existing.id) {
-          latestByMetric.set(r.metric, r);
+  useEffect(() => {
+    if (!id) return;
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      try {
+        const [zoneData, nodesData] = await Promise.all([
+          zoneApi.get(id),
+          nodeApi.list(id),
+        ]);
+        if (cancelled) return;
+        setZone(zoneData);
+        setNodes(nodesData);
+        if (nodesData.length > 0) {
+          setSelectedNode(prev => {
+            const stillExists = prev && nodesData.some(n => n.id === prev.id);
+            return stillExists ? prev : nodesData[0];
+          });
+        } else {
+          setSelectedNode(null);
+          setReadings([]);
         }
+      } catch {
+        // ignore
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-      const display: DisplayReading[] = METRIC_KEYS.map(key => {
-        const cfg = METRIC_CONFIG[key];
-        const reading = latestByMetric.get(key);
-        return {
-          label: cfg.label,
-          key,
-          value: reading?.value ?? null,
-          unit: reading?.unit ?? cfg.unit,
-          min: cfg.min,
-          max: cfg.max,
-          maxScale: cfg.maxScale,
-          capturedAt: reading?.timestamp !== undefined ? Number(reading.timestamp) : undefined,
-        };
-      });
-      setReadings(display);
-    } catch {
-      setReadings([]);
-    } finally {
-      setReadingsLoading(false);
-    }
-  }, []);
+    })();
+    return () => { cancelled = true; };
+  }, [id]);
 
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
-
-  useEffect(() => {
-    if (selectedNode) {
-      fetchReadings(selectedNode.id);
-    }
-  }, [selectedNode, fetchReadings]);
+    if (!selectedNode) return;
+    let cancelled = false;
+    (async () => {
+      setReadingsLoading(true);
+      try {
+        const data = await nodeApi.getReadings(selectedNode.id, { limit: 50 });
+        if (cancelled) return;
+        const latestByMetric = new Map<string, SensorReading>();
+        for (const r of data) {
+          const existing = latestByMetric.get(r.metric);
+          if (!existing || r.id > existing.id) {
+            latestByMetric.set(r.metric, r);
+          }
+        }
+        const display: DisplayReading[] = METRIC_KEYS.map(key => {
+          const cfg = METRIC_CONFIG[key];
+          const reading = latestByMetric.get(key);
+          return {
+            label: cfg.label,
+            key,
+            value: reading?.value ?? null,
+            unit: reading?.unit ?? cfg.unit,
+            min: cfg.min,
+            max: cfg.max,
+            maxScale: cfg.maxScale,
+            capturedAt: reading?.timestamp !== undefined ? Number(reading.timestamp) : undefined,
+          };
+        });
+        setReadings(display);
+      } catch {
+        if (!cancelled) setReadings([]);
+      } finally {
+        if (!cancelled) setReadingsLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [selectedNode]);
 
   const mergedReadings = useMemo(() => {
     if (readings.length === 0) return [];

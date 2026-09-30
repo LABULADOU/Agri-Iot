@@ -30,7 +30,7 @@ pub enum ChannelType {
     Push,
     DingTalk,
     WeCom,
-    SMS,
+    Sms,
     VoiceCall,
     Email,
 }

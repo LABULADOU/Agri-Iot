@@ -89,19 +89,34 @@ fn dispatch(dedup: &mut DedupTracker, pool: &SqlitePool, event: &AnomalyEvent, t
     // Persist to anomaly_events table
     let at_str = format!("{:?}", event.anomaly_type);
     let sev_str = format!("{:?}", event.severity);
-    let _ = sqlx::query(
-        "INSERT INTO anomaly_events (device_id, node_id, metric, anomaly_type, severity, value_original, message, created_at) \
-         VALUES ((SELECT id FROM devices WHERE node_id = ?), ?, ?, ?, ?, ?, ?, ?)"
-    )
-    .bind(&event.node_id)
-    .bind(&event.node_id)
-    .bind(&event.metric)
-    .bind(&at_str)
-    .bind(&sev_str)
-    .bind(event.value_original)
-    .bind(&event.message)
-    .bind(event.timestamp)
-    .execute(pool);
+    let node_id = event.node_id.clone();
+    let metric = event.metric.clone();
+    let message = event.message.clone();
+    let value_original = event.value_original;
+    let timestamp = event.timestamp;
+    let at_str_clone = at_str.clone();
+    let sev_str_clone = sev_str.clone();
+    let pool = pool.clone();
+    // Spawn async task to avoid blocking the dedup lock during I/O
+    tokio::spawn(async move {
+        if let Err(e) = sqlx::query(
+            "INSERT INTO anomaly_events (device_id, node_id, metric, anomaly_type, severity, value_original, message, created_at) \
+             VALUES ((SELECT id FROM devices WHERE node_id = ?), ?, ?, ?, ?, ?, ?, ?)"
+        )
+        .bind(&node_id)
+        .bind(&node_id)
+        .bind(&metric)
+        .bind(&at_str_clone)
+        .bind(&sev_str_clone)
+        .bind(value_original)
+        .bind(&message)
+        .bind(timestamp)
+        .execute(&pool)
+        .await
+        {
+            tracing::warn!("Failed to insert anomaly event: {}", e);
+        }
+    });
 
     // Broadcast SSE event
     let payload = serde_json::json!({
@@ -364,7 +379,7 @@ async fn detect_rate_and_spatial(
     Ok(())
 }
 
-fn median(vals: &mut Vec<f64>) -> f64 {
+fn median(vals: &mut [f64]) -> f64 {
     if vals.is_empty() { return 0.0; }
     vals.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
     let len = vals.len();

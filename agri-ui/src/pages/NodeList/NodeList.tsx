@@ -17,18 +17,26 @@ const NodeList: React.FC = () => {
   const [form] = Form.useForm();
 
   useEffect(() => {
-    fetchNodes();
-    fetchZones();
+    let cancelled = false;
+    nodeApi.list()
+      .then(data => {
+        if (cancelled) return;
+        setNodes(data);
+        setLoading(false);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLoading(false);
+          message.error('获取节点列表失败');
+        }
+      });
+    zoneApi.list()
+      .then(data => {
+        if (!cancelled) setZones(data);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
   }, []);
-
-  const fetchZones = async () => {
-    try {
-      const data = await zoneApi.list();
-      setZones(data);
-    } catch {
-      // zones not available, use defaults
-    }
-  };
 
   const fetchNodes = async () => {
     setLoading(true);
@@ -76,8 +84,8 @@ const NodeList: React.FC = () => {
       }
       setModalVisible(false);
       fetchNodes();
-    } catch (err) {
-      console.error(err);
+    } catch {
+      // validation or submit error handled by form
     }
   };
 

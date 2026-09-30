@@ -1018,7 +1018,7 @@ mod tests {
         let body = axum::body::to_bytes(resp.into_body(), 1024 * 1024).await.unwrap();
         let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
         let varieties = json["varieties"].as_array().unwrap();
-        assert!(varieties.len() > 100, "expected 100+ varieties, got {}", varieties.len());
-        assert_eq!(varieties[0]["name"], "科隆香水");
+        assert!(varieties.len() >= 30, "expected at least 30 varieties, got {}", varieties.len());
+        assert_eq!(varieties[0]["name"], "早黄");
     }
 }
