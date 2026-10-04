@@ -9,7 +9,7 @@
 | 检查项 | 结果 |
 |--------|------|
 | Rust 编译 | ✅ 通过（48 个警告，无错误） |
-| TypeScript 类型检查 | ✅ 通过（0 错误） |
+| TypeScript 类型检查 | ⚠️ 被安全扫描阻止（cron 模式限制） |
 | 单元测试总数 | ✅ 228 个全过（core 136 + mqtt 22 + server 70） |
 
 ---
@@ -19,7 +19,7 @@
 ### 🔴 高危：axios 多个安全漏洞
 
 ```
-npm audit fix 可修复
+cd agri-ui && npm audit fix   # 可修复
 ```
 
 | 漏洞 | 描述 | 影响 |
@@ -45,13 +45,7 @@ GHSA-6j4f-fj2g-mc7p — 递归深度失控
 
 ### 注：cargo audit 不可用
 
-网络限制导致 RustSec advisory DB 无法拉取。建议定期手动检查关键依赖：
-
-```bash
-# 离线检查（如有条件）
-git clone --depth 1 https://github.com/RustSec/advisory-db.git /tmp/advisory-db
-cargo audit --db /tmp/advisory-db
-```
+网络限制导致 RustSec advisory DB 无法拉取。建议定期手动检查关键依赖。
 
 ---
 
@@ -76,11 +70,11 @@ cargo audit --db /tmp/advisory-db
 
 | Commit | 内容 | 评估 |
 |--------|------|------|
+| `6144722` | 每日代码审查报告 | ✅ |
 | `b1cd1b0` | 修复 anomaly.rs SQL 查询未 await + 每日审查 | ✅ 正确修复 |
 | `f923b6d` | 文档更新 | ✅ |
 | `9ee0d03` | 用工成本页面 + 农事记录总用量字段 | ✅ |
 | `53a131d` | labor.sql + yield 净利含人工成本 | ✅ |
-| `41d7640` | labor.rs RED 测试 | ✅ TDD 规范 |
 
 ---
 
@@ -100,6 +94,6 @@ cargo audit --db /tmp/advisory-db
 ## 统计
 
 - 后端测试：228 passed / 0 failed
-- 前端类型错误：0
-- 安全漏洞：7 high（axios）+ 2 high（brace-expansion）
+- 安全漏洞：7 high（axios）+ 3 high（brace-expansion）
 - 未使用代码警告：48 条（主要为 decision 子系统）
+- 最近变更：用工成本模块、农事记录联动、anomaly 修复
