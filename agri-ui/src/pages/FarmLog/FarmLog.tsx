@@ -222,8 +222,12 @@ const FarmLog: React.FC = () => {
   };
 
   const handleSave = async () => {
-    if (!formData.area_id || !formData.content) {
-      message.warning('请填写区域和操作内容');
+    if (!formData.area_id) {
+      message.warning('请选择区域');
+      return;
+    }
+    if (!formData.content.trim()) {
+      message.warning('请填写操作内容');
       return;
     }
     setSaving(true);
@@ -386,6 +390,19 @@ const FarmLog: React.FC = () => {
         }
       >
         <Space direction="vertical" style={{ width: '100%' }} size={12}>
+          <Form.Item label="区域" required style={{ marginBottom: 0 }}>
+            <Select
+              value={formData.area_id || undefined}
+              onChange={v => setFormData(prev => ({ ...prev, area_id: v }))}
+              placeholder={zones.length ? '选择区域' : '暂无区域，请先在区域管理中创建'}
+              showSearch
+              optionFilterProp="label"
+              style={{ width: '100%' }}
+              options={zones.map(z => ({ value: z.id, label: z.name }))}
+              notFoundContent={zones.length ? '无匹配区域' : '暂无区域，请先在区域管理中创建'}
+            />
+          </Form.Item>
+
           <Space style={{ width: '100%' }}>
             <Form.Item label="日期" style={{ marginBottom: 0, flex: 1 }}>
               <DatePicker value={dayjs(formData.log_date)} onChange={d => setFormData(prev => ({ ...prev, log_date: d?.format('YYYY-MM-DD') || '' }))} style={{ width: '100%' }} />

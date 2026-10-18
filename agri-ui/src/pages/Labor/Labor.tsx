@@ -128,8 +128,8 @@ const Labor: React.FC = () => {
     { title: '类别', dataIndex: 'category', key: 'cat', width: 80, render: (v: string) => <Tag>{v}</Tag> },
     { title: '用工', dataIndex: 'worker', key: 'worker', width: 90, render: (v: string) => v || <Text type="secondary">全员</Text> },
     { title: '人数', dataIndex: 'worker_count', key: 'wc', width: 60 },
-    { title: '工时/人', dataIndex: 'work_hours', key: 'wh', width: 75, render: (v: number) => `${v}h` },
-    { title: '单价', dataIndex: 'rate', key: 'rate', width: 70, render: (v: number) => `¥${v}/h` },
+    { title: '工日/人', dataIndex: 'work_hours', key: 'wh', width: 80, render: (v: number) => `${+(+v).toFixed(2)} 工日` },
+    { title: '单价', dataIndex: 'rate', key: 'rate', width: 85, render: (v: number) => `¥${v}/天` },
     { title: '金额', dataIndex: 'amount', key: 'amount', width: 90, render: (v: number) => <b>¥{v.toFixed(2)}</b> },
     { title: '结算', dataIndex: 'paid_status', key: 'paid', width: 70, render: (v: string) => v === 'paid' ? <Tag color="green">已结</Tag> : <Tag color="orange">未结</Tag> },
     { title: '备注', dataIndex: 'notes', key: 'notes', ellipsis: true },
@@ -201,7 +201,7 @@ const Labor: React.FC = () => {
         type="info"
         showIcon
         style={{ marginBottom: 12 }}
-        message={`金额 = 人数 × 工时/人 × 单价（¥${(() => { const r = records[0]; return r ? r.rate : 0; })()}/h/人）`}
+        message={`金额 = 人数 × 工日/人 × 单价(元/天)。全天=1工日=110元（含劳务费10），半天=0.5工日=55元，加班10元/小时；不足半天按实际金额反推工日。`}
       />
 
       <Card
@@ -245,8 +245,8 @@ const Labor: React.FC = () => {
           </Row>
           <Row gutter={12}>
             <Col xs={8}><Form.Item name="worker_count" label="人数" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} min={1} onChange={updateAmount} /></Form.Item></Col>
-            <Col xs={8}><Form.Item name="work_hours" label="工时/人(h)" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} min={0} onChange={updateAmount} /></Form.Item></Col>
-            <Col xs={8}><Form.Item name="rate" label="单价(元/h)" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} min={0} onChange={updateAmount} /></Form.Item></Col>
+            <Col xs={8}><Form.Item name="work_hours" label="工日/人（全天1·半天0.5）" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} min={0} step={0.5} onChange={updateAmount} /></Form.Item></Col>
+            <Col xs={8}><Form.Item name="rate" label="单价(元/天)" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} min={0} step={10} onChange={updateAmount} /></Form.Item></Col>
           </Row>
           <Form.Item label="预计金额">
             <Form.Item name="amount_preview" noStyle><InputNumber disabled style={{ width: '100%' }} /></Form.Item>
