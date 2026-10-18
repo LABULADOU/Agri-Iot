@@ -255,7 +255,8 @@ async fn run_timer_checks(
         .await;
     }
 
-    let cutoff = Utc::now().timestamp() - 300;
+    // Grace period must be > firmware READ_INTERVAL (300s); use 900s (3 missed intervals)
+    let cutoff = Utc::now().timestamp() - 900;
     let stale_devices = sqlx::query_as::<_, (String,)>(
         "SELECT node_id FROM devices WHERE status = 'online' AND updated_at < ?"
     )
@@ -533,6 +534,47 @@ mod tests {
             )),
             telemetry_limiter: Arc::new(crate::rate_limiter::RateLimiter::new(1000, 1)),
         }
+    }
+
+    #[tokio::test]
+    async fn test_offline_detection_grace_period_900s() {
+        let pool = create_test_db().await;
+        let state = make_state(pool);
+        let now = Utc::now().timestamp();
+
+        // updated 600s ago: within 900s grace period, must stay online
+        sqlx::query(
+            "INSERT INTO devices (id, name, node_id, device_type, status, created_at, updated_at)
+             VALUES ('d1', 'fresh', 'node-fresh', 'sensor', 'online', ?, ?)"
+        )
+        .bind(now - 600)
+        .bind(now - 600)
+        .execute(&state.pool).await.unwrap();
+
+        // updated 1000s ago: beyond 900s, must be marked offline
+        sqlx::query(
+            "INSERT INTO devices (id, name, node_id, device_type, status, created_at, updated_at)
+             VALUES ('d2', 'stale', 'node-stale', 'sensor', 'online', ?, ?)"
+        )
+        .bind(now - 1000)
+        .bind(now - 1000)
+        .execute(&state.pool).await.unwrap();
+
+        run_timer_checks(
+            &state.pool,
+            &state.mqtt_client,
+            &state.emergency_ctx,
+            &state.rules_cache,
+            &state.event_tx,
+        ).await.unwrap();
+
+        let fresh: (String,) = sqlx::query_as("SELECT status FROM devices WHERE node_id = 'node-fresh'")
+            .fetch_one(&state.pool).await.unwrap();
+        assert_eq!(fresh.0, "online", "device updated 600s ago must NOT be marked offline (grace period 900s)");
+
+        let stale: (String,) = sqlx::query_as("SELECT status FROM devices WHERE node_id = 'node-stale'")
+            .fetch_one(&state.pool).await.unwrap();
+        assert_eq!(stale.0, "offline", "device updated 1000s ago must be marked offline");
     }
 
     #[test]

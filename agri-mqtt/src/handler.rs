@@ -123,6 +123,7 @@ pub async fn start_listener(
     mut eventloop: rumqttc::EventLoop,
     pool: SqlitePool,
     event_tx: Option<broadcast::Sender<String>>,
+    sub_client: rumqttc::AsyncClient,
 ) {
     let (tx, mut rx) = mpsc::channel::<MqttMessage>(1024);
 
@@ -165,6 +166,16 @@ pub async fn start_listener(
 
     loop {
         match eventloop.poll().await {
+            // Subscribe once per (re)connect instead of a periodic loop;
+            // ConnAck fires on initial connect and on every automatic reconnect.
+            Ok(Event::Incoming(Incoming::ConnAck(_))) => {
+                for topic in topics::subscribe_topics() {
+                    if let Err(e) = sub_client.subscribe(topic.clone(), rumqttc::QoS::AtLeastOnce).await {
+                        tracing::warn!("MQTT subscribe {} failed: {}", topic, e);
+                    }
+                }
+                info!("MQTT connected, topics subscribed");
+            }
             Ok(Event::Incoming(Incoming::Publish(p))) => {
                 let topic = p.topic;
                 let payload = p.payload.to_vec();

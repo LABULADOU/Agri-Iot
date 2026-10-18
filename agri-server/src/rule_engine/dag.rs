@@ -98,7 +98,9 @@ impl RuleChain {
     pub async fn process_async(&self, msg: TbMsg) -> anyhow::Result<()> {
         let ctx = &self.ctx;
         let node_count = self.nodes.len();
-        anyhow::ensure!(node_count > 0, "empty rule chain");
+        if node_count == 0 {
+            return Ok(());
+        }
 
         let mut stack: Vec<(usize, TbMsg)> = Vec::new();
 
@@ -134,4 +136,29 @@ impl RuleChain {
 
 pub fn telemetry_to_tbmsg(node_id: &str, data: serde_json::Value) -> TbMsg {
     TbMsg::new(node_id, TbMsgType::Telemetry, data)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    async fn make_chain() -> RuleChain {
+        let (tx, _) = tokio::sync::broadcast::channel(16);
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
+        RuleChain::new(NodeContext {
+            pool,
+            mqtt_client: Arc::new(Mutex::new(None)),
+            event_tx: tx,
+        })
+    }
+
+    #[tokio::test]
+    async fn test_empty_chain_is_noop_not_error() {
+        let chain = make_chain().await;
+        let msg = TbMsg::new("node-001", TbMsgType::Telemetry, serde_json::json!({"temperature": 25.0}));
+        assert!(
+            chain.process_async(msg).await.is_ok(),
+            "empty rule chain must be a silent no-op, not an error (errors caused 150k+ warn logs)"
+        );
+    }
 }

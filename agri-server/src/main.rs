@@ -3,7 +3,6 @@ use anyhow::Result;
 use axum::{Router, middleware};
 use axum::body::Body;
 use axum::http::{Request, Response, StatusCode};
-use rumqttc::QoS;
 use std::convert::Infallible;
 use tower::service_fn;
 use tracing::{info, error};
@@ -85,6 +84,7 @@ async fn main() -> Result<()> {
     info!("Connecting to external MQTT broker at {}", broker_addr);
 
     let (mqtt_client, eventloop) = create_mqtt_client(&broker_addr);
+    let listener_sub_client = mqtt_client.clone();
 
     let app_state = state::AppState::new(pool, mqtt_client);
 
@@ -92,7 +92,7 @@ async fn main() -> Result<()> {
     let listener_pool = app_state.pool.clone();
     let listener_tx = app_state.event_tx.clone();
     spawn_tracked("mqtt-listener", async move {
-        agri_mqtt::handler::start_listener(eventloop, listener_pool, Some(listener_tx)).await;
+        agri_mqtt::handler::start_listener(eventloop, listener_pool, Some(listener_tx), listener_sub_client).await;
     });
 
     // 定期清理限流器过期桶
@@ -234,18 +234,5 @@ fn create_mqtt_client(broker_addr: &str) -> (rumqttc::AsyncClient, rumqttc::Even
     options.set_clean_session(false);
     options.set_request_channel_capacity(100);
     let (client, eventloop) = rumqttc::AsyncClient::new(options, 100);
-    let sub_client = client.clone();
-    tokio::spawn(async move {
-        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        let topics = agri_core::topics::subscribe_topics();
-        loop {
-            for topic in &topics {
-                if let Err(e) = sub_client.subscribe(topic, QoS::AtLeastOnce).await {
-                    tracing::warn!("MQTT subscribe {} failed: {}", topic, e);
-                }
-            }
-            tokio::time::sleep(std::time::Duration::from_secs(10)).await;
-        }
-    });
     (client, eventloop)
 }

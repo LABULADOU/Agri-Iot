@@ -19,6 +19,8 @@ mkdir -p "$LOG_DIR"
 CHECK_INTERVAL=5
 COOLDOWN=10
 MAX_RETRIES=5
+LOG_MAX_BYTES=$((200 * 1024 * 1024))   # rotate when log exceeds 200MB
+LOG_KEEP_BYTES=$((20 * 1024 * 1024))    # keep last 20MB
 
 # === 全局变量 ===
 BROKER_PID=""
@@ -54,6 +56,21 @@ check_alive() {
         return 1
     fi
     kill -0 "$pid" 2>/dev/null
+}
+
+# 原地截断轮转：子进程以 O_APPEND 打开同一 inode，
+# truncate 后新写入继续追加到文件末尾，无需重启进程。
+rotate_log_if_big() {
+    local f="$1"
+    [ -f "$f" ] || return 0
+    local size
+    size=$(stat -c%s "$f" 2>/dev/null || echo 0)
+    if [ "$size" -gt "$LOG_MAX_BYTES" ]; then
+        tail -c "$LOG_KEEP_BYTES" "$f" > "$f.tmp" 2>/dev/null || true
+        cat "$f.tmp" > "$f"
+        rm -f "$f.tmp"
+        log "Rotated $f ($((size / 1024 / 1024))MB -> $((LOG_KEEP_BYTES / 1024 / 1024))MB kept)"
+    fi
 }
 
 # === 进程管理 ===
@@ -102,10 +119,17 @@ main() {
         exit 1
     fi
 
+    rotate_log_if_big "$LOG_DIR/broker.log"
+    rotate_log_if_big "$LOG_DIR/server.log"
+
     start_broker
     start_server
 
     while true; do
+        rotate_log_if_big "$LOG_DIR/broker.log"
+        rotate_log_if_big "$LOG_DIR/server.log"
+        rotate_log_if_big "$LOG_DIR/init.log"
+
         # --- 检查 Broker ---
         if ! check_alive "$BROKER_PID"; then
             wait ${BROKER_PID:-} 2>/dev/null || true
