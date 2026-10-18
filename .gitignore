@@ -20,6 +20,12 @@ agri-server/static/firmware/
 *.swp
 *.swo
 
+# OpenCode 本地运行状态（goals/node_modules 等）
+.opencode/
+
+# 运行日志
+/nohup.out
+
 # OS
 .DS_Store
 Thumbs.db
