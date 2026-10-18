@@ -1,4 +1,4 @@
-use agri_core::models::{Area, Crop};
+use agri_core::models::Crop;
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
@@ -59,7 +59,9 @@ async fn create_area(
 }
 
 async fn list_areas(State(state): State<AppState>) -> impl IntoResponse {
-    let rows = sqlx::query_as::<_, Area>(
+    // Decode id as String (not UuidText): seed rows like 'area-demo' are valid
+    // TEXT ids and must not 500 the whole endpoint (broke frontend Promise.all).
+    let rows = sqlx::query_as::<_, (String, String, Option<String>, i64)>(
         "SELECT id, name, description, created_at FROM areas",
     )
     .fetch_all(&state.pool)
@@ -69,12 +71,12 @@ async fn list_areas(State(state): State<AppState>) -> impl IntoResponse {
         Ok(rows) => {
             let result: Vec<serde_json::Value> = rows
                 .into_iter()
-                .map(|a| {
+                .map(|r| {
                     serde_json::json!({
-                        "id": a.id,
-                        "name": a.name,
-                        "description": a.description,
-                        "created_at": a.created_at.timestamp(),
+                        "id": r.0,
+                        "name": r.1,
+                        "description": r.2,
+                        "created_at": r.3,
                     })
                 })
                 .collect();
@@ -89,7 +91,7 @@ async fn list_areas(State(state): State<AppState>) -> impl IntoResponse {
 }
 
 async fn get_area(State(state): State<AppState>, Path(id): Path<String>) -> impl IntoResponse {
-    let row = sqlx::query_as::<_, Area>(
+    let row = sqlx::query_as::<_, (String, String, Option<String>, i64)>(
         "SELECT id, name, description, created_at FROM areas WHERE id = ?",
     )
     .bind(&id)
@@ -98,10 +100,10 @@ async fn get_area(State(state): State<AppState>, Path(id): Path<String>) -> impl
 
     match row {
         Ok(Some(a)) => Json(serde_json::json!({
-            "id": a.id,
-            "name": a.name,
-            "description": a.description,
-            "created_at": a.created_at.timestamp(),
+            "id": a.0,
+            "name": a.1,
+            "description": a.2,
+            "created_at": a.3,
         }))
         .into_response(),
         Ok(None) => (
@@ -632,5 +634,69 @@ async fn get_crop_batch_readings(
             internal_err(e),
         )
             .into_response(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::body::to_bytes;
+
+    async fn test_state() -> AppState {
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
+        sqlx::query(
+            "CREATE TABLE areas (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                description TEXT,
+                created_at INTEGER NOT NULL
+            )",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let (tx, _rx) = tokio::sync::broadcast::channel(16);
+        AppState {
+            pool,
+            event_tx: tx,
+            mqtt_client: std::sync::Arc::new(tokio::sync::Mutex::new(None)),
+            rules_cache: std::sync::Arc::new(tokio::sync::Mutex::new(Vec::new())),
+            obsidian_vault_path: None,
+            emergency_ctx: std::sync::Arc::new(tokio::sync::Mutex::new(
+                agri_core::ai::emergency::EmergencyContext::new(),
+            )),
+            telemetry_limiter: std::sync::Arc::new(crate::rate_limiter::RateLimiter::new(60, 1)),
+        }
+    }
+
+    /// 回归测试：areas 表允许非 UUID 的种子 id（如 'area-demo'）。
+    /// 之前用 UuidText 解码导致 500，前端 Promise.all 连带 Dashboard 全空白。
+    #[tokio::test]
+    async fn test_list_areas_tolerates_non_uuid_id() {
+        let state = test_state().await;
+        sqlx::query("INSERT INTO areas (id, name, description, created_at) VALUES ('area-demo', '示范大棚', NULL, 0)")
+            .execute(&state.pool)
+            .await
+            .unwrap();
+
+        let resp = list_areas(State(state)).await.into_response();
+        assert_eq!(resp.status(), StatusCode::OK, "list_areas must not 500 on non-UUID ids");
+
+        let body = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let rows: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(rows.as_array().unwrap().len(), 1);
+        assert_eq!(rows[0]["id"], "area-demo");
+    }
+
+    #[tokio::test]
+    async fn test_get_area_non_uuid_id() {
+        let state = test_state().await;
+        sqlx::query("INSERT INTO areas (id, name, description, created_at) VALUES ('area-demo', '示范大棚', NULL, 0)")
+            .execute(&state.pool)
+            .await
+            .unwrap();
+
+        let resp = get_area(State(state), Path("area-demo".to_string())).await.into_response();
+        assert_eq!(resp.status(), StatusCode::OK, "get_area must not 500 on non-UUID ids");
     }
 }
