@@ -39,13 +39,15 @@ impl fmt::Display for UuidText {
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct Device {
-    pub id: UuidText,
+    // id/area_id 用 String 而非 UuidText：种子/历史数据存在非 UUID 文本 id
+    // （如 'dev-001'、'area-demo'），用 UuidText 解码会让设备列表 500。
+    pub id: String,
     pub name: String,
     pub node_id: String,
     pub device_type: DeviceType,
     pub status: DeviceStatus,
     pub config: Option<JsonValue>,
-    pub area_id: Option<UuidText>,
+    pub area_id: Option<String>,
     pub comfort_config: Option<JsonValue>,
     pub capabilities: Option<JsonValue>,
     pub created_at: DateTime<Utc>,
@@ -973,8 +975,10 @@ impl_sqlx_enum!(FarmOpStatus,
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct FarmOperation {
-    pub id: UuidText,
-    pub area_id: UuidText,
+    // id/area_id 用 String 而非 UuidText：种子/历史数据存在 'op-001'、'area-demo'
+    // 这类非 UUID 文本 id，用 UuidText 解码会让整表查询 500（前端"农事记录加载失败"）。
+    pub id: String,
+    pub area_id: String,
     pub log_date: String,
     pub log_time: String,
     pub category: String,
@@ -1203,7 +1207,7 @@ mod tests {
     #[test]
     fn test_device_model_creation() {
         let device = Device {
-            id: Uuid::new_v4().into(),
+            id: Uuid::new_v4().to_string(),
             name: "温度传感器".to_string(),
             node_id: "node-001".to_string(),
             device_type: DeviceType::Sensor,

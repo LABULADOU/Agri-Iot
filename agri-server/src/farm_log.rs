@@ -645,6 +645,53 @@ mod tests {
         assert_eq!(op_txns(&pool, &op_id).await, 0);
     }
 
+    /// 回归测试：farm_operations 允许非 UUID 的种子 id/area_id（如 'op-001' / 'area-demo'）。
+    /// 之前用 UuidText 解码导致列表和详情整体 500，前端提示"农事记录加载失败"。
+    #[tokio::test]
+    async fn list_and_get_operations_tolerate_non_uuid_ids() {
+        let pool = setup_db().await;
+        sqlx::query("INSERT INTO areas (id, name, created_at) VALUES ('area-demo', '示范大棚', 0)")
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query(
+            "INSERT INTO farm_operations (id, area_id, log_date, log_time, category, content, operator, status, weather, crop_status, notes, details, created_at, updated_at) VALUES ('op-001', 'area-demo', '2026-09-11', '', '打药', '白锈病防治', '张三', 'completed', '', '', '', '{}', 0, 0)",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let app = create_router(test_state(pool)).into_service();
+
+        let res = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v1/farm/operations")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::OK, "list must tolerate non-UUID area_id");
+        let body = axum::body::to_bytes(res.into_body(), usize::MAX).await.unwrap();
+        let parsed: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let ops = parsed["operations"].as_array().unwrap();
+        assert_eq!(ops.len(), 1);
+        assert_eq!(ops[0]["id"], "op-001");
+        assert_eq!(ops[0]["area_id"], "area-demo");
+
+        let res = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v1/farm/operations/op-001")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::OK, "get must tolerate non-UUID id");
+    }
+
     #[tokio::test]
     async fn non_input_category_op_does_not_deduct() {
         let pool = setup_db().await;

@@ -1205,6 +1205,35 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
     }
 
+    /// 回归测试：devices.area_id 允许非 UUID 的种子 id（如 'area-demo'）。
+    /// 之前用 UuidText 解码，设备一旦划分到示范大棚，整个设备列表就 500。
+    #[tokio::test]
+    async fn test_list_devices_tolerates_non_uuid_area_id() {
+        let pool = setup_test_db().await;
+        sqlx::query(
+            "INSERT INTO devices (id, name, node_id, device_type, status, area_id, capabilities, created_at, updated_at) VALUES ('dev-001', '温度传感器', 'node-001', 'sensor', 'online', 'area-demo', '[\"sensor\"]', 0, 0)",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let state = AppState::new(pool, create_mock_client().await);
+        let router = create_router(state);
+
+        let request = Request::builder()
+            .method("GET")
+            .uri("/api/v1/devices")
+            .body(Body::empty())
+            .unwrap();
+
+        let response = router.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK, "device list must tolerate non-UUID area_id");
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let rows: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(rows.as_array().unwrap().len(), 1);
+        assert_eq!(rows[0]["id"], "dev-001");
+        assert_eq!(rows[0]["area_id"], "area-demo");
+    }
+
     /// 测试获取不存在的设备 - 返回404
     #[tokio::test]
     async fn test_get_device_not_found() {
